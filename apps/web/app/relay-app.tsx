@@ -78,53 +78,70 @@ function Sidebar({ active, onChange, mobileOpen, onClose, user, onLogout }: { ac
 function HomeView({ posts, onCompose, go, userName }: { posts: RelayPost[]; onCompose: () => void; go: (v: View) => void; userName: string }) {
   const brands = useBrands();
   const accounts = useAccounts();
-  const upcoming = posts.filter((post) => post.status === "scheduled").slice(0, 3);
+  const scheduled = posts
+    .filter((post) => post.status === "scheduled")
+    .sort((a, b) => new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime());
+  const upcoming = scheduled.slice(0, 4);
+  const healthyAccounts = accounts.filter((account) => account.status === "connected").length;
   const today = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(new Date());
   const firstName = userName.trim().split(/\s+/)[0] || "there";
   return <div className="page home-page page-enter">
-    <section className="welcome"><div><p className="eyebrow">{today}</p><h2>Welcome, {firstName}.</h2><p>{upcoming.length > 0 ? `You have ${upcoming.length} post${upcoming.length === 1 ? "" : "s"} queued next.` : "Your workspace is ready. Start by connecting an account or creating a brand."}</p></div><div className="signal"><span className="pulse" />Systems healthy</div></section>
-    <section className="section-block">
-      <div className="section-heading"><div><h3>Upcoming</h3><p>Your next scheduled posts, across every brand.</p></div><button className="text-button" onClick={() => go("calendar")}>View calendar <ChevronRight /></button></div>
+    <section className="home-hero">
+      <div><p className="eyebrow">{today}</p><h2>Good to see you, {firstName}.</h2><p>{scheduled.length > 0 ? `${scheduled.length} post${scheduled.length === 1 ? " is" : "s are"} ready in your publishing queue.` : "A quiet slate. Plan your next post when inspiration strikes."}</p></div>
+      <button className="home-compose" onClick={onCompose}><span><Plus /></span><b>Create a post</b><small>Draft, schedule, or publish</small></button>
+    </section>
+    <section className="home-summary" aria-label="Workspace summary">
+      <button onClick={() => go("calendar")}><b>{scheduled.length}</b><span>Scheduled</span><ChevronRight /></button>
+      <button onClick={() => go("accounts")}><b>{healthyAccounts}<small>/{accounts.length}</small></b><span>Accounts ready</span><ChevronRight /></button>
+      <button onClick={() => go("brands")}><b>{brands.length}</b><span>{brands.length === 1 ? "Brand" : "Brands"}</span><ChevronRight /></button>
+    </section>
+    <section className="section-block home-agenda">
+      <div className="section-heading"><div><p className="eyebrow">Next up</p><h3>Your publishing queue</h3></div><button className="text-button" onClick={() => go("calendar")}>Open calendar <ChevronRight /></button></div>
       <div className="upcoming-list">
-        {upcoming.map((post, index) => {
+        {upcoming.map((post) => {
           const date = post.scheduledAt ? new Date(post.scheduledAt) : new Date();
           const brand = brands.find((b) => b.id === post.brandId);
           return <article className="upcoming-row" key={post.id}>
-            <div className="timeline"><b>{index === 0 ? "Today" : "Tomorrow"}</b><span>{date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>
+            <div className="timeline"><b>{date.toLocaleDateString([], { month: "short", day: "numeric" })}</b><span>{date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>
             <BrandMark brandId={post.brandId} />
             <div className="upcoming-copy"><span>{brand?.name ?? "Unassigned"}</span><h4>{post.text}</h4><div className="provider-stack">{post.targets.map((target) => <ProviderIcon id={target.provider} key={target.id} />)}</div></div>
             {post.mediaUrl ? <img className="post-thumb" src={post.mediaUrl} alt="Post media" /> : <div className="post-thumb placeholder"><FileText /></div>}
             <button className="icon-button"><MoreHorizontal /></button>
           </article>;
         })}
-        {upcoming.length === 0 && <Empty title="No scheduled posts" body="Scheduled posts will appear here once you create them." />}
+        {upcoming.length === 0 && <div className="home-empty"><span><CalendarDays /></span><div><h3>Nothing scheduled yet</h3><p>Your calendar is clear. Create a post now, or open the calendar to look ahead.</p></div><button className="secondary-button" onClick={() => go("calendar")}>View calendar</button></div>}
       </div>
     </section>
-    <div className="home-grid">
-      <section className="section-block health-panel"><div className="section-heading"><div><h3>Account health</h3><p>{accounts.length} accounts across {brands.length} brands</p></div><button className="icon-button" onClick={() => go("accounts")}><ChevronRight /></button></div>
-        <div className="health-list">{accounts.length === 0 ? <Empty title="No connected accounts" body="Connect a social channel to start publishing." /> : providerRegistry.list().map((provider) => { const matching = accounts.filter((a) => a.provider === provider.id); if (matching.length === 0) return null; const warning = matching.some((a) => a.status !== "connected"); return <div key={provider.id}><ProviderIcon id={provider.id} /><span><b>{provider.name}</b><small>{matching.length} connected account{matching.length === 1 ? "" : "s"}</small></span><Status value={warning ? "warning" : "connected"} /></div>; })}</div>
-      </section>
-      <section className="section-block quick-panel"><div className="section-heading"><div><h3>Quick start</h3><p>Keep your publishing rhythm.</p></div></div><button className="quick-action" onClick={onCompose}><span><Plus /></span><div><b>Create a post</b><small>Draft, schedule or publish now</small></div><ChevronRight /></button><button className="quick-action" onClick={() => go("media")}><span><ImageIcon /></span><div><b>Upload media</b><small>Add images and videos</small></div><ChevronRight /></button></section>
-    </div>
   </div>;
 }
 
 function CalendarView({ posts, onCompose }: { posts: RelayPost[]; onCompose: () => void }) {
   const scheduled = posts.filter((p) => p.status === "scheduled" || p.status === "failed");
-  const [mode, setMode] = useState<"Week" | "Month" | "List">("Week");
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-  const weekDates = Array.from({ length: 7 }, (_, index) => { const date = new Date(start); date.setDate(start.getDate() + index); return date; });
-  const weekDays = weekDates.map((date) => new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric" }).format(date).toUpperCase());
-  const range = `${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(weekDates[0])}–${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(weekDates[6])}`;
+  const [mode, setMode] = useState<"Week" | "Month" | "List">("Month");
+  const [cursor, setCursor] = useState(() => new Date());
+  const today = new Date();
+  const dateKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  const postsForDate = (date: Date) => scheduled.filter((post) => post.scheduledAt && dateKey(new Date(post.scheduledAt)) === dateKey(date));
+  const weekStart = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  const weekDates = Array.from({ length: 7 }, (_, index) => new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + index));
+  const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const calendarStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1 - ((monthStart.getDay() + 6) % 7));
+  const monthDates = Array.from({ length: 42 }, (_, index) => new Date(calendarStart.getFullYear(), calendarStart.getMonth(), calendarStart.getDate() + index));
+  const label = mode === "List" ? "All scheduled posts" : mode === "Month"
+    ? cursor.toLocaleDateString([], { month: "long", year: "numeric" })
+    : `${weekDates[0].toLocaleDateString([], { month: "short", day: "numeric" })}–${weekDates[6].toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+  const move = (direction: number) => setCursor((current) => mode === "Month"
+    ? new Date(current.getFullYear(), current.getMonth() + direction, 1)
+    : new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction * 7));
   return <div className="page page-enter">
-    <div className="toolbar"><div className="date-nav"><button className="secondary-button">Today</button><button className="icon-button"><ChevronLeft /></button><button className="icon-button"><ChevronRight /></button><h2>{range}</h2></div><div className="segmented">{(["Month", "Week", "List"] as const).map((item) => <button key={item} className={mode === item ? "active" : ""} onClick={() => setMode(item)}>{item}</button>)}</div></div>
-    {scheduled.length === 0 ? <Empty title="Your calendar is empty" body="Schedule a post and it will appear here." /> : mode === "List" ? <div className="list-calendar">{scheduled.map((post) => <PostRow post={post} key={post.id} />)}</div> : <div className="calendar-shell">
-      <div className="calendar-head"><span />{weekDays.map((day, index) => <b key={day} className={weekDates[index].toDateString() === new Date().toDateString() ? "today" : ""}>{day}</b>)}</div>
-      <div className="calendar-grid">{[9,10,11,12,13,14,15,16,17].map((hour) => <div className="calendar-line" key={hour}><span>{hour}:00</span>{weekDays.map((day) => <div key={day} className="calendar-cell" />)}</div>)}
-        {scheduled.slice(0, 2).map((post, index) => <button className={`calendar-event ${index === 1 ? "event-two" : "event-one"}`} key={post.id} onClick={onCompose}><BrandMark brandId={post.brandId} size="small" /><span><b>{post.scheduledAt ? new Date(post.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Unscheduled"}</b>{post.text}</span><div>{post.targets.map((t) => <ProviderIcon id={t.provider} key={t.id} />)}</div></button>)}
-      </div>
+    <div className="toolbar"><div className="date-nav">{mode !== "List" && <><button className="secondary-button" onClick={() => setCursor(new Date())}>Today</button><button className="icon-button" aria-label="Previous period" onClick={() => move(-1)}><ChevronLeft /></button><button className="icon-button" aria-label="Next period" onClick={() => move(1)}><ChevronRight /></button></>}<h2>{label}</h2></div><div className="segmented">{(["Month", "Week", "List"] as const).map((item) => <button key={item} className={mode === item ? "active" : ""} onClick={() => setMode(item)}>{item}</button>)}</div></div>
+    {mode === "List" ? <div className="list-calendar">{scheduled.length > 0 ? scheduled.map((post) => <PostRow post={post} key={post.id} />) : <div className="calendar-list-empty"><CalendarDays /><div><b>No posts scheduled</b><span>Your calendar is clear for now.</span></div><button className="secondary-button" onClick={onCompose}><Plus /> Create post</button></div>}</div> : mode === "Month" ? <div className="month-calendar">
+      <div className="month-weekdays">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <b key={day}>{day}</b>)}</div>
+      <div className="month-grid">{monthDates.map((date) => { const dayPosts = postsForDate(date); const isToday = dateKey(date) === dateKey(today); return <div className={`month-day ${date.getMonth() !== cursor.getMonth() ? "outside" : ""} ${isToday ? "today" : ""}`} key={date.toISOString()}><span>{date.getDate()}</span><div>{dayPosts.slice(0, 3).map((post) => <button key={post.id} onClick={onCompose}><BrandMark brandId={post.brandId} size="small" /><em>{new Date(post.scheduledAt!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</em><b>{post.text}</b></button>)}{dayPosts.length > 3 && <small>+{dayPosts.length - 3} more</small>}</div></div>; })}</div>
+    </div> : <div className="calendar-shell week-calendar">
+      <div className="calendar-head"><span />{weekDates.map((date) => <b key={date.toISOString()} className={dateKey(date) === dateKey(today) ? "today" : ""}>{date.toLocaleDateString([], { weekday: "short", day: "numeric" }).toUpperCase()}</b>)}</div>
+      <div className="calendar-grid">{[8,9,10,11,12,13,14,15,16,17].map((hour) => <div className="calendar-line" key={hour}><span>{hour}:00</span>{weekDates.map((date) => <div key={date.toISOString()} className="calendar-cell">{postsForDate(date).filter((post) => new Date(post.scheduledAt!).getHours() === hour).map((post) => <button className="week-event" key={post.id} onClick={onCompose}>{post.text}</button>)}</div>)}</div>)}</div>
     </div>}
   </div>;
 }
@@ -444,7 +461,7 @@ export default function RelayApp({ user, initialBrands, initialAccounts }: { use
     if (!oauth) return;
     setView("accounts");
     if (oauth === "success") { const count = Number(url.searchParams.get("count") || 1); const provider = url.searchParams.get("provider") || "social"; setToast(`${count} ${provider} account${count === 1 ? "" : "s"} connected successfully`); }
-    else { const code = url.searchParams.get("code"); setToast(code === "authorization_denied" ? "Connection cancelled by the provider" : "The social account could not be connected. Check its permissions and try again."); }
+    else { const code = url.searchParams.get("code"); const messages: Record<string, string> = { authorization_denied: "Connection cancelled by the provider", provider_rejected: "The provider rejected the connection. Verify the callback URL, account type, and requested permissions.", account_save_failed: "Authorization succeeded, but Relay could not save the account. Deploy the latest database and OAuth fixes.", authorization_expired: "This authorization is no longer valid. Please reconnect the account." }; setToast(messages[code ?? ""] ?? "The social account could not be connected. Check its permissions and try again."); }
     url.searchParams.delete("oauth"); url.searchParams.delete("provider"); url.searchParams.delete("count"); url.searchParams.delete("code");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`); const timer = window.setTimeout(() => setToast(""), 5000); return () => window.clearTimeout(timer);
   }, []);

@@ -22,6 +22,7 @@ export async function GET(request: Request, context: { params: Promise<{ provide
   const state = query.get("state") ?? "";
   if (!state) return appRedirect({ oauth: "error", code: "invalid_callback" });
 
+  let stage: "state" | "authorization" | "save" = "state";
   try {
     const registry = getOAuthRegistry(); const adapter = registry.get(provider);
     const cookieHeader = request.headers.get("cookie") ?? "";
@@ -33,7 +34,9 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     const [brand] = await sql<{ id: string }[]>`SELECT id FROM "brand" WHERE "id" = ${oauthState.brandId} AND "owner_id" = ${authorization.session.user.id}`;
     if (!brand) return appRedirect({ oauth: "error", code: "brand_not_found" });
     const cipher = AesGcmTokenCipher.fromBase64Key(getTokenCipherKey());
+    stage = "authorization";
     const connected = await adapter.connect(code);
+    stage = "save";
     for (const account of connected) {
       const id = crypto.randomUUID();
       const encryptedAccess = cipher.encrypt(account.accessToken);
@@ -61,8 +64,8 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     }
     return appRedirect({ oauth: "success", provider: adapter.provider, count: String(connected.length) });
   } catch (error) {
-    const codeValue = error instanceof ProviderOAuthError && error.reconnectRequired ? "authorization_expired" : error instanceof ProviderOAuthError ? "provider_rejected" : "callback_failed";
-    console.error(JSON.stringify({ level: "error", event: "oauth_callback_failed", provider, code: codeValue }));
+    const codeValue = error instanceof ProviderOAuthError && error.reconnectRequired ? "authorization_expired" : error instanceof ProviderOAuthError ? "provider_rejected" : stage === "save" ? "account_save_failed" : "callback_failed";
+    console.error(JSON.stringify({ level: "error", event: "oauth_callback_failed", provider, stage, code: codeValue, errorType: error instanceof Error ? error.name : "UnknownError", ...(error instanceof ProviderOAuthError ? error.diagnostic : {}) }));
     return appRedirect({ oauth: "error", code: codeValue });
   }
 }

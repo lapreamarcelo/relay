@@ -147,6 +147,10 @@ For the documented local default, use these values:
 
 Facebook and Facebook-linked Instagram may use the same Meta app. Add both of those callback URLs to that app's valid OAuth redirect URI configuration. The standalone Instagram flow uses `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` and its own Instagram Business Login redirect URI.
 
+If Facebook displays **URL Blocked**, open the exact Meta app whose ID is in `FACEBOOK_APP_ID`, then open **Facebook Login for Business → Settings**. Enable **Client OAuth Login** and **Web OAuth Login**, and add both production callback URLs exactly—one ending in `/api/oauth/facebook/callback` and one ending in `/api/oauth/instagram/callback`. In the app's basic settings, add only the hostname (for example `relay.example.com`) under **App Domains**. Saving a callback in a different Meta app, in the standalone Instagram product, or with a trailing slash does not authorize the URL.
+
+For standalone Instagram, open the exact Meta app whose Instagram App ID is in `INSTAGRAM_APP_ID`, then add `/api/oauth/instagram-standalone/callback` under **Instagram → API setup with Instagram login → Business login settings**. This is separate from the Facebook Login valid-redirect list.
+
 Google accepts localhost redirect URIs for testing. TikTok does not accept Relay's HTTP localhost origin: its redirect must be a static absolute HTTPS URL, and the exact same URL must be sent during authorization. For TikTok development, expose Relay through an HTTPS tunnel, change `APP_URL` to that public origin, and recreate the web container.
 
 If you choose another local port, it must be consistent everywhere. For example:

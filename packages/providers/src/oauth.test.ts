@@ -34,3 +34,25 @@ test("providers are disabled independently when their keys are absent", () => {
   const registry = new OAuthProviderRegistry({}, "http://localhost:3000");
   assert.equal(registry.list().every((adapter) => adapter.configured === false), true);
 });
+
+test("Instagram Login normalizes the callback code and uses a versioned profile lookup", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : input.toString();
+    requests.push({ url, init });
+    if (requests.length === 1) return Response.json({ access_token: "short-token", user_id: "ig-user", permissions: ["instagram_business_basic", "instagram_business_content_publish"] });
+    if (requests.length === 2) return Response.json({ access_token: "long-token", expires_in: 5_184_000 });
+    return Response.json({ user_id: "ig-user", username: "relay", name: "Relay", profile_picture_url: "https://example.com/avatar.jpg" });
+  }) as typeof fetch;
+  try {
+    const [account] = await new OAuthProviderRegistry(environment, "https://relay.example.com").get("instagram-standalone").connect("temporary-code#_");
+    assert.equal(new URLSearchParams(String(requests[0].init?.body)).get("code"), "temporary-code");
+    assert.equal(new URL(requests[1].url).searchParams.get("client_id"), environment.INSTAGRAM_APP_ID);
+    assert.equal(new URL(requests[2].url).pathname, "/v23.0/me");
+    assert.equal(account.providerAccountId, "ig-user");
+    assert.deepEqual(account.grantedScopes, ["instagram_business_basic", "instagram_business_content_publish"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

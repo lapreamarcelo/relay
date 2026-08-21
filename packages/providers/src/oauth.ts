@@ -62,8 +62,16 @@ export interface OAuthAdapter {
   revoke?(input: { accessToken: string; refreshToken: string | null }): Promise<void>;
 }
 
+export interface ProviderOAuthDiagnostic {
+  action: string;
+  status: number;
+  providerCode?: string;
+  providerSubcode?: string;
+  providerType?: string;
+}
+
 export class ProviderOAuthError extends Error {
-  constructor(message: string, readonly reconnectRequired = false) {
+  constructor(message: string, readonly reconnectRequired = false, readonly diagnostic?: ProviderOAuthDiagnostic) {
     super(message);
     this.name = "ProviderOAuthError";
   }
@@ -102,7 +110,18 @@ async function jsonRequest<T>(url: string | URL, init: RequestInit, action: stri
   const text = await response.text();
   let payload: unknown = {};
   try { payload = text ? JSON.parse(text) : {}; } catch { payload = {}; }
-  if (!response.ok) throw new ProviderOAuthError(`${action} was rejected by the provider. Reconnect the account and verify the app permissions.`, response.status === 400 || response.status === 401 || response.status === 403);
+  if (!response.ok) {
+    const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+    const nested = record.error && typeof record.error === "object" ? record.error as Record<string, unknown> : {};
+    const directCode = typeof record.error === "string" ? record.error : asString(record.error_code);
+    const code = directCode || asString(nested.code) || (asNumber(nested.code) !== null ? String(asNumber(nested.code)) : undefined);
+    const subcode = asString(nested.error_subcode) || (asNumber(nested.error_subcode) !== null ? String(asNumber(nested.error_subcode)) : undefined);
+    throw new ProviderOAuthError(
+      `${action} was rejected by the provider. Reconnect the account and verify the app permissions.`,
+      response.status === 400 || response.status === 401 || response.status === 403,
+      { action, status: response.status, providerCode: code, providerSubcode: subcode, providerType: asString(nested.type) ?? undefined },
+    );
+  }
   return payload as T;
 }
 
@@ -119,6 +138,10 @@ interface MetaPage {
   access_token?: unknown;
   picture?: { data?: { url?: unknown } };
   instagram_business_account?: { id?: unknown; username?: unknown; name?: unknown; profile_picture_url?: unknown };
+}
+
+function normalizedInstagramCode(code: string): string {
+  return code.endsWith("#_") ? code.slice(0, -2) : code;
 }
 
 function createMetaAdapter(flow: "facebook" | "instagram", env: OAuthEnvironment, appUrl: string): OAuthAdapter {
@@ -142,10 +165,23 @@ function createMetaAdapter(flow: "facebook" | "instagram", env: OAuthEnvironment
 
   const pages = async (userToken: string): Promise<MetaPage[]> => {
     const url = new URL(`https://graph.facebook.com/${version}/me/accounts`);
-    url.searchParams.set("fields", "id,name,access_token,picture{url},instagram_business_account{id,username,name,profile_picture_url}");
+    url.searchParams.set("fields", "id,name,access_token,picture{url},instagram_business_account");
     url.searchParams.set("limit", "100");
     const payload = await jsonRequest<{ data?: unknown }>(url, { headers: { Authorization: `Bearer ${userToken}` } }, "Meta account discovery");
     return Array.isArray(payload.data) ? payload.data as MetaPage[] : [];
+  };
+
+  const discoverAccounts = async (userToken: string): Promise<MetaPage[]> => {
+    const discoveredPages = await pages(userToken);
+    if (flow === "facebook") return discoveredPages;
+    return Promise.all(discoveredPages.map(async (page) => {
+      const instagramId = asString(page.instagram_business_account?.id);
+      if (!instagramId) return page;
+      const url = new URL(`https://graph.facebook.com/${version}/${instagramId}`);
+      url.searchParams.set("fields", "id,username,name,profile_picture_url");
+      const instagram = await jsonRequest<MetaPage["instagram_business_account"]>(url, { headers: { Authorization: `Bearer ${userToken}` } }, "Instagram account discovery");
+      return { ...page, instagram_business_account: instagram };
+    }));
   };
 
   const accountFromPage = (page: MetaPage, userToken: string, expiresAt: Date): ConnectedProviderAccount | null => {
@@ -180,13 +216,13 @@ function createMetaAdapter(flow: "facebook" | "instagram", env: OAuthEnvironment
       const shortToken = asString(short.access_token);
       if (!shortToken) throw new ProviderOAuthError("Meta did not return an access token.");
       const long = await exchangeLongLived(shortToken);
-      const discovered = (await pages(long.accessToken)).map((page) => accountFromPage(page, long.accessToken, long.expiresAt)).filter((item): item is ConnectedProviderAccount => item !== null);
+      const discovered = (await discoverAccounts(long.accessToken)).map((page) => accountFromPage(page, long.accessToken, long.expiresAt)).filter((item): item is ConnectedProviderAccount => item !== null);
       if (discovered.length === 0) throw new ProviderOAuthError(flow === "facebook" ? "No manageable Facebook Pages were found." : "No professional Instagram account linked to a Facebook Page was found.");
       return discovered;
     },
     async refresh(input) {
       const long = await exchangeLongLived(input.refreshToken);
-      const discovered = (await pages(long.accessToken)).map((page) => accountFromPage(page, long.accessToken, long.expiresAt)).find((item) => item?.providerAccountId === input.providerAccountId);
+      const discovered = (await discoverAccounts(long.accessToken)).map((page) => accountFromPage(page, long.accessToken, long.expiresAt)).find((item) => item?.providerAccountId === input.providerAccountId);
       if (!discovered) throw new ProviderOAuthError("The Meta account is no longer available to this authorization.", true);
       return { accessToken: discovered.accessToken, refreshToken: long.accessToken, expiresAt: long.expiresAt, refreshTokenExpiresAt: long.expiresAt, refreshAfterAt: discovered.refreshAfterAt!, grantedScopes: discovered.grantedScopes };
     },
@@ -195,6 +231,7 @@ function createMetaAdapter(flow: "facebook" | "instagram", env: OAuthEnvironment
 
 function createInstagramStandaloneAdapter(env: OAuthEnvironment, appUrl: string): OAuthAdapter {
   const clientId = env.INSTAGRAM_APP_ID ?? ""; const clientSecret = env.INSTAGRAM_APP_SECRET ?? "";
+  const version = env.META_GRAPH_VERSION || "v23.0";
   const redirectUri = callbackUrl(appUrl, "instagram-standalone");
   const requestedScopes = ["instagram_business_basic", "instagram_business_content_publish"];
   return {
@@ -205,22 +242,23 @@ function createInstagramStandaloneAdapter(env: OAuthEnvironment, appUrl: string)
       return url.toString();
     },
     async connect(code) {
-      const short = await jsonRequest<{ access_token?: unknown; user_id?: unknown }>("https://api.instagram.com/oauth/access_token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form({ client_id: clientId, client_secret: clientSecret, grant_type: "authorization_code", redirect_uri: redirectUri, code }) }, "Instagram authorization");
+      const short = await jsonRequest<{ access_token?: unknown; user_id?: unknown; permissions?: unknown }>("https://api.instagram.com/oauth/access_token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form({ client_id: clientId, client_secret: clientSecret, grant_type: "authorization_code", redirect_uri: redirectUri, code: normalizedInstagramCode(code) }) }, "Instagram authorization");
       const shortToken = asString(short.access_token);
       if (!shortToken) throw new ProviderOAuthError("Instagram did not return an access token.");
       const longUrl = new URL("https://graph.instagram.com/access_token");
-      longUrl.search = form({ grant_type: "ig_exchange_token", client_secret: clientSecret, access_token: shortToken }).toString();
+      longUrl.search = form({ grant_type: "ig_exchange_token", client_id: clientId, client_secret: clientSecret, access_token: shortToken }).toString();
       const long = await jsonRequest<{ access_token?: unknown; expires_in?: unknown }>(longUrl, { method: "GET" }, "Instagram long-lived token exchange");
       const accessToken = asString(long.access_token);
       if (!accessToken) throw new ProviderOAuthError("Instagram did not return a long-lived access token.");
-      const profileUrl = new URL("https://graph.instagram.com/me");
+      const profileUrl = new URL(`https://graph.instagram.com/${version}/me`);
       profileUrl.searchParams.set("fields", "user_id,username,name,profile_picture_url");
       const profile = await jsonRequest<{ id?: unknown; user_id?: unknown; username?: unknown; name?: unknown; profile_picture_url?: unknown }>(profileUrl, { headers: { Authorization: `Bearer ${accessToken}` } }, "Instagram profile discovery");
       const providerAccountId = asString(profile.user_id) || asString(profile.id) || String(short.user_id || "");
       if (!providerAccountId) throw new ProviderOAuthError("Instagram did not return an account identifier.");
       const username = asString(profile.username) || "instagram"; const displayName = asString(profile.name) || username;
       const expiresAt = expiry(long.expires_in, 60 * 24 * 60 * 60);
-      return [{ provider: "instagram", authMethod: "instagram-standalone", providerAccountId, username, displayName, avatarUrl: asString(profile.profile_picture_url), accessToken, refreshToken: accessToken, tokenExpiresAt: expiresAt, refreshTokenExpiresAt: expiresAt, refreshAfterAt: refreshAt(expiresAt, 10 * DAY), grantedScopes: requestedScopes, providerMetadata: {} }];
+      const grantedScopes = scopes(short.permissions);
+      return [{ provider: "instagram", authMethod: "instagram-standalone", providerAccountId, username, displayName, avatarUrl: asString(profile.profile_picture_url), accessToken, refreshToken: accessToken, tokenExpiresAt: expiresAt, refreshTokenExpiresAt: expiresAt, refreshAfterAt: refreshAt(expiresAt, 10 * DAY), grantedScopes: grantedScopes.length ? grantedScopes : requestedScopes, providerMetadata: { metaGraphVersion: version } }];
     },
     async refresh(input) {
       const url = new URL("https://graph.instagram.com/refresh_access_token");
