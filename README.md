@@ -2,10 +2,10 @@
 
 Relay is an open-source publishing layer for social networks: publish once, everywhere.
 
-The current repository includes database-backed user accounts, sessions, and brands; a responsive empty-state dashboard; an authenticated Cloudflare R2 media library; calendar; post library; connected-account health; settings; command menu; provider abstractions; and an encrypted provider-token refresh lifecycle.
+The current repository includes database-backed user accounts, sessions, brands, and social accounts; OAuth connections for Instagram, Facebook, TikTok, and YouTube; a responsive dashboard; an authenticated Cloudflare R2 media library; calendar; post library; connected-account health; settings; command menu; provider abstractions; and a runnable encrypted provider-token refresh worker.
 
 > [!IMPORTANT]
-> Authentication and the R2 media library are functional, but social OAuth callbacks, persisted posts, provider publishing adapters, and the runnable publishing worker are still under development. Deploying this version does not yet publish real posts to social networks.
+> Authentication, social-account OAuth, automatic token renewal, brands, and the R2 media library are functional. Persisted posts, provider publishing adapters, and the publishing queue are still under development. Deploying this version connects accounts but does not yet publish real posts to social networks.
 
 The composer already captures destination-specific metadata so the publishing adapters have a typed contract to implement:
 
@@ -60,7 +60,7 @@ openssl rand -base64 32
 | `ALLOW_REGISTRATION` | Yes | Set to `true` during owner setup and `false` after creating the account. Values are case-sensitive. |
 | `RELAY_SETUP_TOKEN` | First setup | Private token, at least 24 characters, required to create the first owner. |
 | `DATABASE_POOL_SIZE` | No | Maximum web-process database connections. Defaults to `5`. |
-| `ENCRYPTION_KEY` | Provider integration | A stable Base64-encoded 32-byte key used to encrypt provider access and refresh tokens. Generate it with `openssl rand -base64 32`. Never rotate it without a key-migration procedure. |
+| `ENCRYPTION_KEY` | Provider integration | A stable Base64-encoded 32-byte key used to encrypt provider access and refresh tokens. Generate it with `openssl rand -base64 32`. Never rotate or lose it: existing connected accounts cannot be decrypted without it. |
 | `RELAY_PORT` | Docker only | Host port mapped to Relay. Defaults to `3000`. |
 
 The Compose files set `BETTER_AUTH_URL` from `APP_URL`; users do not need to configure it separately.
@@ -131,7 +131,7 @@ YOUTUBE_CLIENT_ID=
 YOUTUBE_CLIENT_SECRET=
 ```
 
-Keep every secret server-side. Never prefix it with `NEXT_PUBLIC_`, commit `.env`, or paste user access/refresh tokens into environment variables. Relay will store user tokens encrypted in PostgreSQL once the OAuth adapters are connected.
+Keep every secret server-side. Never prefix it with `NEXT_PUBLIC_`, commit `.env`, or paste user access/refresh tokens into environment variables. Relay stores connected-account access and refresh credentials encrypted with AES-256-GCM in PostgreSQL; account APIs never return them to the browser.
 
 Every callback is the exact `APP_URL` followed by the path below. `APP_URL`, the URL sent by Relay, and the URL registered in the provider console must match in scheme, host, port, path, case, and trailing-slash behavior. Do not add a query string, fragment, or trailing slash.
 
@@ -158,18 +158,26 @@ RELAY_PORT=3010
 
 The Facebook callback would then be `http://localhost:3010/api/oauth/facebook/callback`, and the same rule applies to the other local callbacks. For TikTok, use the HTTPS tunnel origin as `APP_URL` instead of localhost.
 
-The planned minimum authorization scopes are listed below to help prepare each developer application. Provider scopes and review requirements can change; confirm them in the provider's current documentation while implementing or enabling the corresponding adapter.
+Relay requests the following authorization scopes. Provider review requirements can change, so confirm them in the provider's current documentation when preparing a public application.
 
-| Provider | Planned minimum access |
+| Provider | Requested access |
 | --- | --- |
 | Facebook Pages | List the user's Pages, read Page metadata/engagement, and publish Page posts (`pages_show_list`, `pages_read_engagement`, `pages_manage_posts`; business access where required) |
 | Instagram through Facebook | Read the linked professional account and publish media (`instagram_basic`, `instagram_content_publish`, plus the Page permissions required to find the linked account) |
 | Instagram standalone | Professional-account identity and content publishing (`instagram_business_basic`, `instagram_business_content_publish`) |
-| TikTok | Basic creator information and direct-post access (`user.info.basic`, `video.publish`); public posting requires provider approval/audit |
-| YouTube | Upload videos (`https://www.googleapis.com/auth/youtube.upload`) and request offline access so a refresh token can keep the connection alive |
+| TikTok | Basic creator information and direct-post access (`user.info.basic`, `video.publish`, `video.upload`); public posting requires provider approval/audit |
+| YouTube | Upload videos and read the connected channel (`https://www.googleapis.com/auth/youtube.upload`, `https://www.googleapis.com/auth/youtube.readonly`) with offline access |
 
-> [!IMPORTANT]
-> These Relay callback routes are planned but not implemented yet. Registering the URLs now prepares the provider applications, but the account connection buttons cannot complete OAuth until the server-side start/callback adapters are implemented.
+### Keeping accounts connected
+
+The `worker` container checks due credentials every five minutes. Refresh timing is stored per account rather than relying on browser activity:
+
+- Instagram Login renews long-lived tokens before their 60-day expiry.
+- Facebook and Facebook-linked Instagram renew the long-lived Meta authorization and rediscover the Page token.
+- TikTok refreshes its 24-hour access token and always persists a rotated refresh token returned by TikTok.
+- YouTube uses the offline refresh token to renew short-lived access tokens.
+
+Refresh operations use PostgreSQL leases so two worker instances cannot rotate the same credential simultaneously. Temporary provider failures mark an account as needing attention and are retried. Revoked or expired authorization marks it as expired and the dashboard offers a new OAuth connection. Keep the `worker` service running and keep `ENCRYPTION_KEY` unchanged across deployments.
 
 Official references: [Meta Facebook Login manual flow](https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/), [Instagram API with Facebook Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/), [Instagram API with Instagram Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/), [TikTok Login Kit redirect requirements](https://developers.tiktok.com/doc/login-kit-web/), and [Google web-server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server). Comparative self-hosting guides: [Postiz Facebook](https://docs.postiz.com/providers/facebook), [Postiz Instagram](https://docs.postiz.com/providers/instagram), [Postiz TikTok](https://docs.postiz.com/providers/tiktok), and [Postiz YouTube](https://docs.postiz.com/providers/youtube).
 
@@ -337,7 +345,7 @@ R2_PUBLIC_URL=https://media.example.com
 
 Generate `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, and `RELAY_SETUP_TOKEN` separately with `openssl rand -hex 32`. Generate `ENCRYPTION_KEY` with `openssl rand -base64 32`.
 
-Provider credentials are optional until the social OAuth adapters are implemented. Add only the providers you intend to use:
+Provider credentials are optional if you only want to inspect Relay. Add the credentials for every provider users should be able to connect:
 
 ```env
 FACEBOOK_APP_ID=
@@ -371,6 +379,7 @@ Click **Deploy** and open **Deployments** to follow the build. A successful depl
 - `postgres`: running and healthy.
 - `migrate`: completed successfully and stopped.
 - `web`: running and healthy.
+- `worker`: running. It has no public domain or port.
 
 If the domain shows **No Available Server**, confirm that the `web` domain includes the internal `:3000` suffix and inspect the `web` logs.
 
@@ -403,7 +412,8 @@ Do not delete the PostgreSQL persistent volume during an update. Back up Postgre
 - Back up `BETTER_AUTH_SECRET` and `ENCRYPTION_KEY` securely.
 - Do not expose the PostgreSQL service to the public internet.
 - Monitor Docker build-cache usage and Cloudflare R2 storage usage.
-- Register provider redirect URLs exactly as shown above. They will become active when Relay's OAuth callback routes are implemented.
+- Register provider redirect URLs exactly as shown above before connecting an account.
+- Confirm the `worker` service remains running so connected-account tokens renew automatically.
 
 Coolify references:
 
@@ -462,14 +472,15 @@ Available now:
 - Empty initial workspace with no seeded brands, accounts, posts, calendar events, or media.
 - Authenticated, paginated Cloudflare R2 media listing, upload, rename, and delete operations.
 - PostgreSQL-backed brand creation and brand listing.
-- Provider-neutral encrypted token refresh lifecycle with concurrency leases.
+- OAuth start/callback flows for Facebook Pages, Facebook-linked Instagram, standalone Instagram Login, TikTok, and YouTube.
+- Encrypted PostgreSQL social-account persistence and disconnect actions.
+- Runnable provider-token refresh worker with rotation, warning/expiry state, and concurrency leases.
 
 Still required for real social publishing:
 
-- Meta, TikTok, and Google OAuth start/callback routes.
-- Provider API implementations and app-review approval.
-- PostgreSQL persistence for social accounts, posts, and schedules.
-- A durable publishing queue and runnable worker service.
+- Provider publishing implementations and the provider app-review approval required for public/direct posting.
+- PostgreSQL persistence for posts and schedules.
+- A durable publishing queue and publishing worker loop.
 - Delivery retries, monitoring, and operational backups.
 
 The code intentionally does not present these unfinished integrations as production-ready.

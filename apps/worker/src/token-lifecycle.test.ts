@@ -16,8 +16,8 @@ class MemoryCredentialRepository implements AccountCredentialRepository {
   async findRefreshCandidates(refreshBefore: Date, limit: number): Promise<AccountCredential[]> {
     return this.accounts.filter((account) =>
       account.status !== "expired" &&
-      account.tokenExpiresAt !== null &&
-      account.tokenExpiresAt <= refreshBefore &&
+      account.refreshAfterAt !== null &&
+      account.refreshAfterAt <= refreshBefore &&
       (!account.refreshLeaseExpiresAt || account.refreshLeaseExpiresAt <= new Date()),
     ).slice(0, limit);
   }
@@ -60,10 +60,14 @@ function setup(overrides: Partial<AccountCredential> = {}) {
   const account: AccountCredential = {
     accountId: "account-1",
     provider: "tiktok",
+    authMethod: "tiktok",
+    providerAccountId: "provider-account-1",
+    providerMetadata: {},
     accessTokenEncrypted: cipher.encrypt("access-old"),
     refreshTokenEncrypted: cipher.encrypt("refresh-old"),
     tokenExpiresAt: new Date(now.getTime() + 5 * 60_000),
     refreshTokenExpiresAt: new Date(now.getTime() + 300 * 24 * 60 * 60_000),
+    refreshAfterAt: new Date(now.getTime() - 1),
     grantedScopes: ["video.publish"],
     status: "connected",
     lastCheckedAt: null,
@@ -76,8 +80,8 @@ function setup(overrides: Partial<AccountCredential> = {}) {
   return { cipher, account, repository, providers };
 }
 
-test("returns the existing token when it is outside the refresh window", async () => {
-  const context = setup({ tokenExpiresAt: new Date(now.getTime() + 60 * 60_000) });
+test("returns the existing token before its provider-specific refresh time", async () => {
+  const context = setup({ tokenExpiresAt: new Date(now.getTime() + 60 * 60_000), refreshAfterAt: new Date(now.getTime() + 50 * 60_000) });
   let calls = 0;
   context.providers.register("tiktok", async () => { calls += 1; throw new Error("must not refresh"); });
   const lifecycle = new TokenLifecycleService(context.repository, context.cipher, context.providers);
@@ -95,6 +99,7 @@ test("refreshes early and persists rotated access and refresh tokens", async () 
       refreshToken: "refresh-new",
       expiresAt: new Date(now.getTime() + 24 * 60 * 60_000),
       refreshTokenExpiresAt: new Date(now.getTime() + 365 * 24 * 60 * 60_000),
+      refreshAfterAt: new Date(now.getTime() + 23 * 60 * 60_000),
     };
   });
   const lifecycle = new TokenLifecycleService(context.repository, context.cipher, context.providers);
@@ -140,7 +145,7 @@ test("a refresh lease prevents two workers from rotating the same account", asyn
   context.providers.register("tiktok", async () => {
     calls += 1;
     await gate;
-    return { accessToken: "access-new", expiresAt: new Date(now.getTime() + 60 * 60_000) };
+    return { accessToken: "access-new", expiresAt: new Date(now.getTime() + 60 * 60_000), refreshAfterAt: new Date(now.getTime() + 50 * 60_000) };
   });
   const firstWorker = new TokenLifecycleService(context.repository, context.cipher, context.providers, { workerId: "first" });
   const secondWorker = new TokenLifecycleService(context.repository, context.cipher, context.providers, { workerId: "second" });
@@ -156,7 +161,7 @@ test("a refresh lease prevents two workers from rotating the same account", asyn
 
 test("the maintenance sweep refreshes due accounts before publishing", async () => {
   const context = setup();
-  context.providers.register("tiktok", async () => ({ accessToken: "access-swept", expiresAt: new Date(now.getTime() + 60 * 60_000) }));
+  context.providers.register("tiktok", async () => ({ accessToken: "access-swept", expiresAt: new Date(now.getTime() + 60 * 60_000), refreshAfterAt: new Date(now.getTime() + 50 * 60_000) }));
   const lifecycle = new TokenLifecycleService(context.repository, context.cipher, context.providers);
 
   assert.deepEqual(await lifecycle.sweep(now), { examined: 1, refreshed: 1, reconnectRequired: 0, deferred: 0 });

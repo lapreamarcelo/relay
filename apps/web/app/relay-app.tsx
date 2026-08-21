@@ -7,12 +7,14 @@ import {
   Instagram, KeyRound, LayoutGrid, List, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Pencil, Plus, RefreshCw, Search,
   Send, Settings, ShieldCheck, Sparkles, Sun, Trash2, Upload, Users, Video, X, Youtube, Zap,
 } from "lucide-react";
-import { accounts, initialPosts, type Brand, type ProviderId, type ProviderPostSettings, type RelayPost, type PostStatus } from "@relay/core";
+import { initialPosts, type Brand, type ProviderId, type ProviderPostSettings, type RelayPost, type SocialAccount, type PostStatus } from "@relay/core";
 import { providerRegistry } from "@relay/providers";
 
 type View = "home" | "calendar" | "posts" | "media" | "brands" | "accounts" | "settings";
 const BrandsContext = createContext<Brand[]>([]);
 const useBrands = () => useContext(BrandsContext);
+const AccountsContext = createContext<SocialAccount[]>([]);
+const useAccounts = () => useContext(AccountsContext);
 
 const viewLabel: Record<View, string> = { home: "Home", calendar: "Calendar", posts: "Posts", media: "Media", brands: "Brands", accounts: "Accounts", settings: "Settings" };
 const navItems: { id: View; icon: typeof Home }[] = [
@@ -52,6 +54,7 @@ function Topbar({ view, onCompose, onCommand, onMenu }: { view: View; onCompose:
 }
 
 function Sidebar({ active, onChange, mobileOpen, onClose, user, onLogout }: { active: View; onChange: (view: View) => void; mobileOpen: boolean; onClose: () => void; user: { name: string; role: string }; onLogout: () => void }) {
+  const accounts = useAccounts();
   return <>
     {mobileOpen && <button className="scrim" onClick={onClose} aria-label="Close menu" />}
     <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
@@ -74,6 +77,7 @@ function Sidebar({ active, onChange, mobileOpen, onClose, user, onLogout }: { ac
 
 function HomeView({ posts, onCompose, go, userName }: { posts: RelayPost[]; onCompose: () => void; go: (v: View) => void; userName: string }) {
   const brands = useBrands();
+  const accounts = useAccounts();
   const upcoming = posts.filter((post) => post.status === "scheduled").slice(0, 3);
   const today = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(new Date());
   const firstName = userName.trim().split(/\s+/)[0] || "there";
@@ -144,10 +148,16 @@ function PostsView({ posts }: { posts: RelayPost[] }) {
   return <div className="page page-enter"><div className="filterbar"><div className="tabs">{(["all", "draft", "scheduled", "published", "failed"] as const).map((value) => <button className={filter === value ? "active" : ""} onClick={() => setFilter(value)} key={value}>{value[0].toUpperCase() + value.slice(1)}<span>{value === "all" ? posts.length : posts.filter((p) => p.status === value).length}</span></button>)}</div><button className="secondary-button"><Grid2X2 /> Filters</button></div><div className="posts-list">{shown.map((post) => <PostRow post={post} key={post.id} />)}{shown.length === 0 && <Empty title="Nothing here yet" body="Posts with this status will appear here." />}</div></div>;
 }
 
-function AccountsView() {
+function AccountsView({ onAccountDeleted }: { onAccountDeleted: (id: string) => void }) {
   const brands = useBrands();
-  const [connect, setConnect] = useState(false);
-  return <div className="page page-enter"><div className="inline-heading"><div><h2>Connected accounts</h2><p>Publish destinations grouped by brand.</p></div><button className="primary-button" onClick={() => setConnect(true)}><Plus /> Connect account</button></div>{brands.map((brand) => <section className="account-group" key={brand.id}><div className="brand-header"><BrandMark brandId={brand.id} /><div><h3>{brand.name}</h3><p>{accounts.filter((a) => a.brandId === brand.id).length} connected accounts</p></div><button className="icon-button"><MoreHorizontal /></button></div><div className="account-list">{accounts.filter((account) => account.brandId === brand.id).map((account) => <article key={account.id}><ProviderIcon id={account.provider} /><div><b>{providerRegistry.get(account.provider).name}</b><span>{account.handle}</span></div><div className="followers"><b>{account.followers}</b><small>followers</small></div><Status value={account.status} /><button className="icon-button"><MoreHorizontal /></button></article>)}</div></section>)}{accounts.length === 0 && <Empty title="No accounts connected" body="Connect your first social account to create a publishing destination." />}{connect && <ConnectModal onClose={() => setConnect(false)} />}</div>;
+  const accounts = useAccounts();
+  const [connect, setConnect] = useState<ProviderId | "choose" | null>(null);
+  const disconnect = async (account: SocialAccount) => {
+    if (!window.confirm(`Disconnect ${account.displayName} from Relay? Scheduled publishing to this account will stop.`)) return;
+    const response = await fetch("/api/v1/accounts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: account.id }) });
+    if (response.ok) onAccountDeleted(account.id); else window.alert("Relay could not disconnect this account. Please try again.");
+  };
+  return <div className="page page-enter"><div className="inline-heading"><div><h2>Connected accounts</h2><p>Publish destinations grouped by brand.</p></div><button className="primary-button" disabled={brands.length === 0} onClick={() => setConnect("choose")}><Plus /> Connect account</button></div>{brands.map((brand) => { const brandAccounts = accounts.filter((account) => account.brandId === brand.id); if (brandAccounts.length === 0 && accounts.length > 0) return null; return <section className="account-group" key={brand.id}><div className="brand-header"><BrandMark brandId={brand.id} /><div><h3>{brand.name}</h3><p>{brandAccounts.length} connected account{brandAccounts.length === 1 ? "" : "s"}</p></div></div><div className="account-list">{brandAccounts.map((account) => <article key={account.id}><ProviderIcon id={account.provider} /><div><b>{account.displayName}</b><span>{providerRegistry.get(account.provider).name} · {account.handle}</span></div><div className="followers"><b>{account.tokenExpiresAt ? new Date(account.tokenExpiresAt).toLocaleDateString() : "Managed"}</b><small>token renewal</small></div>{account.status === "expired" ? <button className="status expired status-action" onClick={() => setConnect(account.provider)} title="Reconnect this account"><span />Expired · reconnect</button> : <Status value={account.status} />}<button className="icon-button" aria-label={`Disconnect ${account.displayName}`} title="Disconnect account" onClick={() => void disconnect(account)}><Trash2 /></button></article>)}</div></section>; })}{accounts.length === 0 && <Empty title="No accounts connected" body={brands.length === 0 ? "Create a brand first, then connect your social accounts." : "Connect your first social account to create a publishing destination."} />}{connect && <ConnectModal initialProvider={connect === "choose" ? undefined : connect} onClose={() => setConnect(null)} />}</div>;
 }
 
 interface MediaObject {
@@ -302,13 +312,14 @@ function DeleteBrandModal({ brand, onClose, onDeleted }: { brand: Brand; onClose
 }
 
 function BrandsView({ onBrandCreated, onBrandUpdated, onBrandDeleted }: { onBrandCreated: (brand: Brand) => void; onBrandUpdated: (brand: Brand) => void; onBrandDeleted: (id: string) => void }) {
-  const brands = useBrands(); const [creating, setCreating] = useState(false); const [editing, setEditing] = useState<Brand | null>(null); const [deleting, setDeleting] = useState<Brand | null>(null);
+  const brands = useBrands(); const accounts = useAccounts(); const [creating, setCreating] = useState(false); const [editing, setEditing] = useState<Brand | null>(null); const [deleting, setDeleting] = useState<Brand | null>(null);
   return <div className="page page-enter"><div className="inline-heading"><div><h2>Brands</h2><p>Keep accounts and publishing defaults organized.</p></div><button className="primary-button" onClick={() => setCreating(true)}><Plus /> New brand</button></div>{brands.length === 0 ? <Empty title="No brands yet" body="Create your first brand to organize accounts and publishing defaults." /> : <div className="brand-grid">{brands.map((brand) => <article key={brand.id}><div className="brand-cover" style={{ "--brand": brand.color } as React.CSSProperties}><BrandMark brandId={brand.id} size="large" /></div><div><h3>{brand.name}</h3><p>{accounts.filter((account) => account.brandId === brand.id).length} accounts · {brand.timezone}</p><div className="provider-stack">{accounts.filter((account) => account.brandId === brand.id).map((account) => <ProviderIcon id={account.provider} key={account.id} />)}</div></div><BrandActions brand={brand} onEdit={() => setEditing(brand)} onDelete={() => setDeleting(brand)} /></article>)}</div>}{creating && <BrandModal onClose={() => setCreating(false)} onSaved={onBrandCreated} />}{editing && <BrandModal brand={editing} onClose={() => setEditing(null)} onSaved={onBrandUpdated} />}{deleting && <DeleteBrandModal brand={deleting} onClose={() => setDeleting(null)} onDeleted={onBrandDeleted} />}</div>;
 }
 
 type SettingsSection = "General" | "Workspace" | "API keys" | "Storage" | "Providers" | "System" | "Appearance";
 
 function SettingsView({ theme, setTheme, go, user }: { theme: string; setTheme: (value: string) => void; go: (view: View) => void; user: { name: string; email: string; role: string } }) {
+  const accounts = useAccounts();
   const sections: SettingsSection[] = ["General", "Workspace", "API keys", "Storage", "Providers", "System", "Appearance"];
   const [section, setSection] = useState<SettingsSection>("General");
   const [health, setHealth] = useState<"idle" | "checking" | "healthy" | "error">("idle");
@@ -338,10 +349,24 @@ function SettingsView({ theme, setTheme, go, user }: { theme: string; setTheme: 
 
 function Empty({ title, body }: { title: string; body: string }) { return <div className="empty"><span><Sparkles /></span><h3>{title}</h3><p>{body}</p></div>; }
 
-function ConnectModal({ onClose }: { onClose: () => void }) {
-  const [selected, setSelected] = useState<ProviderId | null>(null);
+function ConnectModal({ onClose, initialProvider }: { onClose: () => void; initialProvider?: ProviderId }) {
+  const brands = useBrands();
+  const [selected, setSelected] = useState<ProviderId | null>(initialProvider ?? null);
+  const [brandId, setBrandId] = useState(brands[0]?.id ?? "");
+  const [providerConfig, setProviderConfig] = useState<Record<string, { configured: boolean; connectionOptions: { flow: string; configured: boolean }[] }>>({});
+  const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  useEffect(() => {
+    void fetch("/api/v1/providers", { cache: "no-store" }).then(async (response) => {
+      const payload = await response.json() as { data?: Array<{ id: string; configured: boolean; connectionOptions: { flow: string; configured: boolean }[] }>; error?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not check provider configuration.");
+      setProviderConfig(Object.fromEntries((payload.data ?? []).map((item) => [item.id, item])));
+    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Could not check provider configuration.")).finally(() => setLoading(false));
+  }, []);
   const provider = selected ? providerRegistry.get(selected) : null;
-  return <div className="modal-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close account connection" /><div className="connect-modal" role="dialog" aria-modal="true" aria-labelledby="connect-title"><div className="modal-title"><div><p className="eyebrow">New destination</p><h2 id="connect-title">Connect an account</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></div><p>Choose a network to check its connection availability.</p><div className="connect-list">{providerRegistry.list().map((item) => <button key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}><ProviderIcon id={item.id} selected /><span><b>{item.name}</b><small>{selected === item.id ? "Connection details shown below" : "Connect a professional account"}</small></span><ChevronRight /></button>)}</div>{provider && <div className="connection-notice" role="status"><CircleAlert /><div><b>{provider.name} connection is not available yet</b><p>Relay’s OAuth server adapter is still being implemented. No credentials or tokens were sent.</p></div></div>}<p className="safe-note"><Zap /> Tokens will be encrypted at rest and never exposed to the browser.</p></div></div>;
+  const options = selected ? providerConfig[selected]?.connectionOptions ?? [] : [];
+  const connectLabel = (flow: string) => flow === "instagram-standalone" ? "Instagram Login" : flow === "instagram" ? "Through a Facebook Page" : `Continue with ${provider?.name ?? "provider"}`;
+  const begin = (flow: string) => { if (brandId) window.location.assign(`/api/oauth/${encodeURIComponent(flow)}/start?brandId=${encodeURIComponent(brandId)}`); };
+  return <div className="modal-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close account connection" /><div className="connect-modal" role="dialog" aria-modal="true" aria-labelledby="connect-title"><div className="modal-title"><div><p className="eyebrow">New destination</p><h2 id="connect-title">Connect an account</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></div><p>Choose a network, then authorize Relay on its secure provider page.</p><label className="connect-brand">Add accounts to<select value={brandId} onChange={(event) => setBrandId(event.target.value)}>{brands.map((brand) => <option value={brand.id} key={brand.id}>{brand.name}</option>)}</select></label>{error && <p className="auth-error" role="alert">{error}</p>}<div className="connect-list" aria-busy={loading}>{providerRegistry.list().map((item) => { const configured = providerConfig[item.id]?.configured; return <button key={item.id} disabled={loading} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}><ProviderIcon id={item.id} selected /><span><b>{item.name}</b><small>{loading ? "Checking configuration…" : configured ? "Ready to connect" : "OAuth keys are not configured"}</small></span><ChevronRight /></button>; })}</div>{provider && <div className="connection-panel"><div><ProviderIcon id={provider.id} selected /><span><b>Connect {provider.name}</b><small>{options.some((option) => option.configured) ? "You’ll return to Relay automatically after authorization." : "Add this provider’s OAuth keys and restart Relay."}</small></span></div>{options.map((option) => <button className="primary-button" key={option.flow} disabled={!option.configured || !brandId} onClick={() => begin(option.flow)}>{connectLabel(option.flow)}<ChevronRight /></button>)}</div>}<p className="safe-note"><Zap /> Tokens are encrypted at rest and never exposed to the browser.</p></div></div>;
 }
 
 function LogoutModal({ busy, error, onClose, onConfirm }: { busy: boolean; error: string; onClose: () => void; onConfirm: () => void }) {
@@ -350,6 +375,7 @@ function LogoutModal({ busy, error, onClose, onConfirm }: { busy: boolean; error
 
 function Composer({ onClose, onCreate }: { onClose: () => void; onCreate: (post: RelayPost) => void }) {
   const brands = useBrands();
+  const accounts = useAccounts();
   const [text, setText] = useState(""); const [brandId, setBrandId] = useState(brands[0]?.id ?? "");
   const available = accounts.filter((account) => account.brandId === brandId);
   const [selected, setSelected] = useState<string[]>([]);
@@ -405,17 +431,27 @@ function Composer({ onClose, onCreate }: { onClose: () => void; onCreate: (post:
 
 function CommandMenu({ onClose, go, compose }: { onClose: () => void; go: (v: View) => void; compose: () => void }) { const commands = [{ name: "Create post", icon: Plus, action: compose }, { name: "Open calendar", icon: CalendarDays, action: () => go("calendar") }, { name: "Search posts", icon: Search, action: () => go("posts") }, { name: "Connect account", icon: Users, action: () => go("accounts") }, { name: "Upload media", icon: ImageIcon, action: () => go("media") }]; return <div className="modal-layer command-layer"><button className="modal-scrim" onClick={onClose} /><div className="command-menu"><div><Search /><input autoFocus placeholder="Search or type a command…"/><kbd>ESC</kbd></div><p>Quick actions</p>{commands.map(({ name, icon: Icon, action }) => <button key={name} onClick={() => { action(); onClose(); }}><Icon />{name}<span>↵</span></button>)}<footer><span><Command /> Relay command menu</span><span>↑↓ Navigate · ↵ Select</span></footer></div></div>; }
 
-export default function RelayApp({ user, initialBrands }: { user: { name: string; email: string; role: string }; initialBrands: Brand[] }) {
+export default function RelayApp({ user, initialBrands, initialAccounts }: { user: { name: string; email: string; role: string }; initialBrands: Brand[]; initialAccounts: SocialAccount[] }) {
   const [view, setView] = useState<View>("home"); const [posts, setPosts] = useState(initialPosts);
   const [brandList, setBrandList] = useState(initialBrands);
+  const [accountList, setAccountList] = useState(initialAccounts);
   const [composer, setComposer] = useState(false); const [command, setCommand] = useState(false); const [menu, setMenu] = useState(false); const [theme, setTheme] = useState("light"); const [toast, setToast] = useState("");
   const [themeReady, setThemeReady] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false); const [logoutBusy, setLogoutBusy] = useState(false); const [logoutError, setLogoutError] = useState("");
   useEffect(() => { const stored = window.localStorage.getItem("relay-theme"); if (stored === "light" || stored === "dark") setTheme(stored); setThemeReady(true); }, []);
+  useEffect(() => {
+    const url = new URL(window.location.href); const oauth = url.searchParams.get("oauth");
+    if (!oauth) return;
+    setView("accounts");
+    if (oauth === "success") { const count = Number(url.searchParams.get("count") || 1); const provider = url.searchParams.get("provider") || "social"; setToast(`${count} ${provider} account${count === 1 ? "" : "s"} connected successfully`); }
+    else { const code = url.searchParams.get("code"); setToast(code === "authorization_denied" ? "Connection cancelled by the provider" : "The social account could not be connected. Check its permissions and try again."); }
+    url.searchParams.delete("oauth"); url.searchParams.delete("provider"); url.searchParams.delete("count"); url.searchParams.delete("code");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`); const timer = window.setTimeout(() => setToast(""), 5000); return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => { document.documentElement.dataset.theme = theme; if (themeReady) window.localStorage.setItem("relay-theme", theme); }, [theme, themeReady]);
   useEffect(() => { const handle = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setCommand(true); } if (event.key.toLowerCase() === "c" && !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) setComposer(true); if (event.key === "Escape") { setComposer(false); setCommand(false); } }; window.addEventListener("keydown", handle); return () => window.removeEventListener("keydown", handle); }, []);
   const addPost = (post: RelayPost) => { setPosts((current) => [post, ...current]); setToast(post.status === "scheduled" ? "Post scheduled for tomorrow at 09:30" : "Post published successfully"); setTimeout(() => setToast(""), 3500); };
-  const content = useMemo(() => { if (view === "home") return <HomeView posts={posts} onCompose={() => setComposer(true)} go={setView} userName={user.name} />; if (view === "calendar") return <CalendarView posts={posts} onCompose={() => setComposer(true)} />; if (view === "posts") return <PostsView posts={posts} />; if (view === "accounts") return <AccountsView />; if (view === "media") return <MediaView onCompose={() => setComposer(true)} />; if (view === "brands") return <BrandsView onBrandCreated={(brand) => setBrandList((current) => [...current, brand])} onBrandUpdated={(brand) => setBrandList((current) => current.map((item) => item.id === brand.id ? brand : item))} onBrandDeleted={(id) => setBrandList((current) => current.filter((item) => item.id !== id))} />; return <SettingsView theme={theme} setTheme={setTheme} go={setView} user={user} />; }, [view, posts, theme, user]);
+  const content = useMemo(() => { if (view === "home") return <HomeView posts={posts} onCompose={() => setComposer(true)} go={setView} userName={user.name} />; if (view === "calendar") return <CalendarView posts={posts} onCompose={() => setComposer(true)} />; if (view === "posts") return <PostsView posts={posts} />; if (view === "accounts") return <AccountsView onAccountDeleted={(id) => setAccountList((current) => current.filter((item) => item.id !== id))} />; if (view === "media") return <MediaView onCompose={() => setComposer(true)} />; if (view === "brands") return <BrandsView onBrandCreated={(brand) => setBrandList((current) => [...current, brand])} onBrandUpdated={(brand) => setBrandList((current) => current.map((item) => item.id === brand.id ? brand : item))} onBrandDeleted={(id) => setBrandList((current) => current.filter((item) => item.id !== id))} />; return <SettingsView theme={theme} setTheme={setTheme} go={setView} user={user} />; }, [view, posts, theme, user]);
   const logout = async () => {
     setLogoutBusy(true); setLogoutError("");
     try {
@@ -424,5 +460,5 @@ export default function RelayApp({ user, initialBrands }: { user: { name: string
       window.location.replace("/login");
     } catch (reason) { setLogoutError(reason instanceof Error ? reason.message : "Relay could not end your session."); setLogoutBusy(false); }
   };
-  return <BrandsContext.Provider value={brandList}><div className="app-shell"><Sidebar active={view} onChange={setView} mobileOpen={menu} onClose={() => setMenu(false)} user={user} onLogout={() => { setLogoutError(""); setLogoutConfirm(true); }} /><main className="main"><Topbar view={view} onCompose={() => setComposer(true)} onCommand={() => setCommand(true)} onMenu={() => setMenu(true)} />{content}</main><nav className="mobile-nav">{navItems.slice(0, 3).map(({ id, icon: Icon }) => <button className={view === id ? "active" : ""} onClick={() => setView(id)} key={id}><Icon /><span>{viewLabel[id]}</span></button>)}<button className="mobile-create" onClick={() => setComposer(true)}><Plus /></button><button className={view === "accounts" ? "active" : ""} onClick={() => setView("accounts")}><Users /><span>Accounts</span></button><button onClick={() => setMenu(true)}><Menu /><span>More</span></button></nav>{composer && <Composer onClose={() => setComposer(false)} onCreate={addPost} />}{command && <CommandMenu onClose={() => setCommand(false)} go={setView} compose={() => setComposer(true)} />}{logoutConfirm && <LogoutModal busy={logoutBusy} error={logoutError} onClose={() => setLogoutConfirm(false)} onConfirm={() => void logout()} />}{toast && <div className="toast"><span><Check /></span>{toast}</div>}</div></BrandsContext.Provider>;
+  return <BrandsContext.Provider value={brandList}><AccountsContext.Provider value={accountList}><div className="app-shell"><Sidebar active={view} onChange={setView} mobileOpen={menu} onClose={() => setMenu(false)} user={user} onLogout={() => { setLogoutError(""); setLogoutConfirm(true); }} /><main className="main"><Topbar view={view} onCompose={() => setComposer(true)} onCommand={() => setCommand(true)} onMenu={() => setMenu(true)} />{content}</main><nav className="mobile-nav">{navItems.slice(0, 3).map(({ id, icon: Icon }) => <button className={view === id ? "active" : ""} onClick={() => setView(id)} key={id}><Icon /><span>{viewLabel[id]}</span></button>)}<button className="mobile-create" onClick={() => setComposer(true)}><Plus /></button><button className={view === "accounts" ? "active" : ""} onClick={() => setView("accounts")}><Users /><span>Accounts</span></button><button onClick={() => setMenu(true)}><Menu /><span>More</span></button></nav>{composer && <Composer onClose={() => setComposer(false)} onCreate={addPost} />}{command && <CommandMenu onClose={() => setCommand(false)} go={setView} compose={() => setComposer(true)} />}{logoutConfirm && <LogoutModal busy={logoutBusy} error={logoutError} onClose={() => setLogoutConfirm(false)} onConfirm={() => void logout()} />}{toast && <div className="toast"><span><Check /></span>{toast}</div>}</div></AccountsContext.Provider></BrandsContext.Provider>;
 }

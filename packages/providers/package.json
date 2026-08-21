@@ -5,8 +5,10 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./oauth": "./src/oauth.ts",
+    "./refresh-registry": "./src/refresh-registry.ts",
     "./token-refresh": "./src/token-refresh.ts"
   },
-  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit" },
-  "devDependencies": { "@relay/core": "workspace:*", "typescript": "^5.8.0" }
+  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "test": "node --experimental-transform-types --test src/*.test.ts" },
+  "devDependencies": { "@relay/core": "workspace:*", "@types/node": "^22.0.0", "typescript": "^5.8.0" }
 }

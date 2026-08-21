@@ -53,6 +53,7 @@ services:
       TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
       YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
       YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+      META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v23.0}
     expose:
       - "3000"
     depends_on:
@@ -64,5 +65,28 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+  worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    environment:
+      APP_URL: ${APP_URL:?Set APP_URL in Coolify}
+      DATABASE_URL: postgresql://relay:${POSTGRES_PASSWORD}@postgres:5432/relay
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-5}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in Coolify}
+      FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
+      INSTAGRAM_APP_ID: ${INSTAGRAM_APP_ID:-}
+      INSTAGRAM_APP_SECRET: ${INSTAGRAM_APP_SECRET:-}
+      TIKTOK_CLIENT_ID: ${TIKTOK_CLIENT_ID:-}
+      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+      META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v23.0}
+      TOKEN_REFRESH_INTERVAL_MS: ${TOKEN_REFRESH_INTERVAL_MS:-300000}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 volumes:
   relay_postgres_data:

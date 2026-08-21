@@ -1,12 +1,16 @@
-import type { AccountStatus, ProviderId } from "./index";
+import type { AccountStatus, ProviderAuthMethod, ProviderId } from "./index";
 
 export interface AccountCredential {
   accountId: string;
   provider: ProviderId;
+  authMethod: ProviderAuthMethod;
+  providerAccountId: string;
+  providerMetadata: Record<string, unknown>;
   accessTokenEncrypted: string;
   refreshTokenEncrypted: string | null;
   tokenExpiresAt: Date | null;
   refreshTokenExpiresAt: Date | null;
+  refreshAfterAt: Date | null;
   grantedScopes: string[];
   status: AccountStatus;
   lastCheckedAt: Date | null;
@@ -19,6 +23,7 @@ export interface RotatedAccountTokens {
   refreshTokenEncrypted: string | null;
   tokenExpiresAt: Date;
   refreshTokenExpiresAt: Date | null;
+  refreshAfterAt: Date;
   grantedScopes: string[];
 }
 

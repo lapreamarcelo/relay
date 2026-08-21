@@ -59,8 +59,7 @@ export class TokenLifecycleService {
   }
 
   async sweep(now = new Date()): Promise<TokenSweepResult> {
-    const refreshBefore = new Date(now.getTime() + this.refreshWindowMs);
-    const candidates = await this.repository.findRefreshCandidates(refreshBefore, this.sweepBatchSize);
+    const candidates = await this.repository.findRefreshCandidates(now, this.sweepBatchSize);
     const result: TokenSweepResult = { examined: candidates.length, refreshed: 0, reconnectRequired: 0, deferred: 0 };
 
     await Promise.all(candidates.map(async (candidate) => {
@@ -77,6 +76,7 @@ export class TokenLifecycleService {
   }
 
   private needsRefresh(account: AccountCredential, now: Date): boolean {
+    if (account.refreshAfterAt) return account.refreshAfterAt <= now;
     if (!account.tokenExpiresAt) return false;
     return account.tokenExpiresAt.getTime() <= now.getTime() + this.refreshWindowMs;
   }
@@ -92,10 +92,14 @@ export class TokenLifecycleService {
     }
 
     const existingRefreshToken = this.cipher.decrypt(claimed.refreshTokenEncrypted);
+    const existingAccessToken = this.cipher.decrypt(claimed.accessTokenEncrypted);
 
     try {
-      const refreshed = await this.providers.get(claimed.provider)({
+      const refreshed = await this.providers.get(claimed.authMethod)({
         refreshToken: existingRefreshToken,
+        accessToken: existingAccessToken,
+        providerAccountId: claimed.providerAccountId,
+        providerMetadata: claimed.providerMetadata,
         grantedScopes: claimed.grantedScopes,
       });
       if (refreshed.expiresAt <= now) throw new Error("Provider returned an already-expired access token");
@@ -106,6 +110,7 @@ export class TokenLifecycleService {
         refreshTokenEncrypted: this.cipher.encrypt(nextRefreshToken),
         tokenExpiresAt: refreshed.expiresAt,
         refreshTokenExpiresAt: refreshed.refreshTokenExpiresAt ?? claimed.refreshTokenExpiresAt,
+        refreshAfterAt: refreshed.refreshAfterAt,
         grantedScopes: refreshed.grantedScopes ?? claimed.grantedScopes,
       }, now);
       return refreshed.accessToken;

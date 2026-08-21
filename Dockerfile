@@ -31,6 +31,13 @@ COPY packages/database/scripts packages/database/scripts
 COPY packages/database/drizzle packages/database/drizzle
 CMD ["node", "packages/database/scripts/migrate.mjs"]
 
+FROM dependencies AS worker
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY packages ./packages
+COPY apps/worker ./apps/worker
+CMD ["./apps/worker/node_modules/.bin/tsx", "apps/worker/src/run.ts"]
+
 FROM node:22-bookworm-slim AS runner
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

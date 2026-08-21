@@ -1,7 +1,10 @@
-import type { ProviderId } from "@relay/core";
+import type { ProviderAuthMethod } from "@relay/core";
 
 export interface RefreshProviderTokensInput {
   refreshToken: string;
+  accessToken: string;
+  providerAccountId: string;
+  providerMetadata: Record<string, unknown>;
   grantedScopes: string[];
 }
 
@@ -10,6 +13,7 @@ export interface RefreshedProviderTokens {
   refreshToken?: string;
   expiresAt: Date;
   refreshTokenExpiresAt?: Date | null;
+  refreshAfterAt: Date;
   grantedScopes?: string[];
 }
 
@@ -23,15 +27,15 @@ export class ProviderAuthorizationError extends Error {
 }
 
 export class ProviderRefreshRegistry {
-  private readonly refreshers = new Map<ProviderId, ProviderTokenRefresher>();
+  private readonly refreshers = new Map<ProviderAuthMethod, ProviderTokenRefresher>();
 
-  register(provider: ProviderId, refresher: ProviderTokenRefresher): void {
-    this.refreshers.set(provider, refresher);
+  register(authMethod: ProviderAuthMethod, refresher: ProviderTokenRefresher): void {
+    this.refreshers.set(authMethod, refresher);
   }
 
-  get(provider: ProviderId): ProviderTokenRefresher {
-    const refresher = this.refreshers.get(provider);
-    if (!refresher) throw new Error(`No token refresher registered for ${provider}`);
+  get(authMethod: ProviderAuthMethod): ProviderTokenRefresher {
+    const refresher = this.refreshers.get(authMethod);
+    if (!refresher) throw new Error(`No token refresher registered for ${authMethod}`);
     return refresher;
   }
 }

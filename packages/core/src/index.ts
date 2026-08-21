@@ -1,4 +1,5 @@
 export type ProviderId = "instagram" | "facebook" | "tiktok" | "youtube";
+export type ProviderAuthMethod = "instagram-facebook" | "instagram-standalone" | "facebook" | "tiktok" | "youtube";
 export type AccountStatus = "connected" | "warning" | "expired";
 export type PostStatus = "draft" | "scheduled" | "published" | "failed";
 
@@ -14,10 +15,16 @@ export interface SocialAccount {
   id: string;
   brandId: string;
   provider: ProviderId;
+  authMethod: ProviderAuthMethod;
+  providerAccountId: string;
   handle: string;
   displayName: string;
+  avatarUrl?: string;
   status: AccountStatus;
   followers: string;
+  tokenExpiresAt?: string;
+  refreshTokenExpiresAt?: string;
+  lastCheckedAt?: string;
 }
 
 export interface InstagramPostSettings {
