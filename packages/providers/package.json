@@ -1,0 +1,12 @@
+{
+  "name": "@relay/providers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./token-refresh": "./src/token-refresh.ts"
+  },
+  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit" },
+  "devDependencies": { "@relay/core": "workspace:*", "typescript": "^5.8.0" }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@relay/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./account-credentials": "./src/account-credentials.ts",
+    "./token-encryption": "./src/token-encryption.ts"
+  },
+  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit" },
+  "devDependencies": { "@types/node": "^22.0.0", "typescript": "^5.8.0" }
+}
