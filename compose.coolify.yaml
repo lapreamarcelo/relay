@@ -13,9 +13,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
-    networks:
-      - relay_private
-
   migrate:
     build:
       context: .
@@ -27,9 +24,6 @@ services:
       postgres:
         condition: service_healthy
     restart: "no"
-    networks:
-      - relay_private
-
   web:
     build:
       context: .
@@ -70,11 +64,5 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-    networks:
-      - relay_private
-
 volumes:
   relay_postgres_data:
-
-networks:
-  relay_private:

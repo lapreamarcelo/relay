@@ -25,7 +25,7 @@ Relay documents two supported paths:
 1. **Coolify for production (recommended):** deploy the public GitHub repository with `compose.coolify.yaml`.
 2. **Docker for local testing:** copy `.env.example` to `.env` and run `docker compose up -d --build`.
 
-Both paths include PostgreSQL and run database migrations automatically. You do not need to install Node.js or PostgreSQL on the host. Recommended all-in-one server size is 2 vCPU, 4 GB RAM, and 40 GB disk. Relay does not need a GPU.
+Both paths include PostgreSQL and run database migrations automatically. You do not need to install Node.js or PostgreSQL on the host. Relay itself is lightweight and does not need a GPU. For a server running both self-hosted Coolify and Relay, start with 2 vCPU, 2 GB RAM, 30 GB free disk, and swap enabled. Use 4 GB RAM when the same server also hosts other applications or repeatedly builds several projects.
 
 ## Environment variables
 
@@ -279,7 +279,7 @@ You need:
 - The public Relay repository URL: `https://github.com/lapreamarcelo/relay`.
 - A Coolify server or Coolify Cloud connected to a server.
 - An A record such as `relay.example.com` pointing to that server's public IP address.
-- At least 2 vCPU, 4 GB RAM, and 40 GB disk when Coolify builds and runs Relay on the same server.
+- For self-hosted Coolify and Relay on the same server: 2 vCPU, 2 GB RAM, 30 GB free disk, and swap enabled. Choose 4 GB RAM if that server also hosts other applications.
 
 ### 2. Select the GitHub repository
 
@@ -309,7 +309,14 @@ Click **Continue**. Coolify should load three services: `postgres`, `migrate`, a
 
 ### 4. Add environment variables
 
-Open **Environment Variables**, use the bulk editor, and paste the block below after replacing every placeholder. Keep these variables runtime-only; they are not build variables.
+Open **Environment Variables** after Coolify has loaded the Compose file. Coolify automatically creates the variables referenced by `compose.coolify.yaml`; fill in those existing rows instead of creating or pasting a second set. Keep them runtime-only and disable Preview availability unless you intentionally use preview deployments.
+
+Use the block below only as a value checklist. Do not import it as additional rows when the same names are already visible in Coolify.
+
+If a name appears twice, check its scope before deleting anything:
+
+- **Production + Preview:** keep the Production value and disable Preview availability when preview deployments are not used. Coolify intentionally keeps these scopes separate.
+- **Two entries in the same scope:** keep the entry generated from the Compose file and remove the manually added duplicate.
 
 ```env
 APP_URL=https://relay.example.com
