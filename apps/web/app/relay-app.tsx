@@ -29,9 +29,10 @@ function BrandMark({ brandId, size = "normal" }: { brandId: string; size?: "smal
 
 function ProviderIcon({ id, selected }: { id: ProviderId; selected?: boolean }) {
   const manifest = providerRegistry.get(id);
-  if (id === "instagram") return <span className={`provider-icon ${selected ? "selected" : ""}`} style={{ "--provider": manifest.color } as React.CSSProperties}><Instagram /></span>;
-  if (id === "youtube") return <span className={`provider-icon ${selected ? "selected" : ""}`} style={{ "--provider": manifest.color } as React.CSSProperties}><Youtube /></span>;
-  return <span className={`provider-icon text ${selected ? "selected" : ""}`} style={{ "--provider": manifest.color } as React.CSSProperties}>{manifest.shortName}</span>;
+  const className = `provider-icon provider-${id} ${selected ? "selected" : ""}`;
+  if (id === "instagram") return <span className={className} aria-hidden="true" style={{ "--provider": manifest.color } as React.CSSProperties}><Instagram /></span>;
+  if (id === "youtube") return <span className={className} aria-hidden="true" style={{ "--provider": manifest.color } as React.CSSProperties}><Youtube /></span>;
+  return <span className={`${className} text`} aria-hidden="true" style={{ "--provider": manifest.color } as React.CSSProperties}>{manifest.shortName}</span>;
 }
 
 function Status({ value }: { value: PostStatus | "connected" | "warning" | "expired" }) {
@@ -252,30 +253,57 @@ function MediaView({ onCompose }: { onCompose: () => void }) {
   </div>;
 }
 
-function BrandModal({ onClose, onCreated }: { onClose: () => void; onCreated: (brand: Brand) => void }) {
+function BrandModal({ brand, onClose, onSaved }: { brand?: Brand; onClose: () => void; onSaved: (brand: Brand) => void }) {
   const colors = ["#ff5c35", "#d9468f", "#1877f2", "#25875a", "#8a5cf5", "#d18b22"];
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(colors[0]);
-  const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+  const editing = Boolean(brand);
+  const [name, setName] = useState(brand?.name ?? "");
+  const [color, setColor] = useState(brand?.color ?? colors[0]);
+  const [timezone, setTimezone] = useState(() => brand?.timezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"));
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const monogram = name.trim().split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "R";
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const response = await fetch("/api/v1/brands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, color, timezone }) });
+      const response = await fetch("/api/v1/brands", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: brand?.id, name, color, timezone }) });
       const payload = await response.json() as { data?: Brand; error?: string };
-      if (!response.ok || !payload.data) throw new Error(payload.error || "Could not create the brand.");
-      onCreated(payload.data); onClose();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create the brand."); setBusy(false); }
+      if (!response.ok || !payload.data) throw new Error(payload.error || `Could not ${editing ? "update" : "create"} the brand.`);
+      onSaved(payload.data); onClose();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : `Could not ${editing ? "update" : "create"} the brand.`); setBusy(false); }
   };
 
-  return <div className="modal-layer"><button className="modal-scrim" disabled={busy} onClick={onClose} aria-label="Cancel brand creation" /><form className="brand-modal" onSubmit={submit}><header><div><p className="eyebrow">New brand</p><h2>Create a publishing identity</h2></div><button type="button" className="icon-button" disabled={busy} onClick={onClose}><X /></button></header><div className="brand-form-preview" style={{ "--brand": color } as React.CSSProperties}><span>{monogram}</span><div><b>{name.trim() || "Your brand"}</b><small>{timezone}</small></div></div><label htmlFor="brand-name">Brand name</label><input id="brand-name" autoFocus required maxLength={60} value={name} onChange={(event) => setName(event.target.value)} placeholder="Acme Studio" /><label>Brand color</label><div className="color-options">{colors.map((value) => <button type="button" key={value} className={color === value ? "active" : ""} style={{ "--swatch": value } as React.CSSProperties} aria-label={`Use color ${value}`} aria-pressed={color === value} onClick={() => setColor(value)}><span /></button>)}</div><label htmlFor="brand-timezone">Timezone</label><input id="brand-timezone" required value={timezone} onChange={(event) => setTimezone(event.target.value)} placeholder="Europe/Madrid" /><small className="field-help">Use an IANA timezone such as Europe/Madrid or America/New_York.</small>{error && <p className="auth-error" role="alert">{error}</p>}<footer><button type="button" className="secondary-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !name.trim()}>{busy ? <LoaderCircle className="spin" /> : <Plus />}{busy ? "Creating…" : "Create brand"}</button></footer></form></div>;
+  return <div className="modal-layer"><button className="modal-scrim" disabled={busy} onClick={onClose} aria-label={`Cancel brand ${editing ? "editing" : "creation"}`} /><form className="brand-modal" onSubmit={submit}><header><div><p className="eyebrow">{editing ? "Brand settings" : "New brand"}</p><h2>{editing ? "Edit publishing identity" : "Create a publishing identity"}</h2></div><button type="button" className="icon-button" disabled={busy} onClick={onClose} aria-label="Close"><X /></button></header><div className="brand-form-preview" style={{ "--brand": color } as React.CSSProperties}><span>{monogram}</span><div><b>{name.trim() || "Your brand"}</b><small>{timezone}</small></div></div><label htmlFor="brand-name">Brand name</label><input id="brand-name" autoFocus required maxLength={60} value={name} onChange={(event) => setName(event.target.value)} placeholder="Acme Studio" /><label>Brand color</label><div className="color-options">{colors.map((value) => <button type="button" key={value} className={color === value ? "active" : ""} style={{ "--swatch": value } as React.CSSProperties} aria-label={`Use color ${value}`} aria-pressed={color === value} onClick={() => setColor(value)}><span /></button>)}</div><label htmlFor="brand-timezone">Timezone</label><input id="brand-timezone" required value={timezone} onChange={(event) => setTimezone(event.target.value)} placeholder="Europe/Madrid" /><small className="field-help">Use an IANA timezone such as Europe/Madrid or America/New_York.</small>{error && <p className="auth-error" role="alert">{error}</p>}<footer><button type="button" className="secondary-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !name.trim()}>{busy ? <LoaderCircle className="spin" /> : editing ? <Check /> : <Plus />}{busy ? "Saving…" : editing ? "Save changes" : "Create brand"}</button></footer></form></div>;
 }
 
-function BrandsView({ onBrandCreated }: { onBrandCreated: (brand: Brand) => void }) {
-  const brands = useBrands(); const [creating, setCreating] = useState(false);
-  return <div className="page page-enter"><div className="inline-heading"><div><h2>Brands</h2><p>Keep accounts and publishing defaults organized.</p></div><button className="primary-button" onClick={() => setCreating(true)}><Plus /> New brand</button></div>{brands.length === 0 ? <Empty title="No brands yet" body="Create your first brand to organize accounts and publishing defaults." /> : <div className="brand-grid">{brands.map((brand) => <article key={brand.id}><div className="brand-cover" style={{ "--brand": brand.color } as React.CSSProperties}><BrandMark brandId={brand.id} size="large" /></div><div><h3>{brand.name}</h3><p>{accounts.filter((account) => account.brandId === brand.id).length} accounts · {brand.timezone}</p><div className="provider-stack">{accounts.filter((account) => account.brandId === brand.id).map((account) => <ProviderIcon id={account.provider} key={account.id} />)}</div></div><button className="icon-button"><MoreHorizontal /></button></article>)}</div>}{creating && <BrandModal onClose={() => setCreating(false)} onCreated={onBrandCreated} />}</div>;
+function BrandActions({ brand, onEdit, onDelete }: { brand: Brand; onEdit: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(false); const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", dismiss); document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", escape); };
+  }, [open]);
+  return <div className="brand-actions" ref={root}><button className="icon-button" aria-label={`Actions for ${brand.name}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}><MoreHorizontal /></button>{open && <div className="brand-actions-menu" role="menu"><button role="menuitem" onClick={() => { setOpen(false); onEdit(); }}><Pencil />Edit brand</button><button className="danger" role="menuitem" onClick={() => { setOpen(false); onDelete(); }}><Trash2 />Delete brand</button></div>}</div>;
+}
+
+function DeleteBrandModal({ brand, onClose, onDeleted }: { brand: Brand; onClose: () => void; onDeleted: (id: string) => void }) {
+  const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const remove = async () => {
+    setBusy(true); setError("");
+    try {
+      const response = await fetch("/api/v1/brands", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: brand.id }) });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not delete the brand.");
+      onDeleted(brand.id); onClose();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete the brand."); setBusy(false); }
+  };
+  return <div className="modal-layer"><button className="modal-scrim" disabled={busy} onClick={onClose} aria-label="Cancel brand deletion" /><section className="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-brand-title" aria-describedby="delete-brand-description"><span className="confirm-icon"><Trash2 /></span><div><p className="eyebrow">Delete brand</p><h2 id="delete-brand-title">Delete {brand.name}?</h2><p id="delete-brand-description">This removes the brand from Relay. This action cannot be undone.</p></div>{error && <p className="auth-error" role="alert">{error}</p>}<footer><button className="secondary-button" disabled={busy} onClick={onClose}>Keep brand</button><button className="danger-button" disabled={busy} onClick={() => void remove()}>{busy ? <LoaderCircle className="spin" /> : <Trash2 />}{busy ? "Deleting…" : "Delete brand"}</button></footer></section></div>;
+}
+
+function BrandsView({ onBrandCreated, onBrandUpdated, onBrandDeleted }: { onBrandCreated: (brand: Brand) => void; onBrandUpdated: (brand: Brand) => void; onBrandDeleted: (id: string) => void }) {
+  const brands = useBrands(); const [creating, setCreating] = useState(false); const [editing, setEditing] = useState<Brand | null>(null); const [deleting, setDeleting] = useState<Brand | null>(null);
+  return <div className="page page-enter"><div className="inline-heading"><div><h2>Brands</h2><p>Keep accounts and publishing defaults organized.</p></div><button className="primary-button" onClick={() => setCreating(true)}><Plus /> New brand</button></div>{brands.length === 0 ? <Empty title="No brands yet" body="Create your first brand to organize accounts and publishing defaults." /> : <div className="brand-grid">{brands.map((brand) => <article key={brand.id}><div className="brand-cover" style={{ "--brand": brand.color } as React.CSSProperties}><BrandMark brandId={brand.id} size="large" /></div><div><h3>{brand.name}</h3><p>{accounts.filter((account) => account.brandId === brand.id).length} accounts · {brand.timezone}</p><div className="provider-stack">{accounts.filter((account) => account.brandId === brand.id).map((account) => <ProviderIcon id={account.provider} key={account.id} />)}</div></div><BrandActions brand={brand} onEdit={() => setEditing(brand)} onDelete={() => setDeleting(brand)} /></article>)}</div>}{creating && <BrandModal onClose={() => setCreating(false)} onSaved={onBrandCreated} />}{editing && <BrandModal brand={editing} onClose={() => setEditing(null)} onSaved={onBrandUpdated} />}{deleting && <DeleteBrandModal brand={deleting} onClose={() => setDeleting(null)} onDeleted={onBrandDeleted} />}</div>;
 }
 
 type SettingsSection = "General" | "Workspace" | "API keys" | "Storage" | "Providers" | "System" | "Appearance";
@@ -310,7 +338,11 @@ function SettingsView({ theme, setTheme, go, user }: { theme: string; setTheme: 
 
 function Empty({ title, body }: { title: string; body: string }) { return <div className="empty"><span><Sparkles /></span><h3>{title}</h3><p>{body}</p></div>; }
 
-function ConnectModal({ onClose }: { onClose: () => void }) { return <div className="modal-layer"><button className="modal-scrim" onClick={onClose} /><div className="connect-modal"><div className="modal-title"><div><p className="eyebrow">New destination</p><h2>Connect an account</h2></div><button className="icon-button" onClick={onClose}><X /></button></div><p>Choose a network. You’ll be sent to its secure authorization page.</p><div className="connect-list">{providerRegistry.list().map((provider) => <button key={provider.id}><ProviderIcon id={provider.id} /><span><b>{provider.name}</b><small>Connect a professional account</small></span><ChevronRight /></button>)}</div><p className="safe-note"><Zap /> Tokens are encrypted at rest and never exposed to the browser.</p></div></div>; }
+function ConnectModal({ onClose }: { onClose: () => void }) {
+  const [selected, setSelected] = useState<ProviderId | null>(null);
+  const provider = selected ? providerRegistry.get(selected) : null;
+  return <div className="modal-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close account connection" /><div className="connect-modal" role="dialog" aria-modal="true" aria-labelledby="connect-title"><div className="modal-title"><div><p className="eyebrow">New destination</p><h2 id="connect-title">Connect an account</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></div><p>Choose a network to check its connection availability.</p><div className="connect-list">{providerRegistry.list().map((item) => <button key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}><ProviderIcon id={item.id} selected /><span><b>{item.name}</b><small>{selected === item.id ? "Connection details shown below" : "Connect a professional account"}</small></span><ChevronRight /></button>)}</div>{provider && <div className="connection-notice" role="status"><CircleAlert /><div><b>{provider.name} connection is not available yet</b><p>Relay’s OAuth server adapter is still being implemented. No credentials or tokens were sent.</p></div></div>}<p className="safe-note"><Zap /> Tokens will be encrypted at rest and never exposed to the browser.</p></div></div>;
+}
 
 function LogoutModal({ busy, error, onClose, onConfirm }: { busy: boolean; error: string; onClose: () => void; onConfirm: () => void }) {
   return <div className="modal-layer"><button className="modal-scrim" onClick={busy ? undefined : onClose} aria-label="Cancel sign out" /><section className="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="logout-title" aria-describedby="logout-description"><span className="confirm-icon"><LogOut /></span><div><p className="eyebrow">End session</p><h2 id="logout-title">Sign out of Relay?</h2><p id="logout-description">You’ll need your email and password to access the dashboard again.</p></div>{error && <p className="auth-error" role="alert">{error}</p>}<footer><button className="secondary-button" disabled={busy} onClick={onClose}>Stay signed in</button><button className="danger-button" disabled={busy} onClick={onConfirm}>{busy ? <LoaderCircle className="spin" /> : <LogOut />}{busy ? "Signing out…" : "Sign out"}</button></footer></section></div>;
@@ -383,7 +415,7 @@ export default function RelayApp({ user, initialBrands }: { user: { name: string
   useEffect(() => { document.documentElement.dataset.theme = theme; if (themeReady) window.localStorage.setItem("relay-theme", theme); }, [theme, themeReady]);
   useEffect(() => { const handle = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setCommand(true); } if (event.key.toLowerCase() === "c" && !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) setComposer(true); if (event.key === "Escape") { setComposer(false); setCommand(false); } }; window.addEventListener("keydown", handle); return () => window.removeEventListener("keydown", handle); }, []);
   const addPost = (post: RelayPost) => { setPosts((current) => [post, ...current]); setToast(post.status === "scheduled" ? "Post scheduled for tomorrow at 09:30" : "Post published successfully"); setTimeout(() => setToast(""), 3500); };
-  const content = useMemo(() => { if (view === "home") return <HomeView posts={posts} onCompose={() => setComposer(true)} go={setView} userName={user.name} />; if (view === "calendar") return <CalendarView posts={posts} onCompose={() => setComposer(true)} />; if (view === "posts") return <PostsView posts={posts} />; if (view === "accounts") return <AccountsView />; if (view === "media") return <MediaView onCompose={() => setComposer(true)} />; if (view === "brands") return <BrandsView onBrandCreated={(brand) => setBrandList((current) => [...current, brand])} />; return <SettingsView theme={theme} setTheme={setTheme} go={setView} user={user} />; }, [view, posts, theme, user]);
+  const content = useMemo(() => { if (view === "home") return <HomeView posts={posts} onCompose={() => setComposer(true)} go={setView} userName={user.name} />; if (view === "calendar") return <CalendarView posts={posts} onCompose={() => setComposer(true)} />; if (view === "posts") return <PostsView posts={posts} />; if (view === "accounts") return <AccountsView />; if (view === "media") return <MediaView onCompose={() => setComposer(true)} />; if (view === "brands") return <BrandsView onBrandCreated={(brand) => setBrandList((current) => [...current, brand])} onBrandUpdated={(brand) => setBrandList((current) => current.map((item) => item.id === brand.id ? brand : item))} onBrandDeleted={(id) => setBrandList((current) => current.filter((item) => item.id !== id))} />; return <SettingsView theme={theme} setTheme={setTheme} go={setView} user={user} />; }, [view, posts, theme, user]);
   const logout = async () => {
     setLogoutBusy(true); setLogoutError("");
     try {

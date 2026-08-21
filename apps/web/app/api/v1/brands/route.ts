@@ -7,6 +7,17 @@ function validTimezone(value: string): boolean {
   catch { return false; }
 }
 
+function parseBrandInput(body: { name?: unknown; color?: unknown; timezone?: unknown } | null) {
+  const name = typeof body?.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
+  const color = typeof body?.color === "string" ? body.color.trim().toLowerCase() : "";
+  const timezone = typeof body?.timezone === "string" ? body.timezone.trim() : "";
+  if (!name || name.length > 60) return { error: "Brand name must be between 1 and 60 characters." } as const;
+  if (!/^#[0-9a-f]{6}$/.test(color)) return { error: "Choose a valid brand color." } as const;
+  if (!timezone || !validTimezone(timezone)) return { error: "Choose a valid IANA timezone." } as const;
+  const monogram = name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  return { name, color, timezone, monogram } as const;
+}
+
 export async function GET(request: Request) {
   const authorization = await requireApiSession(request);
   if (authorization.response) return authorization.response;
@@ -21,14 +32,9 @@ export async function POST(request: Request) {
   if (authorization.response) return authorization.response;
 
   const body = await request.json().catch(() => null) as { name?: unknown; color?: unknown; timezone?: unknown } | null;
-  const name = typeof body?.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
-  const color = typeof body?.color === "string" ? body.color.trim().toLowerCase() : "";
-  const timezone = typeof body?.timezone === "string" ? body.timezone.trim() : "";
-  if (!name || name.length > 60) return Response.json({ error: "Brand name must be between 1 and 60 characters." }, { status: 400 });
-  if (!/^#[0-9a-f]{6}$/.test(color)) return Response.json({ error: "Choose a valid brand color." }, { status: 400 });
-  if (!timezone || !validTimezone(timezone)) return Response.json({ error: "Choose a valid IANA timezone." }, { status: 400 });
-
-  const monogram = name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const input = parseBrandInput(body);
+  if ("error" in input) return Response.json({ error: input.error }, { status: 400 });
+  const { name, color, timezone, monogram } = input;
   const id = crypto.randomUUID();
   const [created] = await sql<{ id: string; name: string; monogram: string; color: string; timezone: string }[]>`
     INSERT INTO "brand" (id, owner_id, name, monogram, color, timezone)
@@ -36,4 +42,34 @@ export async function POST(request: Request) {
     RETURNING id, name, monogram, color, timezone
   `;
   return Response.json({ data: created }, { status: 201 });
+}
+
+export async function PATCH(request: Request) {
+  const authorization = await requireApiSession(request);
+  if (authorization.response) return authorization.response;
+  const body = await request.json().catch(() => null) as { id?: unknown; name?: unknown; color?: unknown; timezone?: unknown } | null;
+  const id = typeof body?.id === "string" ? body.id.trim() : "";
+  if (!id) return Response.json({ error: "Brand id is required." }, { status: 400 });
+  const input = parseBrandInput(body);
+  if ("error" in input) return Response.json({ error: input.error }, { status: 400 });
+  const [updated] = await sql<{ id: string; name: string; monogram: string; color: string; timezone: string }[]>`
+    UPDATE "brand" SET "name" = ${input.name}, "monogram" = ${input.monogram}, "color" = ${input.color}, "timezone" = ${input.timezone}, "updated_at" = NOW()
+    WHERE "id" = ${id} AND "owner_id" = ${authorization.session.user.id}
+    RETURNING id, name, monogram, color, timezone
+  `;
+  if (!updated) return Response.json({ error: "Brand not found." }, { status: 404 });
+  return Response.json({ data: updated });
+}
+
+export async function DELETE(request: Request) {
+  const authorization = await requireApiSession(request);
+  if (authorization.response) return authorization.response;
+  const body = await request.json().catch(() => null) as { id?: unknown } | null;
+  const id = typeof body?.id === "string" ? body.id.trim() : "";
+  if (!id) return Response.json({ error: "Brand id is required." }, { status: 400 });
+  const [deleted] = await sql<{ id: string }[]>`
+    DELETE FROM "brand" WHERE "id" = ${id} AND "owner_id" = ${authorization.session.user.id} RETURNING id
+  `;
+  if (!deleted) return Response.json({ error: "Brand not found." }, { status: 404 });
+  return Response.json({ data: deleted });
 }
