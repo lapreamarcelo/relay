@@ -13,7 +13,7 @@ export interface Brand {
 
 export interface SocialAccount {
   id: string;
-  brandId: string;
+  brandId: string | null;
   provider: ProviderId;
   authMethod: ProviderAuthMethod;
   providerAccountId: string;

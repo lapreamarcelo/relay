@@ -6,7 +6,7 @@ import { requireApiSession } from "../../../../lib/api-session";
 import { getOAuthRegistry, getTokenCipherKey } from "../../../../lib/social-oauth";
 
 interface AccountRow {
-  id: string; brand_id: string; provider: ProviderId; auth_method: ProviderAuthMethod; provider_account_id: string;
+  id: string; brand_id: string | null; provider: ProviderId; auth_method: ProviderAuthMethod; provider_account_id: string;
   username: string; display_name: string; avatar_url: string | null; status: "connected" | "warning" | "expired";
   token_expires_at: string | Date | null; refresh_token_expires_at: string | Date | null; last_checked_at: string | Date | null;
 }

@@ -15,10 +15,10 @@ export async function GET(request: Request, context: { params: Promise<{ provide
   if (!adapter.configured) return Response.json({ error: `${adapter.provider} OAuth credentials are not configured on the server.` }, { status: 503 });
 
   const brandId = new URL(request.url).searchParams.get("brandId")?.trim() ?? "";
-  const [brand] = await sql<{ id: string }[]>`SELECT id FROM "brand" WHERE "id" = ${brandId} AND "owner_id" = ${authorization.session.user.id}`;
-  if (!brand) return Response.json({ error: "Choose a brand you own before connecting an account." }, { status: 400 });
+  const [brand] = brandId ? await sql<{ id: string }[]>`SELECT id FROM "brand" WHERE "id" = ${brandId} AND "owner_id" = ${authorization.session.user.id}` : [];
+  if (brandId && !brand) return Response.json({ error: "The selected brand was not found." }, { status: 400 });
 
-  const state = createOAuthState(authorization.session.user.id, brand.id, adapter.flow);
+  const state = createOAuthState(authorization.session.user.id, brand?.id ?? null, adapter.flow);
   const response = NextResponse.redirect(adapter.authorizationUrl(state));
   response.cookies.set(OAUTH_STATE_COOKIE, state, oauthCookieOptions());
   return response;

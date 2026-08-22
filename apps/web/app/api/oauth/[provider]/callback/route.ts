@@ -31,8 +31,8 @@ export async function GET(request: Request, context: { params: Promise<{ provide
     if (query.has("error")) return appRedirect({ oauth: "error", code: "authorization_denied" });
     const code = query.get("code") ?? "";
     if (!code) return appRedirect({ oauth: "error", code: "invalid_callback" });
-    const [brand] = await sql<{ id: string }[]>`SELECT id FROM "brand" WHERE "id" = ${oauthState.brandId} AND "owner_id" = ${authorization.session.user.id}`;
-    if (!brand) return appRedirect({ oauth: "error", code: "brand_not_found" });
+    const [brand] = oauthState.brandId ? await sql<{ id: string }[]>`SELECT id FROM "brand" WHERE "id" = ${oauthState.brandId} AND "owner_id" = ${authorization.session.user.id}` : [];
+    if (oauthState.brandId && !brand) return appRedirect({ oauth: "error", code: "brand_not_found" });
     const cipher = AesGcmTokenCipher.fromBase64Key(getTokenCipherKey());
     stage = "authorization";
     const connected = await adapter.connect(code);
@@ -47,13 +47,13 @@ export async function GET(request: Request, context: { params: Promise<{ provide
           access_token_encrypted, refresh_token_encrypted, token_expires_at, refresh_token_expires_at, refresh_after_at,
           granted_scopes, provider_metadata, status, last_checked_at
         ) VALUES (
-          ${id}, ${authorization.session.user.id}, ${brand.id}, ${account.provider}, ${account.authMethod}, ${account.providerAccountId},
+          ${id}, ${authorization.session.user.id}, ${brand?.id ?? null}, ${account.provider}, ${account.authMethod}, ${account.providerAccountId},
           ${account.username}, ${account.displayName}, ${account.avatarUrl}, ${encryptedAccess}, ${encryptedRefresh},
           ${account.tokenExpiresAt?.toISOString() ?? null}, ${account.refreshTokenExpiresAt?.toISOString() ?? null}, ${account.refreshAfterAt?.toISOString() ?? null},
           ${JSON.stringify(account.grantedScopes)}::jsonb, ${JSON.stringify(account.providerMetadata)}::jsonb, 'connected', NOW()
         )
         ON CONFLICT (owner_id, provider, provider_account_id) DO UPDATE SET
-          brand_id = EXCLUDED.brand_id, auth_method = EXCLUDED.auth_method, username = EXCLUDED.username,
+          brand_id = COALESCE(EXCLUDED.brand_id, "social_account".brand_id), auth_method = EXCLUDED.auth_method, username = EXCLUDED.username,
           display_name = EXCLUDED.display_name, avatar_url = EXCLUDED.avatar_url,
           access_token_encrypted = EXCLUDED.access_token_encrypted, refresh_token_encrypted = EXCLUDED.refresh_token_encrypted,
           token_expires_at = EXCLUDED.token_expires_at, refresh_token_expires_at = EXCLUDED.refresh_token_expires_at,

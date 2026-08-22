@@ -18,7 +18,7 @@ export default async function HomePage() {
     SELECT id, name, monogram, color, timezone FROM "brand" WHERE "owner_id" = ${session.user.id} ORDER BY "created_at" ASC
   `;
   const brands = brandRows.map((brand) => ({ id: brand.id, name: brand.name, monogram: brand.monogram, color: brand.color, timezone: brand.timezone }));
-  const accountRows = await sql<{ id: string; brand_id: string; provider: ProviderId; auth_method: ProviderAuthMethod; provider_account_id: string; username: string; display_name: string; avatar_url: string | null; status: "connected" | "warning" | "expired"; token_expires_at: string | Date | null; refresh_token_expires_at: string | Date | null; last_checked_at: string | Date | null }[]>`
+  const accountRows = await sql<{ id: string; brand_id: string | null; provider: ProviderId; auth_method: ProviderAuthMethod; provider_account_id: string; username: string; display_name: string; avatar_url: string | null; status: "connected" | "warning" | "expired"; token_expires_at: string | Date | null; refresh_token_expires_at: string | Date | null; last_checked_at: string | Date | null }[]>`
     SELECT id, brand_id, provider, auth_method, provider_account_id, username, display_name, avatar_url, status,
       token_expires_at, refresh_token_expires_at, last_checked_at
     FROM "social_account" WHERE "owner_id" = ${session.user.id} ORDER BY "created_at" ASC

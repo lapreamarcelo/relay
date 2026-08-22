@@ -86,7 +86,7 @@ export const socialAccount = pgTable(
   {
     id: text("id").primaryKey(),
     ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-    brandId: text("brand_id").notNull().references(() => brand.id, { onDelete: "cascade" }),
+    brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
     provider: text("provider").notNull(),
     authMethod: text("auth_method").notNull(),
     providerAccountId: text("provider_account_id").notNull(),
