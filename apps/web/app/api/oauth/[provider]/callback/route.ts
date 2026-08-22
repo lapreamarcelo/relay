@@ -50,7 +50,7 @@ export async function GET(request: Request, context: { params: Promise<{ provide
           ${id}, ${authorization.session.user.id}, ${brand.id}, ${account.provider}, ${account.authMethod}, ${account.providerAccountId},
           ${account.username}, ${account.displayName}, ${account.avatarUrl}, ${encryptedAccess}, ${encryptedRefresh},
           ${account.tokenExpiresAt?.toISOString() ?? null}, ${account.refreshTokenExpiresAt?.toISOString() ?? null}, ${account.refreshAfterAt?.toISOString() ?? null},
-          ${sql.json(account.grantedScopes)}, ${sql.json(account.providerMetadata as Parameters<typeof sql.json>[0])}, 'connected', NOW()
+          ${JSON.stringify(account.grantedScopes)}::jsonb, ${JSON.stringify(account.providerMetadata)}::jsonb, 'connected', NOW()
         )
         ON CONFLICT (owner_id, provider, provider_account_id) DO UPDATE SET
           brand_id = EXCLUDED.brand_id, auth_method = EXCLUDED.auth_method, username = EXCLUDED.username,

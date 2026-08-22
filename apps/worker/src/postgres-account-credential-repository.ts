@@ -57,7 +57,7 @@ export class PostgresAccountCredentialRepository implements AccountCredentialRep
     await sql`
       UPDATE "social_account" SET access_token_encrypted = ${tokens.accessTokenEncrypted}, refresh_token_encrypted = ${tokens.refreshTokenEncrypted},
         token_expires_at = ${tokens.tokenExpiresAt?.toISOString() ?? null}, refresh_token_expires_at = ${tokens.refreshTokenExpiresAt?.toISOString() ?? null},
-        refresh_after_at = ${tokens.refreshAfterAt?.toISOString() ?? null}, granted_scopes = ${sql.json(tokens.grantedScopes)}, status = 'connected',
+        refresh_after_at = ${tokens.refreshAfterAt?.toISOString() ?? null}, granted_scopes = ${JSON.stringify(tokens.grantedScopes)}::jsonb, status = 'connected',
         last_checked_at = ${checkedAt.toISOString()}, refresh_lease_owner = NULL, refresh_lease_expires_at = NULL, updated_at = NOW()
       WHERE id = ${accountId} AND refresh_lease_owner = ${leaseOwner}
     `;
