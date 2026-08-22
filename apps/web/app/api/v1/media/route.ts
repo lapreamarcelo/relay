@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     const key = `media/${crypto.randomUUID()}-${fileName}`;
     const command = new PutObjectCommand({ Bucket: config.bucket, Key: key, ContentType: contentType });
     const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 15 * 60 });
-    return Response.json({ key, uploadUrl, expiresIn: 15 * 60 });
+    return Response.json({ key, uploadUrl, url: publicObjectUrl(key), expiresIn: 15 * 60 });
   } catch (error) {
     return errorResponse(error);
   }
