@@ -2,12 +2,12 @@
 
 Relay is an open-source publishing layer for social networks: publish once, everywhere.
 
-The current repository includes database-backed user accounts, sessions, brands, and social accounts; OAuth connections for Instagram, Facebook, TikTok, and YouTube; a responsive dashboard; an authenticated Cloudflare R2 media library; calendar; post library; connected-account health; settings; command menu; provider abstractions; and a runnable encrypted provider-token refresh worker.
+The current repository includes database-backed user accounts, sessions, brands, and social accounts; OAuth connections and publishing for Instagram, Facebook, TikTok, and YouTube; a responsive dashboard; an authenticated Cloudflare R2 media library; calendar; post library; connected-account health; settings; command menu; and a durable publishing and encrypted token-refresh worker.
 
 > [!IMPORTANT]
-> Authentication, social-account OAuth, automatic token renewal, brands, and the R2 media library are functional. Persisted posts, provider publishing adapters, and the publishing queue are still under development. Deploying this version connects accounts but does not yet publish real posts to social networks.
+> Authentication, social-account OAuth, automatic token renewal, persisted posts, scheduling, provider publishing, brands, and the R2 media library are functional. Public posting still depends on each provider approving the permissions and products configured in your developer application.
 
-The composer already captures destination-specific metadata so the publishing adapters have a typed contract to implement:
+The composer captures and sends destination-specific metadata to the publishing worker:
 
 | Platform | Composer settings | Safe default |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ The composer already captures destination-specific metadata so the publishing ad
 | TikTok | Viewer privacy, comments, Duet, and Stitch | Only me; Duet and Stitch off |
 | YouTube | Required video title, comma-separated tags, visibility, and made-for-kids declaration | Private |
 
-TikTok is special: the eventual adapter must call `creator_info/query` immediately before publishing and only show/use the privacy and interaction choices returned for that creator. Relay stores the user's choice now and will reject it if it is unavailable when publishing is implemented. YouTube title is required whenever a YouTube destination is selected. These settings are currently held in the in-browser post model; they are not persisted or sent to provider APIs yet.
+TikTok is special: Relay calls `creator_info/query` immediately before publishing and validates the chosen privacy and interaction settings against that creator's current capabilities. YouTube title is required whenever a YouTube destination is selected. Relay persists these settings per destination and sends them to the corresponding provider API.
 
 ## Installation
 
@@ -183,6 +183,12 @@ The `worker` container checks due credentials every five minutes. Refresh timing
 
 Refresh operations use PostgreSQL leases so two worker instances cannot rotate the same credential simultaneously. Temporary provider failures mark an account as needing attention and are retried. Revoked or expired authorization marks it as expired and the dashboard offers a new OAuth connection. Keep the `worker` service running and keep `ENCRYPTION_KEY` unchanged across deployments.
 
+### Publishing worker
+
+The same `worker` container checks for due posts every five seconds. It claims each destination with a PostgreSQL lease, obtains a current access token, and records the provider post ID, public URL, or exact provider error. Immediate posts normally start within five seconds; scheduled posts start at their configured time. Retryable provider outages use bounded backoff, while permanent failures appear in Relay's notifications and post details.
+
+TikTok may remain **Processing** while TikTok moderates a Direct Post. Relay polls its publish status until it succeeds or fails. TikTok `PULL_FROM_URL` also requires the public `R2_PUBLIC_URL` domain or URL prefix to be verified in the TikTok developer portal. YouTube video uploads use the resumable upload protocol.
+
 Official references: [Meta Facebook Login manual flow](https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow/), [Instagram API with Facebook Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/), [Instagram API with Instagram Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/), [TikTok Login Kit redirect requirements](https://developers.tiktok.com/doc/login-kit-web/), and [Google web-server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server). Comparative self-hosting guides: [Postiz Facebook](https://docs.postiz.com/providers/facebook), [Postiz Instagram](https://docs.postiz.com/providers/instagram), [Postiz TikTok](https://docs.postiz.com/providers/tiktok), and [Postiz YouTube](https://docs.postiz.com/providers/youtube).
 
 ## Install with Docker
@@ -317,7 +323,7 @@ On the application configuration screen set:
 | Base Directory | `/` |
 | Docker Compose Location | `/compose.coolify.yaml` |
 
-Click **Continue**. Coolify should load three services: `postgres`, `migrate`, and `web`. Only `web` will be public. `migrate` is expected to exit successfully after preparing the database.
+Click **Continue**. Coolify should load four services: `postgres`, `migrate`, `web`, and `worker`. Only `web` will be public. `migrate` is expected to exit successfully after preparing the database.
 
 ### 4. Add environment variables
 
@@ -418,6 +424,7 @@ Do not delete the PostgreSQL persistent volume during an update. Back up Postgre
 - Monitor Docker build-cache usage and Cloudflare R2 storage usage.
 - Register provider redirect URLs exactly as shown above before connecting an account.
 - Confirm the `worker` service remains running so connected-account tokens renew automatically.
+- Verify the `R2_PUBLIC_URL` domain or prefix in TikTok before enabling TikTok Direct Post.
 
 Coolify references:
 
@@ -450,7 +457,6 @@ pnpm db:migrate
 
 Keyboard shortcuts in the dashboard:
 
-- `C`: open the composer.
 - `⌘ K` / `Ctrl K`: open the command menu.
 - `Esc`: close overlays.
 
@@ -458,7 +464,7 @@ Keyboard shortcuts in the dashboard:
 
 ```text
 apps/web              Next.js application and API route handlers
-apps/worker           Provider token refresh and publishing guards
+apps/worker           Due-post publishing and provider-token refresh worker
 packages/database     PostgreSQL/Drizzle auth schema and migrations
 packages/core         Provider-neutral Relay domain models
 packages/providers    Provider manifests and refresh registry
@@ -479,12 +485,15 @@ Available now:
 - OAuth start/callback flows for Facebook Pages, Facebook-linked Instagram, standalone Instagram Login, TikTok, and YouTube.
 - Encrypted PostgreSQL social-account persistence and disconnect actions.
 - Runnable provider-token refresh worker with rotation, warning/expiry state, and concurrency leases.
+- Persisted drafts, scheduled and immediate posts, per-destination metadata, and delivery history.
+- Durable due-post claiming, bounded retries, provider status polling, and exact success/failure notifications.
+- Instagram feed/Reel/Story, Facebook feed/photo/video/Reel, TikTok Direct Post, and YouTube video publishing adapters.
+- Explicit scheduled-post cancellation before a post is handed to a provider.
 
-Still required for real social publishing:
+Production responsibilities that remain with the operator:
 
-- Provider publishing implementations and the provider app-review approval required for public/direct posting.
-- PostgreSQL persistence for posts and schedules.
-- A durable publishing queue and publishing worker loop.
-- Delivery retries, monitoring, and operational backups.
+- Provider application review and permission approval required for public/direct posting.
+- A verified public media domain for TikTok `PULL_FROM_URL` publishing.
+- Monitoring, PostgreSQL backups, and provider/API incident response.
 
-The code intentionally does not present these unfinished integrations as production-ready.
+Relay surfaces provider errors, but it cannot override provider moderation, revoked permissions, application-review restrictions, or service outages.

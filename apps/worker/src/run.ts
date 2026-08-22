@@ -1,10 +1,13 @@
 import { AesGcmTokenCipher } from "@relay/core/token-encryption";
 import { sql } from "@relay/database";
 import { createProviderRefreshRegistry } from "@relay/providers/refresh-registry";
+import { ProviderPublishRegistry } from "@relay/providers/publish";
 import type { OAuthEnvironment } from "@relay/providers/oauth";
 import { PostgresAccountCredentialRepository } from "./postgres-account-credential-repository.ts";
 import { TokenLifecycleService } from "./token-lifecycle.ts";
 import { runTokenMaintenanceLoop } from "./token-maintenance-loop.ts";
+import { PostPublishingService } from "./post-publishing.ts";
+import { runPublishingLoop } from "./publishing-loop.ts";
 
 const encryptionKey = process.env.ENCRYPTION_KEY;
 if (!encryptionKey) throw new Error("ENCRYPTION_KEY is required by the Relay worker");
@@ -20,7 +23,10 @@ const lifecycle = new TokenLifecycleService(
 );
 
 try {
-  await runTokenMaintenanceLoop(lifecycle, { intervalMs: Number(process.env.TOKEN_REFRESH_INTERVAL_MS ?? 300_000), signal: abortController.signal });
+  await Promise.all([
+    runTokenMaintenanceLoop(lifecycle, { intervalMs: Number(process.env.TOKEN_REFRESH_INTERVAL_MS ?? 300_000), signal: abortController.signal }),
+    runPublishingLoop(new PostPublishingService(lifecycle, new ProviderPublishRegistry(), process.env.HOSTNAME ? `publisher-${process.env.HOSTNAME}` : undefined), { intervalMs: Number(process.env.PUBLISH_INTERVAL_MS ?? 5_000), signal: abortController.signal }),
+  ]);
 } finally {
   await sql.end();
 }

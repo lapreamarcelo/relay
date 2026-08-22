@@ -85,6 +85,7 @@ services:
       YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
       META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v23.0}
       TOKEN_REFRESH_INTERVAL_MS: ${TOKEN_REFRESH_INTERVAL_MS:-300000}
+      PUBLISH_INTERVAL_MS: ${PUBLISH_INTERVAL_MS:-5000}
     depends_on:
       migrate:
         condition: service_completed_successfully

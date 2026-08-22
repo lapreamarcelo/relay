@@ -106,8 +106,8 @@ export async function POST(request: Request) {
     for (const destination of destinations) {
       const targetId = crypto.randomUUID();
       await transaction`
-        INSERT INTO "post_target" (id, post_id, social_account_id, provider, account_display_name, account_handle, status, settings)
-        VALUES (${targetId}, ${postId}, ${destination.id}, ${destination.provider}, ${destination.displayName}, ${destination.handle}, ${status}, ${JSON.stringify(destination.settings)}::jsonb)
+        INSERT INTO "post_target" (id, post_id, social_account_id, provider, account_display_name, account_handle, status, settings, publish_after)
+        VALUES (${targetId}, ${postId}, ${destination.id}, ${destination.provider}, ${destination.displayName}, ${destination.handle}, ${status}, ${JSON.stringify(destination.settings)}::jsonb, ${status === "scheduled" ? new Date(scheduledAt!).toISOString() : new Date().toISOString()})
       `;
     }
   });
@@ -121,9 +121,12 @@ export async function DELETE(request: Request) {
   const body = await request.json().catch(() => null) as { id?: unknown } | null;
   const id = optionalString(body?.id, 240);
   if (!id) return Response.json({ error: "A post id is required." }, { status: 400 });
+  const [post] = await sql<{ status: PostStatus }[]>`SELECT status FROM "post" WHERE id = ${id} AND owner_id = ${authorization.session.user.id}`;
+  if (!post) return Response.json({ error: "The post was not found." }, { status: 404 });
+  if (post.status === "publishing" || post.status === "processing") return Response.json({ error: "This post has already been handed to the provider and can no longer be cancelled." }, { status: 409 });
   const deleted = await sql<{ id: string }[]>`
     DELETE FROM "post" WHERE id = ${id} AND owner_id = ${authorization.session.user.id} RETURNING id
   `;
-  if (deleted.length === 0) return Response.json({ error: "The post was not found." }, { status: 404 });
+  if (deleted.length === 0) return Response.json({ error: "The post changed while it was being removed. Refresh and try again." }, { status: 409 });
   return Response.json({ data: { id } });
 }

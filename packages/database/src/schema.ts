@@ -1,5 +1,5 @@
 import { sql as drizzleSql } from "drizzle-orm";
-import { boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const user = pgTable(
   "user",
@@ -173,12 +173,17 @@ export const postTarget = pgTable(
     accountHandle: text("account_handle").notNull(),
     status: text("status").notNull(),
     settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+    providerPostId: text("provider_post_id"),
     externalUrl: text("external_url"),
     error: text("error"),
+    publishAttempts: integer("publish_attempts").notNull().default(0),
+    publishAfter: timestamp("publish_after", { withTimezone: true }).notNull().defaultNow(),
+    publishLeaseOwner: text("publish_lease_owner"),
+    publishLeaseExpiresAt: timestamp("publish_lease_expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("post_target_post_id_idx").on(table.postId), index("post_target_social_account_id_idx").on(table.socialAccountId)],
+  (table) => [index("post_target_post_id_idx").on(table.postId), index("post_target_social_account_id_idx").on(table.socialAccountId), index("post_target_publish_due_idx").on(table.publishAfter)],
 );
 
 export const schema = { user, session, account, verification, brand, socialAccount, notification, relayPost, postTarget };
