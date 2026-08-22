@@ -2,15 +2,29 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight,
-  CircleAlert, Clock3, Cloud, Command, Database, File as FileIcon, FileText, Grid2X2, Home, Image as ImageIcon,
+  ArrowLeft, Bell, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  CircleAlert, Clock3, Cloud, Command, Database, ExternalLink, File as FileIcon, FileText, Grid2X2, Home, Image as ImageIcon,
   Instagram, KeyRound, LayoutGrid, List, LoaderCircle, LogOut, Menu, Moon, MoreHorizontal, Pencil, Plus, RefreshCw, Search,
   Send, Settings, ShieldCheck, Sparkles, Sun, Trash2, Upload, Users, Video, X, Youtube, Zap,
 } from "lucide-react";
-import { initialPosts, type Brand, type ProviderId, type ProviderPostSettings, type RelayPost, type SocialAccount, type PostStatus } from "@relay/core";
+import { type Brand, type ProviderId, type ProviderPostSettings, type RelayPost, type SocialAccount, type PostStatus } from "@relay/core";
 import { providerRegistry } from "@relay/providers";
 
 type View = "home" | "calendar" | "posts" | "media" | "brands" | "accounts" | "settings";
+type NotificationKind = "success" | "error" | "scheduled" | "info";
+interface RelayNotification {
+  id: string;
+  eventKey: string;
+  postId: string | null;
+  targetId: string | null;
+  provider: ProviderId | null;
+  kind: NotificationKind;
+  title: string;
+  message: string;
+  externalUrl: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
 const BrandsContext = createContext<Brand[]>([]);
 const useBrands = () => useContext(BrandsContext);
 const AccountsContext = createContext<SocialAccount[]>([]);
@@ -38,19 +52,34 @@ function ProviderIcon({ id, selected }: { id: ProviderId; selected?: boolean }) 
 }
 
 function Status({ value }: { value: PostStatus | "connected" | "warning" | "expired" }) {
-  const labels: Record<string, string> = { draft: "Draft", scheduled: "Scheduled", published: "Published", failed: "Failed", connected: "Connected", warning: "Attention", expired: "Expired" };
+  const labels: Record<string, string> = { draft: "Draft", scheduled: "Scheduled", publishing: "Publishing", published: "Published", failed: "Failed", connected: "Connected", warning: "Attention", expired: "Expired" };
   return <span className={`status ${value}`}><span />{labels[value]}</span>;
 }
 
-function Topbar({ view, onCompose, onCommand, onMenu }: { view: View; onCompose: () => void; onCommand: () => void; onMenu: () => void }) {
+function Topbar({ view, unread, onNotifications, onCompose, onCommand, onMenu }: { view: View; unread: number; onNotifications: () => void; onCompose: () => void; onCommand: () => void; onMenu: () => void }) {
   return <header className="topbar">
     <button className="icon-button mobile-only" aria-label="Open menu" onClick={onMenu}><Menu /></button>
     <div><p className="eyebrow">Personal workspace</p><h1>{viewLabel[view]}</h1></div>
     <div className="top-actions">
       <button className="command-trigger" onClick={onCommand}><Search /><span>Search Relay</span><kbd>⌘ K</kbd></button>
+      <button className="notification-trigger" aria-label={`Open notifications${unread ? `, ${unread} unread` : ""}`} onClick={onNotifications}><Bell />{unread > 0 && <span>{unread > 99 ? "99+" : unread}</span>}</button>
       <button className="primary-button" onClick={onCompose}><Plus /> Create post</button>
     </div>
   </header>;
+}
+
+function NotificationCenter({ notifications, loading, onClose, onMarkAllRead }: { notifications: RelayNotification[]; loading: boolean; onClose: () => void; onMarkAllRead: () => void }) {
+  const [filter, setFilter] = useState<"all" | "problems" | "success">("all");
+  const visible = notifications.filter((item) => filter === "all" || (filter === "problems" ? item.kind === "error" : item.kind === "success"));
+  const unread = notifications.filter((item) => !item.readAt).length;
+  const relative = (value: string) => {
+    const seconds = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 1_000));
+    if (seconds < 60) return "just now";
+    if (seconds < 3_600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86_400) return `${Math.floor(seconds / 3_600)}h ago`;
+    return new Date(value).toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+  return <div className="notification-layer"><button className="notification-scrim" onClick={onClose} aria-label="Close notifications" /><aside className="notification-center" role="dialog" aria-modal="true" aria-labelledby="notification-title"><header><div><p className="eyebrow">Publishing activity</p><h2 id="notification-title">Notifications</h2></div><div>{unread > 0 && <button onClick={onMarkAllRead}>Mark all read</button>}<button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></div></header><div className="notification-filters">{([['all', 'All'], ['problems', 'Problems'], ['success', 'Success']] as const).map(([value, label]) => <button className={filter === value ? "active" : ""} onClick={() => setFilter(value)} key={value}>{label}{value === "problems" && notifications.some((item) => item.kind === "error") && <span>{notifications.filter((item) => item.kind === "error").length}</span>}</button>)}</div><div className="notification-list">{loading ? <div className="notification-empty"><LoaderCircle className="spin" /><b>Loading activity…</b></div> : visible.length === 0 ? <div className="notification-empty"><Bell /><b>{filter === "all" ? "No publishing activity yet" : `No ${filter} to show`}</b><p>Platform results will appear here after Relay schedules or publishes a post.</p></div> : visible.map((item) => <article className={`${item.kind} ${item.readAt ? "" : "unread"}`} key={item.id}><span className="notification-state">{item.kind === "success" ? <CheckCircle2 /> : item.kind === "error" ? <CircleAlert /> : item.kind === "scheduled" ? <Clock3 /> : <Bell />}</span><div><div><span>{item.provider && <ProviderIcon id={item.provider} />}</span><b>{item.title}</b><time>{relative(item.createdAt)}</time></div><p>{item.message}</p>{item.externalUrl && <a href={item.externalUrl} target="_blank" rel="noreferrer">Open on {item.provider ? providerRegistry.get(item.provider).name : "platform"}<ExternalLink /></a>}</div></article>)}</div><footer><span><span className="notification-legend success" />Published</span><span><span className="notification-legend error" />Needs attention</span><span><span className="notification-legend scheduled" />Scheduled</span></footer></aside></div>;
 }
 
 function Sidebar({ active, onChange, mobileOpen, onClose, user, onLogout }: { active: View; onChange: (view: View) => void; mobileOpen: boolean; onClose: () => void; user: { name: string; role: string }; onLogout: () => void }) {
@@ -116,20 +145,21 @@ function HomeView({ posts, onCompose, go, userName, initialNow }: { posts: Relay
   </div>;
 }
 
-function CalendarView({ posts, onCompose }: { posts: RelayPost[]; onCompose: () => void }) {
-  const scheduled = posts.filter((p) => p.status === "scheduled" || p.status === "failed");
+function CalendarView({ posts, onCompose, onPostAgain, onDelete }: { posts: RelayPost[]; onCompose: () => void; onPostAgain: (post: RelayPost) => void; onDelete: (post: RelayPost) => void }) {
+  const timelinePosts = posts.filter((post) => post.scheduledAt || post.publishedAt || post.createdAt);
   const [mode, setMode] = useState<"Week" | "Month" | "List">("Month");
   const [cursor, setCursor] = useState(() => new Date());
   const today = new Date();
   const dateKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-  const postsForDate = (date: Date) => scheduled.filter((post) => post.scheduledAt && dateKey(new Date(post.scheduledAt)) === dateKey(date));
+  const postTime = (post: RelayPost) => post.scheduledAt ?? post.publishedAt ?? post.createdAt;
+  const postsForDate = (date: Date) => timelinePosts.filter((post) => postTime(post) && dateKey(new Date(postTime(post)!)) === dateKey(date));
   const weekStart = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
   const weekDates = Array.from({ length: 7 }, (_, index) => new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + index));
   const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const calendarStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1 - ((monthStart.getDay() + 6) % 7));
   const monthDates = Array.from({ length: 42 }, (_, index) => new Date(calendarStart.getFullYear(), calendarStart.getMonth(), calendarStart.getDate() + index));
-  const label = mode === "List" ? "All scheduled posts" : mode === "Month"
+  const label = mode === "List" ? "All saved posts" : mode === "Month"
     ? cursor.toLocaleDateString([], { month: "long", year: "numeric" })
     : `${weekDates[0].toLocaleDateString([], { month: "short", day: "numeric" })}–${weekDates[6].toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
   const move = (direction: number) => setCursor((current) => mode === "Month"
@@ -137,33 +167,65 @@ function CalendarView({ posts, onCompose }: { posts: RelayPost[]; onCompose: () 
     : new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction * 7));
   return <div className="page page-enter">
     <div className="toolbar"><div className="date-nav">{mode !== "List" && <><button className="secondary-button" onClick={() => setCursor(new Date())}>Today</button><button className="icon-button" aria-label="Previous period" onClick={() => move(-1)}><ChevronLeft /></button><button className="icon-button" aria-label="Next period" onClick={() => move(1)}><ChevronRight /></button></>}<h2>{label}</h2></div><div className="segmented">{(["Month", "Week", "List"] as const).map((item) => <button key={item} className={mode === item ? "active" : ""} onClick={() => setMode(item)}>{item}</button>)}</div></div>
-    {mode === "List" ? <div className="list-calendar">{scheduled.length > 0 ? scheduled.map((post) => <PostRow post={post} key={post.id} />) : <div className="calendar-list-empty"><CalendarDays /><div><b>No posts scheduled</b><span>Your calendar is clear for now.</span></div><button className="secondary-button" onClick={onCompose}><Plus /> Create post</button></div>}</div> : mode === "Month" ? <div className="month-calendar">
+    {mode === "List" ? <div className="list-calendar">{timelinePosts.length > 0 ? timelinePosts.map((post) => <PostRow post={post} onPostAgain={onPostAgain} onDelete={onDelete} key={post.id} />) : <div className="calendar-list-empty"><CalendarDays /><div><b>No saved posts yet</b><span>Scheduled and published posts will remain here.</span></div><button className="secondary-button" onClick={onCompose}><Plus /> Create post</button></div>}</div> : mode === "Month" ? <div className="month-calendar">
       <div className="month-weekdays">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <b key={day}>{day}</b>)}</div>
-      <div className="month-grid">{monthDates.map((date) => { const dayPosts = postsForDate(date); const isToday = dateKey(date) === dateKey(today); return <div className={`month-day ${date.getMonth() !== cursor.getMonth() ? "outside" : ""} ${isToday ? "today" : ""}`} key={date.toISOString()}><span>{date.getDate()}</span><div>{dayPosts.slice(0, 3).map((post) => <button key={post.id} onClick={onCompose}><BrandMark brandId={post.brandId} size="small" /><em>{new Date(post.scheduledAt!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</em><b>{post.text}</b></button>)}{dayPosts.length > 3 && <small>+{dayPosts.length - 3} more</small>}</div></div>; })}</div>
+      <div className="month-grid">{monthDates.map((date) => { const dayPosts = postsForDate(date); const isToday = dateKey(date) === dateKey(today); return <div className={`month-day ${date.getMonth() !== cursor.getMonth() ? "outside" : ""} ${isToday ? "today" : ""}`} key={date.toISOString()}><span>{date.getDate()}</span><div>{dayPosts.slice(0, 3).map((post) => <button key={post.id} title="Create a new post from this one" onClick={() => onPostAgain(post)}><BrandMark brandId={post.brandId} size="small" /><em>{new Date(postTime(post)!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</em><b>{post.text || "Media post"}</b></button>)}{dayPosts.length > 3 && <small>+{dayPosts.length - 3} more</small>}</div></div>; })}</div>
     </div> : <div className="calendar-shell week-calendar">
       <div className="calendar-head"><span />{weekDates.map((date) => <b key={date.toISOString()} className={dateKey(date) === dateKey(today) ? "today" : ""}>{date.toLocaleDateString([], { weekday: "short", day: "numeric" }).toUpperCase()}</b>)}</div>
-      <div className="calendar-grid">{[8,9,10,11,12,13,14,15,16,17].map((hour) => <div className="calendar-line" key={hour}><span>{hour}:00</span>{weekDates.map((date) => <div key={date.toISOString()} className="calendar-cell">{postsForDate(date).filter((post) => new Date(post.scheduledAt!).getHours() === hour).map((post) => <button className="week-event" key={post.id} onClick={onCompose}>{post.text}</button>)}</div>)}</div>)}</div>
+      <div className="calendar-grid">{Array.from({ length: 24 }, (_, hour) => <div className="calendar-line" key={hour}><span>{String(hour).padStart(2, "0")}:00</span>{weekDates.map((date) => <div key={date.toISOString()} className="calendar-cell">{postsForDate(date).filter((post) => new Date(postTime(post)!).getHours() === hour).map((post) => <button className={`week-event ${post.status}`} key={post.id} title="Post again" onClick={() => onPostAgain(post)}>{post.text || "Media post"}</button>)}</div>)}</div>)}</div>
     </div>}
   </div>;
 }
 
-function PostRow({ post }: { post: RelayPost }) {
+function settingsSummary(settings: ProviderPostSettings): string {
+  if (settings.kind === "instagram") return settings.publishType === "feed" ? "Feed post" : settings.publishType[0].toUpperCase() + settings.publishType.slice(1);
+  if (settings.kind === "facebook") return settings.publishType === "feed" ? "Feed post" : "Reel";
+  if (settings.kind === "tiktok") return settings.privacyLevel === "SELF_ONLY" ? "Only me" : settings.privacyLevel === "PUBLIC_TO_EVERYONE" ? "Everyone" : settings.privacyLevel === "FOLLOWER_OF_CREATOR" ? "Followers" : "Friends";
+  return `${settings.privacyStatus[0].toUpperCase() + settings.privacyStatus.slice(1)} · ${settings.title}`;
+}
+
+function PostDetailsModal({ post, onClose, onPostAgain }: { post: RelayPost; onClose: () => void; onPostAgain: () => void }) {
+  const brands = useBrands();
+  const brand = brands.find((item) => item.id === post.brandId);
+  const timestamp = post.publishedAt ?? post.scheduledAt ?? post.createdAt;
+  return <div className="modal-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close post details" /><section className="post-details-modal" role="dialog" aria-modal="true" aria-labelledby="post-details-title"><header><div><p className="eyebrow">Saved post</p><h2 id="post-details-title">Post details</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header><div className="post-details-summary">{post.mediaUrl ? post.mediaType === "video" ? <video src={post.mediaUrl} controls preload="metadata" /> : <img src={post.mediaUrl} alt="Post media" /> : <span><FileText /></span>}<div><Status value={post.status} /><h3>{post.text || "Media post"}</h3><p><BrandMark brandId={post.brandId} size="small" />{brand?.name ?? "Unassigned"}</p>{timestamp && <time>{new Date(timestamp).toLocaleString()}</time>}</div></div><div className="post-target-details"><p className="eyebrow">Destinations</p>{post.targets.map((target) => <article key={target.id}><ProviderIcon id={target.provider} selected /><div><b>{providerRegistry.get(target.provider).name}</b><span>{settingsSummary(target.settings)}</span>{target.error && <em><CircleAlert />{target.error}</em>}</div><Status value={target.status} />{target.externalUrl && <a className="icon-button" href={target.externalUrl} target="_blank" rel="noreferrer" aria-label={`Open on ${providerRegistry.get(target.provider).name}`}><ExternalLink /></a>}</article>)}</div><footer><button className="secondary-button" onClick={onClose}>Close</button><button className="primary-button" onClick={onPostAgain}><RefreshCw /> Post again</button></footer></section></div>;
+}
+
+function PostRow({ post, onPostAgain, onDelete }: { post: RelayPost; onPostAgain: (post: RelayPost) => void; onDelete: (post: RelayPost) => void }) {
   const brands = useBrands();
   const brand = brands.find((b) => b.id === post.brandId);
-  const timestamp = post.scheduledAt ?? post.publishedAt;
+  const timestamp = post.scheduledAt ?? post.publishedAt ?? post.createdAt;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const externalUrl = post.targets.find((target) => target.externalUrl)?.externalUrl;
   return <article className="post-row">
-    {post.mediaUrl ? <img src={post.mediaUrl} alt="" /> : <div className="post-no-media"><FileText /></div>}
+    {post.mediaUrl ? post.mediaType === "video" ? <video src={post.mediaUrl} muted preload="metadata" /> : <img src={post.mediaUrl} alt="" /> : <div className="post-no-media"><FileText /></div>}
     <div className="post-main"><p>{post.text}</p><span><BrandMark brandId={post.brandId} size="small" />{brand?.name ?? "Unassigned"}</span></div>
     <div className="provider-stack">{post.targets.map((target) => <ProviderIcon id={target.provider} key={target.id} />)}</div>
     <div className="post-date"><b>{timestamp ? new Date(timestamp).toLocaleDateString([], { month: "short", day: "numeric" }) : "—"}</b><small>{timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Not scheduled"}</small></div>
-    <Status value={post.status} /><button className="icon-button"><MoreHorizontal /></button>
+    <Status value={post.status} /><button className="icon-button post-menu-trigger" aria-expanded={menuOpen} aria-haspopup="menu" aria-label="Post actions" onClick={() => setMenuOpen((open) => !open)}><MoreHorizontal /></button>
+    {menuOpen && <><button className="post-menu-scrim" aria-label="Close post actions" onClick={() => setMenuOpen(false)} /><div className="post-action-menu" role="menu"><button role="menuitem" onClick={() => { setMenuOpen(false); setDetailsOpen(true); }}><FileText /> View details</button><button role="menuitem" onClick={() => { setMenuOpen(false); onPostAgain(post); }}><RefreshCw /> Post again</button>{externalUrl && <a role="menuitem" href={externalUrl} target="_blank" rel="noreferrer"><ExternalLink /> Open on platform</a>}<span /> <button className="danger" role="menuitem" onClick={() => { setMenuOpen(false); onDelete(post); }}><Trash2 /> Delete from Relay</button></div></>}
+    {detailsOpen && <PostDetailsModal post={post} onClose={() => setDetailsOpen(false)} onPostAgain={() => { setDetailsOpen(false); onPostAgain(post); }} />}
   </article>;
 }
 
-function PostsView({ posts }: { posts: RelayPost[] }) {
+function PostsView({ posts, onPostAgain, onDelete }: { posts: RelayPost[]; onPostAgain: (post: RelayPost) => void; onDelete: (post: RelayPost) => void }) {
+  const brands = useBrands();
   const [filter, setFilter] = useState<"all" | PostStatus>("all");
-  const shown = filter === "all" ? posts : posts.filter((post) => post.status === filter);
-  return <div className="page page-enter"><div className="filterbar"><div className="tabs">{(["all", "draft", "scheduled", "published", "failed"] as const).map((value) => <button className={filter === value ? "active" : ""} onClick={() => setFilter(value)} key={value}>{value[0].toUpperCase() + value.slice(1)}<span>{value === "all" ? posts.length : posts.filter((p) => p.status === value).length}</span></button>)}</div><button className="secondary-button"><Grid2X2 /> Filters</button></div><div className="posts-list">{shown.map((post) => <PostRow post={post} key={post.id} />)}{shown.length === 0 && <Empty title="Nothing here yet" body="Posts with this status will appear here." />}</div></div>;
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [provider, setProvider] = useState<"all" | ProviderId>("all");
+  const [brandId, setBrandId] = useState("all");
+  const [mediaFilter, setMediaFilter] = useState<"all" | "with" | "without">("all");
+  const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const activeFilters = Number(provider !== "all") + Number(brandId !== "all") + Number(mediaFilter !== "all") + Number(sort !== "newest");
+  const resetFilters = () => { setProvider("all"); setBrandId("all"); setMediaFilter("all"); setSort("newest"); };
+  const postTime = (post: RelayPost) => new Date(post.publishedAt ?? post.scheduledAt ?? post.createdAt ?? 0).getTime();
+  const shown = posts.filter((post) => filter === "all" || post.status === filter)
+    .filter((post) => provider === "all" || post.targets.some((target) => target.provider === provider))
+    .filter((post) => brandId === "all" || (brandId === "unassigned" ? !post.brandId : post.brandId === brandId))
+    .filter((post) => mediaFilter === "all" || (mediaFilter === "with" ? post.mediaType !== "none" : post.mediaType === "none"))
+    .sort((first, second) => sort === "newest" ? postTime(second) - postTime(first) : postTime(first) - postTime(second));
+  return <div className="page page-enter"><div className="filterbar"><div className="tabs">{(["all", "draft", "scheduled", "publishing", "published", "failed"] as const).map((value) => <button className={filter === value ? "active" : ""} onClick={() => setFilter(value)} key={value}>{value[0].toUpperCase() + value.slice(1)}<span>{value === "all" ? posts.length : posts.filter((p) => p.status === value).length}</span></button>)}</div><button className={`secondary-button filters-trigger ${filtersOpen ? "active" : ""}`} aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}><Grid2X2 /> Filters{activeFilters > 0 && <span>{activeFilters}</span>}</button></div>{filtersOpen && <section className="post-filter-tray" aria-label="Post filters"><div><label>Network<select value={provider} onChange={(event) => setProvider(event.target.value as typeof provider)}><option value="all">All networks</option>{providerRegistry.list().map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Brand<select value={brandId} onChange={(event) => setBrandId(event.target.value)}><option value="all">All brands</option><option value="unassigned">Unassigned</option>{brands.map((brand) => <option value={brand.id} key={brand.id}>{brand.name}</option>)}</select></label><label>Media<select value={mediaFilter} onChange={(event) => setMediaFilter(event.target.value as typeof mediaFilter)}><option value="all">All posts</option><option value="with">With media</option><option value="without">Text only</option></select></label><label>Order<select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label></div><footer><span>{shown.length} post{shown.length === 1 ? "" : "s"} shown</span><button disabled={activeFilters === 0} onClick={resetFilters}>Reset filters</button><button className="primary-button" onClick={() => setFiltersOpen(false)}>Done</button></footer></section>}<div className="posts-list">{shown.map((post) => <PostRow post={post} onPostAgain={onPostAgain} onDelete={onDelete} key={post.id} />)}{shown.length === 0 && <Empty title="No posts match these filters" body="Adjust or reset the filters to see more posts." />}</div></div>;
 }
 
 function AccountsView({ onAccountDeleted }: { onAccountDeleted: (id: string) => void }) {
@@ -457,35 +519,43 @@ function ComposerMediaLibrary({ onClose, onSelect }: { onClose: () => void; onSe
   return <div className="modal-layer media-picker-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close media library" /><section className="media-picker" role="dialog" aria-modal="true" aria-labelledby="media-picker-title"><header><div><p className="eyebrow">Cloudflare R2</p><h2 id="media-picker-title">Choose from your library</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header>{error && <div className="media-error"><CircleAlert />{error}</div>}{loading ? <div className="media-loading"><LoaderCircle className="spin" />Loading your media…</div> : items.length === 0 ? <Empty title="Your media library is empty" body="Upload from your device to add the first item." /> : <div className="media-picker-grid">{items.map((item) => { const kind = mediaKind(item.name); if (kind === "file") return null; return <button key={item.key} onClick={() => onSelect({ name: item.name, url: item.url, previewUrl: item.url, type: kind })}><span>{kind === "image" ? <img src={item.url} alt="" /> : <video src={item.url} muted preload="metadata" />}</span><b>{item.name}</b><small>{formatBytes(item.size)} · {kind}</small></button>; })}</div>}<footer><button className="secondary-button" disabled={loading || history.length === 0} onClick={() => { const previous = history.at(-1) ?? null; setHistory((current) => current.slice(0, -1)); setCursor(previous); }}><ChevronLeft /> Previous</button><span>Page {history.length + 1}</span><button className="secondary-button" disabled={loading || !nextCursor} onClick={() => { setHistory((current) => [...current, cursor]); setCursor(nextCursor); }}>Next <ChevronRight /></button></footer></section></div>;
 }
 
-function Composer({ onClose, onCreate, initialMedia = null }: { onClose: () => void; onCreate: (post: RelayPost) => void; initialMedia?: ComposerMedia | null }) {
+function Composer({ onClose, onCreate, initialMedia = null, initialPost = null }: { onClose: () => void; onCreate: (post: RelayPost) => Promise<boolean>; initialMedia?: ComposerMedia | null; initialPost?: RelayPost | null }) {
   const brands = useBrands();
   const accounts = useAccounts();
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const scheduleInputRef = useRef<HTMLInputElement>(null);
   const localPreviewRef = useRef<string | null>(null);
-  const [text, setText] = useState(""); const [brandId, setBrandId] = useState(brands[0]?.id ?? "");
+  const reusableBrandId = initialPost && brands.some((brand) => brand.id === initialPost.brandId) ? initialPost.brandId : initialPost?.brandId === "" ? "" : brands[0]?.id ?? "";
+  const reusableTargets = initialPost?.targets.filter((target) => accounts.some((account) => account.id === target.accountId && account.brandId === (reusableBrandId || null))) ?? [];
+  const reusableSetting = <T extends ProviderPostSettings["kind"],>(kind: T) => reusableTargets.find((target) => target.settings.kind === kind)?.settings as Extract<ProviderPostSettings, { kind: T }> | undefined;
+  const instagramDefaults = reusableSetting("instagram");
+  const facebookDefaults = reusableSetting("facebook");
+  const tiktokDefaults = reusableSetting("tiktok");
+  const youtubeDefaults = reusableSetting("youtube");
+  const reusableMedia = initialMedia ?? (initialPost?.mediaUrl && initialPost.mediaType !== "none" ? { name: initialPost.mediaUrl.split("/").at(-1) || "Saved media", url: initialPost.mediaUrl, previewUrl: initialPost.mediaUrl, type: initialPost.mediaType } : null);
+  const [text, setText] = useState(initialPost?.text ?? ""); const [brandId, setBrandId] = useState(reusableBrandId);
   const available = accounts.filter((account) => account.brandId === (brandId || null));
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(reusableTargets.map((target) => target.accountId));
   const [previewMode, setPreviewMode] = useState<"feed" | "mobile">("feed");
-  const [instagramType, setInstagramType] = useState<"feed" | "reel" | "story">("feed");
-  const [facebookType, setFacebookType] = useState<"feed" | "reel">("feed");
-  const [facebookLink, setFacebookLink] = useState("");
-  const [tiktokPrivacy, setTiktokPrivacy] = useState<"PUBLIC_TO_EVERYONE" | "MUTUAL_FOLLOW_FRIENDS" | "FOLLOWER_OF_CREATOR" | "SELF_ONLY">("SELF_ONLY");
-  const [tiktokComments, setTiktokComments] = useState(true);
-  const [tiktokDuet, setTiktokDuet] = useState(false);
-  const [tiktokStitch, setTiktokStitch] = useState(false);
-  const [youtubeTitle, setYoutubeTitle] = useState("");
-  const [youtubeTags, setYoutubeTags] = useState("");
-  const [youtubePrivacy, setYoutubePrivacy] = useState<"private" | "unlisted" | "public">("private");
-  const [youtubeMadeForKids, setYoutubeMadeForKids] = useState(false);
-  const [media, setMedia] = useState<ComposerMedia | null>(initialMedia);
+  const [instagramType, setInstagramType] = useState<"feed" | "reel" | "story">(instagramDefaults?.publishType ?? "feed");
+  const [facebookType, setFacebookType] = useState<"feed" | "reel">(facebookDefaults?.publishType ?? "feed");
+  const [facebookLink, setFacebookLink] = useState(facebookDefaults?.linkUrl ?? "");
+  const [tiktokPrivacy, setTiktokPrivacy] = useState<"PUBLIC_TO_EVERYONE" | "MUTUAL_FOLLOW_FRIENDS" | "FOLLOWER_OF_CREATOR" | "SELF_ONLY">(tiktokDefaults?.privacyLevel ?? "SELF_ONLY");
+  const [tiktokComments, setTiktokComments] = useState(tiktokDefaults?.allowComments ?? true);
+  const [tiktokDuet, setTiktokDuet] = useState(tiktokDefaults?.allowDuet ?? false);
+  const [tiktokStitch, setTiktokStitch] = useState(tiktokDefaults?.allowStitch ?? false);
+  const [youtubeTitle, setYoutubeTitle] = useState(youtubeDefaults?.title ?? "");
+  const [youtubeTags, setYoutubeTags] = useState(youtubeDefaults?.tags.join(", ") ?? "");
+  const [youtubePrivacy, setYoutubePrivacy] = useState<"private" | "unlisted" | "public">(youtubeDefaults?.privacyStatus ?? "private");
+  const [youtubeMadeForKids, setYoutubeMadeForKids] = useState(youtubeDefaults?.madeForKids ?? false);
+  const [media, setMedia] = useState<ComposerMedia | null>(reusableMedia);
   const [mediaSource, setMediaSource] = useState<"choose" | "library" | null>(null);
   const [mediaBusy, setMediaBusy] = useState(false); const [mediaError, setMediaError] = useState("");
   const [schedule, setSchedule] = useState(true);
   const [scheduledAt, setScheduledAt] = useState(() => { const date = new Date(); date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); const offset = date.getTimezoneOffset() * 60_000; return new Date(date.getTime() - offset).toISOString().slice(0, 16); });
   const [saved, setSaved] = useState(true);
+  const [submitBusy, setSubmitBusy] = useState(false); const [submitError, setSubmitError] = useState("");
   useEffect(() => { setSaved(false); const timeout = setTimeout(() => setSaved(true), 700); return () => clearTimeout(timeout); }, [text]);
-  useEffect(() => { setSelected([]); }, [brandId]);
   useEffect(() => () => { if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current); }, []);
   const selectedAccounts = available.filter((account) => selected.includes(account.id));
   const selectedProviders = [...new Set(selectedAccounts.map((account) => account.provider))];
@@ -527,16 +597,19 @@ function Composer({ onClose, onCreate, initialMedia = null }: { onClose: () => v
     if (provider === "tiktok") return { kind: "tiktok", privacyLevel: tiktokPrivacy, allowComments: tiktokComments, allowDuet: tiktokDuet, allowStitch: tiktokStitch };
     return { kind: "youtube", title: youtubeTitle.trim(), tags: [...new Set(youtubeTags.split(",").map((tag) => tag.trim()).filter(Boolean))], privacyStatus: youtubePrivacy, madeForKids: youtubeMadeForKids };
   };
-  const submit = () => {
-    if (!canSubmit) return;
-    const targets = selectedAccounts.map((account, index) => ({ id: `new-target-${index}`, accountId: account.id, provider: account.provider, status: schedule ? "scheduled" as const : "published" as const, settings: settingsFor(account.provider) }));
-    onCreate({ id: `post-${Date.now()}`, brandId, text, mediaType: media?.type ?? "none", mediaUrl: media?.url, status: schedule ? "scheduled" : "published", scheduledAt: schedule ? new Date(scheduledAt).toISOString() : undefined, publishedAt: schedule ? undefined : new Date().toISOString(), targets });
-    onClose();
+  const submit = async () => {
+    if (!canSubmit || submitBusy) return;
+    setSubmitBusy(true); setSubmitError("");
+    const status = schedule ? "scheduled" as const : "publishing" as const;
+    const targets = selectedAccounts.map((account, index) => ({ id: `new-target-${index}`, accountId: account.id, provider: account.provider, status, settings: settingsFor(account.provider) }));
+    const created = await onCreate({ id: "", brandId, text, mediaType: media?.type ?? "none", mediaUrl: media?.url, status, scheduledAt: schedule ? new Date(scheduledAt).toISOString() : undefined, targets });
+    if (created) onClose();
+    else { setSubmitError("Relay could not save this post. Review the message and try again."); setSubmitBusy(false); }
   };
   return <div className="composer-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close composer" /><section className="composer">
-    <header><div><button className="icon-button mobile-only" onClick={onClose}><ArrowLeft /></button><span className="composer-mark"><Send /></span><div><p className="eyebrow">New post</p><h2>Create once. Relay everywhere.</h2></div></div><div><span className={`save-state ${saved ? "saved" : ""}`}>{saved ? <><Check /> Saved</> : "Saving…"}</span><button className="icon-button desktop-only" onClick={onClose}><X /></button></div></header>
+    <header><div><button className="icon-button mobile-only" onClick={onClose}><ArrowLeft /></button><span className="composer-mark"><Send /></span><div><p className="eyebrow">{initialPost ? "Post again" : "New post"}</p><h2>Create once. Relay everywhere.</h2></div></div><div><span className={`save-state ${saved ? "saved" : ""}`}>{saved ? <><Check /> Ready</> : "Editing…"}</span><button className="icon-button desktop-only" onClick={onClose}><X /></button></div></header>
     <div className="composer-body"><main>
-      <label className="field-label">Brand <span className="optional-label">optional</span></label><div className="brand-select">{accounts.some((account) => account.brandId === null) && <button className={!brandId ? "active" : ""} onClick={() => setBrandId("")}><span className="brand-mark small"><Users /></span>Unassigned{!brandId && <Check />}</button>}{brands.map((brand) => <button className={brandId === brand.id ? "active" : ""} onClick={() => setBrandId(brand.id)} key={brand.id}><BrandMark brandId={brand.id} size="small" />{brand.name}{brandId === brand.id && <Check />}</button>)}{accounts.length === 0 && <p className="inline-empty">Connect a social account before composing a post.</p>}</div>
+      <label className="field-label">Brand <span className="optional-label">optional</span></label><div className="brand-select">{accounts.some((account) => account.brandId === null) && <button className={!brandId ? "active" : ""} onClick={() => { setBrandId(""); setSelected([]); }}><span className="brand-mark small"><Users /></span>Unassigned{!brandId && <Check />}</button>}{brands.map((brand) => <button className={brandId === brand.id ? "active" : ""} onClick={() => { setBrandId(brand.id); setSelected([]); }} key={brand.id}><BrandMark brandId={brand.id} size="small" />{brand.name}{brandId === brand.id && <Check />}</button>)}{accounts.length === 0 && <p className="inline-empty">Connect a social account before composing a post.</p>}</div>
       <label className="field-label" htmlFor="caption">Content</label><div className="caption-box"><textarea id="caption" autoFocus value={text} onChange={(event) => setText(event.target.value)} placeholder="What do you want to share?" />{media && <div className="composer-media"><span>{media.type === "video" ? <Video /> : <ImageIcon />}</span><div><b>{media.name}</b><small>{mediaBusy ? "Uploading to Cloudflare R2…" : "Ready from your media library"}</small></div><button aria-label="Remove media" onClick={removeMedia}><X /></button></div>}<div><button disabled={mediaBusy} onClick={() => setMediaSource("choose")}>{mediaBusy ? <LoaderCircle className="spin" /> : <ImageIcon />} {mediaBusy ? "Uploading…" : media ? "Replace media" : "Add media"}</button><input ref={mediaInputRef} className="visually-hidden" type="file" accept="image/*,video/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void addMedia(file); }} /><span>{text.length} / 2,200</span></div></div>{mediaError && <p className="composer-error" role="alert"><CircleAlert />{mediaError}</p>}
       <div className="dest-heading"><div><label className="field-label">Publish to</label><p>Select the destinations for this post.</p></div><button className="select-all-button" onClick={() => setSelected(selected.length === available.length ? [] : available.map((account) => account.id))}>{selected.length === available.length && available.length > 0 ? "Clear" : "Select all"}</button></div>
       <div className="destination-list">{available.map((account) => { const isSelected = selected.includes(account.id); return <button className={isSelected ? "selected" : ""} onClick={() => setSelected(isSelected ? selected.filter((id) => id !== account.id) : [...selected, account.id])} key={account.id}><span className="check-box">{isSelected && <Check />}</span><ProviderIcon id={account.provider} selected={isSelected} /><span><b>{providerRegistry.get(account.provider).name}</b><small>{account.handle}</small></span><em>{isSelected ? <><Check /> Selected</> : "Not selected"}</em></button>; })}{available.length === 0 && <p className="inline-empty">No connected accounts are available.</p>}</div>
@@ -547,17 +620,18 @@ function Composer({ onClose, onCreate, initialMedia = null }: { onClose: () => v
         {selectedProviders.includes("youtube") && <div className="platform-card"><div className="platform-card-title"><ProviderIcon id="youtube" /><span><b>YouTube</b><small>Video metadata sent with the upload.</small></span></div><label>Video title <span>required</span><input value={youtubeTitle} maxLength={100} onChange={(event) => setYoutubeTitle(event.target.value)} placeholder="Add a YouTube title" /></label><label>Tags <span>comma-separated</span><input value={youtubeTags} onChange={(event) => setYoutubeTags(event.target.value)} placeholder="product, tutorial, behind the scenes" /></label><div className="platform-grid"><label>Visibility<select value={youtubePrivacy} onChange={(event) => setYoutubePrivacy(event.target.value as typeof youtubePrivacy)}><option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></label><label className="checkbox-field"><input type="checkbox" checked={youtubeMadeForKids} onChange={(event) => setYoutubeMadeForKids(event.target.checked)} /> Made for kids</label></div></div>}
       </section>}
     </main><aside className="preview-panel"><div className="preview-head"><span>Preview</span><div className="segmented compact" aria-label="Preview format">{(["feed", "mobile"] as const).map((mode) => <button key={mode} className={previewMode === mode ? "active" : ""} aria-pressed={previewMode === mode} onClick={() => setPreviewMode(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</div></div><div className={`social-preview ${previewMode}`}>{previewMode === "mobile" && <div className="phone-status"><b>9:41</b><span>● ◒ ▰</span></div>}<div className="preview-account"><BrandMark brandId={brandId} size="small" /><span><b>{brands.find((brand) => brand.id === brandId)?.name ?? "Unassigned"}</b><small>Preview · just now</small></span><MoreHorizontal /></div>{media ? <div className="preview-media">{media.type === "video" ? <video src={media.previewUrl} muted controls /> : <img src={media.previewUrl} alt={media.name} />}{mediaBusy && <span><LoaderCircle className="spin" />Uploading…</span>}</div> : <div className="preview-placeholder"><span className="preview-glyph"><i /><i /></span><p>Your media will appear here</p></div>}<div className="preview-actions"><span>♡</span><span>◯</span><span>⌁</span></div><p>{text || (media ? "Media ready to publish." : "Start writing to preview your post across social networks.")}</p>{previewMode === "mobile" && <div className="phone-home-indicator" />}</div><div className="validation"><h4>Destination check</h4>{selectedAccounts.map((account) => { const ready = hasContent && (account.provider !== "youtube" || youtubeReady); return <div key={account.id}><ProviderIcon id={account.provider} /><span>{providerRegistry.get(account.provider).name}</span>{ready ? <em className="ready"><Check /> Ready</em> : <em><CircleAlert />{!hasContent ? " Add content" : " Add title"}</em>}</div>; })}</div></aside></div>
-    <footer><div className="schedule-choice"><button className={!schedule ? "active" : ""} onClick={() => setSchedule(false)}><Zap /> Publish now</button><button className={schedule ? "active" : ""} onClick={() => setSchedule(true)}><Clock3 /> Schedule</button>{schedule && <div className="schedule-date" role="button" tabIndex={0} onClick={(event) => { if (event.target !== scheduleInputRef.current) openSchedulePicker(); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openSchedulePicker(); } }}><CalendarDays /><span><small>Publish date &amp; time</small><input ref={scheduleInputRef} aria-label="Publish date and time" type="datetime-local" value={scheduledAt} min={new Date().toISOString().slice(0, 16)} onChange={(event) => setScheduledAt(event.target.value)} /></span></div>}</div><button className="publish-button" disabled={!canSubmit || mediaBusy} onClick={submit}>{schedule ? "Schedule post" : "Publish now"}<Send /></button></footer>
+    {submitError && <p className="composer-submit-error" role="alert"><CircleAlert />{submitError}</p>}<footer><div className="schedule-choice"><button className={!schedule ? "active" : ""} onClick={() => setSchedule(false)}><Zap /> Publish now</button><button className={schedule ? "active" : ""} onClick={() => setSchedule(true)}><Clock3 /> Schedule</button>{schedule && <div className="schedule-date" role="button" tabIndex={0} onClick={(event) => { if (event.target !== scheduleInputRef.current) openSchedulePicker(); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openSchedulePicker(); } }}><CalendarDays /><span><small>Publish date &amp; time</small><input ref={scheduleInputRef} aria-label="Publish date and time" type="datetime-local" value={scheduledAt} min={new Date().toISOString().slice(0, 16)} onChange={(event) => setScheduledAt(event.target.value)} /></span></div>}</div><button className="publish-button" disabled={!canSubmit || mediaBusy || submitBusy} onClick={() => void submit()}>{submitBusy ? <><LoaderCircle className="spin" />Saving…</> : <>{schedule ? "Schedule post" : "Start publishing"}<Send /></>}</button></footer>
   </section>{mediaSource === "choose" && <div className="modal-layer media-picker-layer"><button className="modal-scrim" onClick={() => setMediaSource(null)} aria-label="Close media options" /><section className="media-source-modal" role="dialog" aria-modal="true" aria-labelledby="media-source-title"><header><div><p className="eyebrow">Add media</p><h2 id="media-source-title">Where is your media?</h2></div><button className="icon-button" onClick={() => setMediaSource(null)} aria-label="Close"><X /></button></header><div><button onClick={() => { setMediaSource(null); mediaInputRef.current?.click(); }}><span><Upload /></span><b>Upload from device</b><small>Choose a new image or video. Relay will save it to R2.</small><ChevronRight /></button><button onClick={() => setMediaSource("library")}><span><Cloud /></span><b>Choose from library</b><small>Reuse media already stored in Cloudflare R2.</small><ChevronRight /></button></div></section></div>}{mediaSource === "library" && <ComposerMediaLibrary onClose={() => setMediaSource(null)} onSelect={chooseLibraryMedia} />}</div>;
 }
 
 function CommandMenu({ onClose, go, compose }: { onClose: () => void; go: (v: View) => void; compose: () => void }) { const commands = [{ name: "Create post", icon: Plus, action: compose }, { name: "Open calendar", icon: CalendarDays, action: () => go("calendar") }, { name: "Search posts", icon: Search, action: () => go("posts") }, { name: "Connect account", icon: Users, action: () => go("accounts") }, { name: "Upload media", icon: ImageIcon, action: () => go("media") }]; return <div className="modal-layer command-layer"><button className="modal-scrim" onClick={onClose} /><div className="command-menu"><div><Search /><input autoFocus placeholder="Search or type a command…"/><kbd>ESC</kbd></div><p>Quick actions</p>{commands.map(({ name, icon: Icon, action }) => <button key={name} onClick={() => { action(); onClose(); }}><Icon />{name}<span>↵</span></button>)}<footer><span><Command /> Relay command menu</span><span>↑↓ Navigate · ↵ Select</span></footer></div></div>; }
 
-export default function RelayApp({ user, initialBrands, initialAccounts, initialNow }: { user: { name: string; email: string; role: string }; initialBrands: Brand[]; initialAccounts: SocialAccount[]; initialNow: string }) {
+export default function RelayApp({ user, initialBrands, initialAccounts, initialPosts, initialNow }: { user: { name: string; email: string; role: string }; initialBrands: Brand[]; initialAccounts: SocialAccount[]; initialPosts: RelayPost[]; initialNow: string }) {
   const [view, setView] = useState<View>("home"); const [posts, setPosts] = useState(initialPosts);
   const [brandList, setBrandList] = useState(initialBrands);
   const [accountList, setAccountList] = useState(initialAccounts);
-  const [composer, setComposer] = useState(false); const [composerMedia, setComposerMedia] = useState<ComposerMedia | null>(null); const [command, setCommand] = useState(false); const [menu, setMenu] = useState(false); const [theme, setTheme] = useState("light"); const [toast, setToast] = useState(""); const [toastTone, setToastTone] = useState<"success" | "error">("success");
+  const [composer, setComposer] = useState(false); const [composerMedia, setComposerMedia] = useState<ComposerMedia | null>(null); const [composerPost, setComposerPost] = useState<RelayPost | null>(null); const [command, setCommand] = useState(false); const [menu, setMenu] = useState(false); const [theme, setTheme] = useState("light"); const [toast, setToast] = useState(""); const [toastTone, setToastTone] = useState<"success" | "error">("success");
+  const [notifications, setNotifications] = useState<RelayNotification[]>([]); const [notificationsOpen, setNotificationsOpen] = useState(false); const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [themeReady, setThemeReady] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false); const [logoutBusy, setLogoutBusy] = useState(false); const [logoutError, setLogoutError] = useState("");
   useEffect(() => { const stored = window.localStorage.getItem("relay-theme"); if (stored === "light" || stored === "dark") setTheme(stored); setThemeReady(true); }, []);
@@ -571,11 +645,86 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`); const timer = window.setTimeout(() => setToast(""), 5000); return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => { document.documentElement.dataset.theme = theme; if (themeReady) window.localStorage.setItem("relay-theme", theme); }, [theme, themeReady]);
-  useEffect(() => { const handle = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setCommand(true); } if (event.key.toLowerCase() === "c" && !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) { setComposerMedia(null); setComposer(true); } if (event.key === "Escape") { setComposer(false); setCommand(false); } }; window.addEventListener("keydown", handle); return () => window.removeEventListener("keydown", handle); }, []);
-  const openComposer = (media: ComposerMedia | null = null) => { setComposerMedia(media); setComposer(true); };
-  const closeComposer = () => { setComposer(false); setComposerMedia(null); };
-  const addPost = (post: RelayPost) => { setPosts((current) => [post, ...current]); setToastTone("success"); setToast(post.status === "scheduled" ? "Post scheduled for tomorrow at 09:30" : "Post published successfully"); setTimeout(() => setToast(""), 3500); };
-  const content = useMemo(() => { if (view === "home") return <HomeView posts={posts} onCompose={() => openComposer()} go={setView} userName={user.name} initialNow={initialNow} />; if (view === "calendar") return <CalendarView posts={posts} onCompose={() => openComposer()} />; if (view === "posts") return <PostsView posts={posts} />; if (view === "accounts") return <AccountsView onAccountDeleted={(id) => setAccountList((current) => current.filter((item) => item.id !== id))} />; if (view === "media") return <MediaView onCompose={(media) => openComposer(media)} />; if (view === "brands") return <BrandsView onBrandCreated={(brand) => setBrandList((current) => [...current, brand])} onBrandUpdated={(brand) => setBrandList((current) => current.map((item) => item.id === brand.id ? brand : item))} onBrandDeleted={(id) => setBrandList((current) => current.filter((item) => item.id !== id))} onAccountsAssigned={(assignments) => setAccountList((current) => current.map((account) => { const assignment = assignments.find((item) => item.id === account.id); return assignment ? { ...account, brandId: assignment.brandId } : account; }))} />; return <SettingsView theme={theme} setTheme={setTheme} go={setView} user={user} />; }, [view, posts, theme, user, initialNow]);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/v1/notifications", { cache: "no-store" });
+        const payload = await response.json() as { data?: RelayNotification[] };
+        if (active && response.ok) setNotifications(payload.data ?? []);
+      } finally { if (active) setNotificationsLoading(false); }
+    };
+    void load(); const interval = window.setInterval(() => void load(), 15_000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, []);
+  useEffect(() => { const handle = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setCommand(true); } if (event.key.toLowerCase() === "c" && !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) { setComposerMedia(null); setComposerPost(null); setComposer(true); } if (event.key === "Escape") { setComposer(false); setCommand(false); } }; window.addEventListener("keydown", handle); return () => window.removeEventListener("keydown", handle); }, []);
+  const openComposer = (media: ComposerMedia | null = null, post: RelayPost | null = null) => { setComposerMedia(media); setComposerPost(post); setComposer(true); };
+  const closeComposer = () => { setComposer(false); setComposerMedia(null); setComposerPost(null); };
+  const refreshNotifications = async () => {
+    const response = await fetch("/api/v1/notifications", { cache: "no-store" });
+    const payload = await response.json() as { data?: RelayNotification[] };
+    if (response.ok) setNotifications(payload.data ?? []);
+  };
+  const recordPostNotifications = async (post: RelayPost) => {
+    const items = post.targets.map((target) => {
+      const platform = providerRegistry.get(target.provider).name;
+      const account = accountList.find((item) => item.id === target.accountId);
+      const destination = account ? `${account.displayName} (${account.handle})` : "the selected account";
+      const kind: NotificationKind = target.status === "failed" ? "error" : target.status === "published" ? "success" : target.status === "scheduled" ? "scheduled" : "info";
+      const title = kind === "error" ? `${platform} could not publish the post` : kind === "success" ? `Post published on ${platform}` : kind === "scheduled" ? `${platform} post scheduled` : `Publishing to ${platform}`;
+      const message = kind === "error"
+        ? target.error || `${platform} did not provide a detailed reason. Check the connected account, media requirements, and permissions before retrying.`
+        : kind === "success" ? `${destination} returned a successful publishing result.`
+          : kind === "scheduled" && post.scheduledAt ? `Scheduled for ${new Date(post.scheduledAt).toLocaleString()} on ${destination}.`
+            : `Relay queued this post for ${destination}. Waiting for provider confirmation.`;
+      return { eventKey: `${post.id}:${target.id}:${target.status}`, postId: post.id, targetId: target.id, provider: target.provider, kind, title, message, externalUrl: target.externalUrl };
+    });
+    if (items.length === 0) return;
+    try {
+      const response = await fetch("/api/v1/notifications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ notifications: items }) });
+      if (!response.ok) throw new Error("Could not save publishing activity");
+      await refreshNotifications();
+    } catch {
+      setToastTone("error"); setToast("The post was saved, but Relay could not record its notification history.");
+      setTimeout(() => setToast(""), 4500);
+    }
+  };
+  const addPost = async (post: RelayPost): Promise<boolean> => {
+    try {
+      const response = await fetch("/api/v1/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(post) });
+      const payload = await response.json() as { data?: RelayPost; error?: string };
+      if (!response.ok || !payload.data) throw new Error(payload.error || "Relay could not save this post.");
+      setPosts((current) => [payload.data!, ...current]); void recordPostNotifications(payload.data);
+      setToastTone("success");
+      setToast(payload.data.status === "scheduled" ? `Post saved and scheduled for ${payload.data.targets.length} destination${payload.data.targets.length === 1 ? "" : "s"}` : `Publishing started for ${payload.data.targets.length} destination${payload.data.targets.length === 1 ? "" : "s"}`);
+      setTimeout(() => setToast(""), 4000);
+      return true;
+    } catch (reason) {
+      setToastTone("error"); setToast(reason instanceof Error ? reason.message : "Relay could not save this post.");
+      setTimeout(() => setToast(""), 4500);
+      return false;
+    }
+  };
+  const deletePost = async (post: RelayPost) => {
+    if (!window.confirm("Delete this post from Relay? Its media will remain in your R2 library, but the saved calendar entry and destination details will be removed.")) return;
+    try {
+      const response = await fetch("/api/v1/posts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: post.id }) });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Relay could not delete this post.");
+      setPosts((current) => current.filter((item) => item.id !== post.id));
+      setToastTone("success"); setToast("Post removed from Relay. Its media is still available in your library.");
+      setTimeout(() => setToast(""), 4000);
+    } catch (reason) {
+      setToastTone("error"); setToast(reason instanceof Error ? reason.message : "Relay could not delete this post.");
+      setTimeout(() => setToast(""), 4500);
+    }
+  };
+  const markAllNotificationsRead = async () => {
+    const readAt = new Date().toISOString();
+    setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? readAt })));
+    await fetch("/api/v1/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: "{}" });
+  };
+  const content = useMemo(() => { if (view === "home") return <HomeView posts={posts} onCompose={() => openComposer()} go={setView} userName={user.name} initialNow={initialNow} />; if (view === "calendar") return <CalendarView posts={posts} onCompose={() => openComposer()} onPostAgain={(post) => openComposer(null, post)} onDelete={(post) => void deletePost(post)} />; if (view === "posts") return <PostsView posts={posts} onPostAgain={(post) => openComposer(null, post)} onDelete={(post) => void deletePost(post)} />; if (view === "accounts") return <AccountsView onAccountDeleted={(id) => setAccountList((current) => current.filter((item) => item.id !== id))} />; if (view === "media") return <MediaView onCompose={(media) => openComposer(media)} />; if (view === "brands") return <BrandsView onBrandCreated={(brand) => setBrandList((current) => [...current, brand])} onBrandUpdated={(brand) => setBrandList((current) => current.map((item) => item.id === brand.id ? brand : item))} onBrandDeleted={(id) => setBrandList((current) => current.filter((item) => item.id !== id))} onAccountsAssigned={(assignments) => setAccountList((current) => current.map((account) => { const assignment = assignments.find((item) => item.id === account.id); return assignment ? { ...account, brandId: assignment.brandId } : account; }))} />; return <SettingsView theme={theme} setTheme={setTheme} go={setView} user={user} />; }, [view, posts, theme, user, initialNow]);
   const logout = async () => {
     setLogoutBusy(true); setLogoutError("");
     try {
@@ -584,5 +733,6 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
       window.location.replace("/login");
     } catch (reason) { setLogoutError(reason instanceof Error ? reason.message : "Relay could not end your session."); setLogoutBusy(false); }
   };
-  return <BrandsContext.Provider value={brandList}><AccountsContext.Provider value={accountList}><div className="app-shell"><Sidebar active={view} onChange={setView} mobileOpen={menu} onClose={() => setMenu(false)} user={user} onLogout={() => { setLogoutError(""); setLogoutConfirm(true); }} /><main className="main"><Topbar view={view} onCompose={() => openComposer()} onCommand={() => setCommand(true)} onMenu={() => setMenu(true)} />{content}</main><nav className="mobile-nav">{navItems.slice(0, 3).map(({ id, icon: Icon }) => <button className={view === id ? "active" : ""} onClick={() => setView(id)} key={id}><Icon /><span>{viewLabel[id]}</span></button>)}<button className="mobile-create" onClick={() => openComposer()}><Plus /></button><button className={view === "accounts" ? "active" : ""} onClick={() => setView("accounts")}><Users /><span>Accounts</span></button><button onClick={() => setMenu(true)}><Menu /><span>More</span></button></nav>{composer && <Composer initialMedia={composerMedia} onClose={closeComposer} onCreate={addPost} />}{command && <CommandMenu onClose={() => setCommand(false)} go={setView} compose={() => openComposer()} />}{logoutConfirm && <LogoutModal busy={logoutBusy} error={logoutError} onClose={() => setLogoutConfirm(false)} onConfirm={() => void logout()} />}{toast && <div className={`toast ${toastTone}`}><span>{toastTone === "error" ? <CircleAlert /> : <Check />}</span>{toast}</div>}</div></AccountsContext.Provider></BrandsContext.Provider>;
+  const unreadNotifications = notifications.filter((item) => !item.readAt).length;
+  return <BrandsContext.Provider value={brandList}><AccountsContext.Provider value={accountList}><div className="app-shell"><Sidebar active={view} onChange={setView} mobileOpen={menu} onClose={() => setMenu(false)} user={user} onLogout={() => { setLogoutError(""); setLogoutConfirm(true); }} /><main className="main"><Topbar view={view} unread={unreadNotifications} onNotifications={() => setNotificationsOpen(true)} onCompose={() => openComposer()} onCommand={() => setCommand(true)} onMenu={() => setMenu(true)} />{content}</main><nav className="mobile-nav">{navItems.slice(0, 3).map(({ id, icon: Icon }) => <button className={view === id ? "active" : ""} onClick={() => setView(id)} key={id}><Icon /><span>{viewLabel[id]}</span></button>)}<button className="mobile-create" onClick={() => openComposer()}><Plus /></button><button className={view === "accounts" ? "active" : ""} onClick={() => setView("accounts")}><Users /><span>Accounts</span></button><button onClick={() => setMenu(true)}><Menu /><span>More</span></button></nav>{composer && <Composer initialMedia={composerMedia} initialPost={composerPost} onClose={closeComposer} onCreate={addPost} />}{command && <CommandMenu onClose={() => setCommand(false)} go={setView} compose={() => openComposer()} />}{notificationsOpen && <NotificationCenter notifications={notifications} loading={notificationsLoading} onClose={() => setNotificationsOpen(false)} onMarkAllRead={() => void markAllNotificationsRead()} />}{logoutConfirm && <LogoutModal busy={logoutBusy} error={logoutError} onClose={() => setLogoutConfirm(false)} onConfirm={() => void logout()} />}{toast && <div className={`toast ${toastTone}`}><span>{toastTone === "error" ? <CircleAlert /> : <Check />}</span>{toast}</div>}</div></AccountsContext.Provider></BrandsContext.Provider>;
 }

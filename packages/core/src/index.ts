@@ -1,7 +1,7 @@
 export type ProviderId = "instagram" | "facebook" | "tiktok" | "youtube";
 export type ProviderAuthMethod = "instagram-facebook" | "instagram-standalone" | "facebook" | "tiktok" | "youtube";
 export type AccountStatus = "connected" | "warning" | "expired";
-export type PostStatus = "draft" | "scheduled" | "published" | "failed";
+export type PostStatus = "draft" | "scheduled" | "publishing" | "published" | "failed";
 
 export interface Brand {
   id: string;
@@ -79,6 +79,7 @@ export interface RelayPost {
   status: PostStatus;
   scheduledAt?: string;
   publishedAt?: string;
+  createdAt?: string;
   targets: PostTarget[];
 }
 

@@ -1,3 +1,4 @@
+import { sql as drizzleSql } from "drizzle-orm";
 import { boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const user = pgTable(
@@ -115,6 +116,71 @@ export const socialAccount = pgTable(
   ],
 );
 
-export const schema = { user, session, account, verification, brand, socialAccount };
+export const notification = pgTable(
+  "notification",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    eventKey: text("event_key").notNull(),
+    postId: text("post_id"),
+    targetId: text("target_id"),
+    provider: text("provider"),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    externalUrl: text("external_url"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("notification_owner_event_unique").on(table.ownerId, table.eventKey),
+    index("notification_owner_created_idx").on(table.ownerId, table.createdAt),
+    index("notification_owner_unread_idx").on(table.ownerId, table.createdAt).where(drizzleSql`${table.readAt} IS NULL`),
+  ],
+);
+
+export const relayPost = pgTable(
+  "post",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
+    text: text("text").notNull(),
+    mediaType: text("media_type").notNull().default("none"),
+    mediaUrl: text("media_url"),
+    status: text("status").notNull().default("draft"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("post_owner_created_idx").on(table.ownerId, table.createdAt),
+    index("post_owner_scheduled_idx").on(table.ownerId, table.scheduledAt),
+    index("post_owner_published_idx").on(table.ownerId, table.publishedAt),
+    index("post_brand_id_idx").on(table.brandId),
+  ],
+);
+
+export const postTarget = pgTable(
+  "post_target",
+  {
+    id: text("id").primaryKey(),
+    postId: text("post_id").notNull().references(() => relayPost.id, { onDelete: "cascade" }),
+    socialAccountId: text("social_account_id").references(() => socialAccount.id, { onDelete: "set null" }),
+    provider: text("provider").notNull(),
+    accountDisplayName: text("account_display_name").notNull(),
+    accountHandle: text("account_handle").notNull(),
+    status: text("status").notNull(),
+    settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+    externalUrl: text("external_url"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("post_target_post_id_idx").on(table.postId), index("post_target_social_account_id_idx").on(table.socialAccountId)],
+);
+
+export const schema = { user, session, account, verification, brand, socialAccount, notification, relayPost, postTarget };
 
 export type RelayUser = typeof user.$inferSelect;

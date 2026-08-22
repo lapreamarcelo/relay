@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "../lib/auth";
+import { listPostsForOwner } from "../lib/post-repository";
 import RelayApp from "./relay-app";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function HomePage() {
   `;
   const iso = (value: string | Date | null) => value === null ? undefined : new Date(value).toISOString();
   const accounts: SocialAccount[] = accountRows.map((account) => ({ id: account.id, brandId: account.brand_id, provider: account.provider, authMethod: account.auth_method, providerAccountId: account.provider_account_id, handle: account.username.startsWith("@") ? account.username : `@${account.username}`, displayName: account.display_name, avatarUrl: account.avatar_url ?? undefined, status: account.status, followers: "", tokenExpiresAt: iso(account.token_expires_at), refreshTokenExpiresAt: iso(account.refresh_token_expires_at), lastCheckedAt: iso(account.last_checked_at) }));
+  const posts = await listPostsForOwner(session.user.id);
 
-  return <RelayApp initialBrands={brands} initialAccounts={accounts} initialNow={new Date().toISOString()} user={{ name: session.user.name, email: session.user.email, role: session.user.role ?? "MEMBER" }} />;
+  return <RelayApp initialBrands={brands} initialAccounts={accounts} initialPosts={posts} initialNow={new Date().toISOString()} user={{ name: session.user.name, email: session.user.email, role: session.user.role ?? "MEMBER" }} />;
 }
