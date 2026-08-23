@@ -15,6 +15,14 @@ export const runtime = "nodejs";
 const DEFAULT_PAGE_SIZE = 24;
 const MAX_PAGE_SIZE = 100;
 const MAX_SERVER_UPLOAD_SIZE = 100 * 1024 * 1024;
+const PROJECT_ID_PATTERN = /^[0-9a-f-]{36}$/i;
+
+function mediaPrefix(projectId: string | null | undefined): string | undefined {
+  if (!projectId || projectId === "all") return undefined;
+  if (projectId === "unfiled") return "media/";
+  if (!PROJECT_ID_PATTERN.test(projectId)) throw new Error("Invalid media project");
+  return `media-projects/${projectId}/media/`;
+}
 
 function sanitizeFileName(value: string): string {
   const normalized = value.normalize("NFKC").split(/[\\/]/).pop()?.trim() ?? "";
@@ -35,7 +43,7 @@ function errorResponse(error: unknown) {
 }
 
 export async function GET(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "media:read" });
   if (authorization.response) return authorization.response;
 
   try {
@@ -45,15 +53,17 @@ export async function GET(request: Request) {
       ? Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(requestedLimit)))
       : DEFAULT_PAGE_SIZE;
     const cursor = url.searchParams.get("cursor") || undefined;
+    const prefix = mediaPrefix(url.searchParams.get("project"));
     const config = getR2Config();
     const result = await getR2Client().send(new ListObjectsV2Command({
       Bucket: config.bucket,
       MaxKeys: limit,
       ContinuationToken: cursor,
+      Prefix: prefix,
     }));
 
     const data = (result.Contents ?? [])
-      .filter((object) => object.Key && !object.Key.endsWith("/"))
+      .filter((object) => object.Key && !object.Key.endsWith("/") && !object.Key.endsWith("/.project.json"))
       .map((object) => ({
         key: object.Key!,
         name: object.Key!.split("/").pop() || object.Key!,
@@ -84,6 +94,7 @@ export async function POST(request: Request) {
     if (request.headers.get("content-type")?.includes("multipart/form-data")) {
       const form = await request.formData();
       const entry = form.get("file");
+      const projectId = typeof form.get("projectId") === "string" ? String(form.get("projectId")) : undefined;
       if (!(entry instanceof File)) return Response.json({ error: "A media file is required" }, { status: 400 });
       if (entry.size > MAX_SERVER_UPLOAD_SIZE) {
         return Response.json({ error: "Server fallback uploads are limited to 100 MB. Configure R2 CORS for larger direct uploads." }, { status: 413 });
@@ -95,7 +106,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "Only image and video uploads are supported" }, { status: 400 });
       }
       const config = getR2Config();
-      const key = `media/${crypto.randomUUID()}-${fileName}`;
+      const key = `${mediaPrefix(projectId) ?? "media/"}${crypto.randomUUID()}-${fileName}`;
       await getR2Client().send(new PutObjectCommand({
         Bucket: config.bucket,
         Key: key,
@@ -106,7 +117,7 @@ export async function POST(request: Request) {
       return Response.json({ key, name: fileName, url: publicObjectUrl(key), mode: "server" }, { status: 201 });
     }
 
-    const body = await request.json() as { fileName?: unknown; contentType?: unknown };
+    const body = await request.json() as { fileName?: unknown; contentType?: unknown; projectId?: unknown };
     const fileName = typeof body.fileName === "string" ? sanitizeFileName(body.fileName) : "";
     const contentType = typeof body.contentType === "string" ? body.contentType.trim().toLowerCase() : "";
     if (!fileName) return Response.json({ error: "A valid file name is required" }, { status: 400 });
@@ -115,7 +126,8 @@ export async function POST(request: Request) {
     }
 
     const config = getR2Config();
-    const key = `media/${crypto.randomUUID()}-${fileName}`;
+    const projectId = typeof body.projectId === "string" ? body.projectId : undefined;
+    const key = `${mediaPrefix(projectId) ?? "media/"}${crypto.randomUUID()}-${fileName}`;
     const command = new PutObjectCommand({ Bucket: config.bucket, Key: key, ContentType: contentType });
     const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 15 * 60 });
     return Response.json({ key, uploadUrl, url: publicObjectUrl(key), expiresIn: 15 * 60 });

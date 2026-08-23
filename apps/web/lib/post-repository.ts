@@ -7,6 +7,7 @@ interface PostRow {
   text: string;
   media_type: "none" | "image" | "video";
   media_url: string | null;
+  media_urls: string[];
   status: PostStatus;
   scheduled_at: string | Date | null;
   published_at: string | Date | null;
@@ -22,6 +23,15 @@ interface TargetRow {
   settings: ProviderPostSettings;
   external_url: string | null;
   error: string | null;
+  analytics_captured_at: string | Date | null;
+  analytics_views: number | null;
+  analytics_reach: number | null;
+  analytics_likes: number | null;
+  analytics_comments: number | null;
+  analytics_shares: number | null;
+  analytics_saves: number | null;
+  analytics_watch_time_seconds: number | null;
+  analytics_average_watch_time_seconds: number | null;
 }
 
 function iso(value: string | Date | null): string | undefined {
@@ -30,15 +40,22 @@ function iso(value: string | Date | null): string | undefined {
 
 export async function listPostsForOwner(ownerId: string): Promise<RelayPost[]> {
   const posts = await sql<PostRow[]>`
-    SELECT id, brand_id, text, media_type, media_url, status, scheduled_at, published_at, created_at
+    SELECT id, brand_id, text, media_type, media_url, media_urls, status, scheduled_at, published_at, created_at
     FROM "post" WHERE owner_id = ${ownerId} ORDER BY created_at DESC LIMIT 500
   `;
   if (posts.length === 0) return [];
   const targets = await sql<TargetRow[]>`
     SELECT target.id, target.post_id, target.social_account_id, target.provider, target.status,
-      target.settings, target.external_url, target.error
+      target.settings, target.external_url, target.error, metric.captured_at AS analytics_captured_at,
+      metric.views::float8 AS analytics_views, metric.reach::float8 AS analytics_reach, metric.likes::float8 AS analytics_likes,
+      metric.comments::float8 AS analytics_comments, metric.shares::float8 AS analytics_shares, metric.saves::float8 AS analytics_saves,
+      metric.watch_time_seconds::float8 AS analytics_watch_time_seconds, metric.average_watch_time_seconds AS analytics_average_watch_time_seconds
     FROM "post_target" target
     INNER JOIN "post" post ON post.id = target.post_id
+    LEFT JOIN LATERAL (
+      SELECT captured_at, views, reach, likes, comments, shares, saves, watch_time_seconds, average_watch_time_seconds
+      FROM "post_metric_snapshot" WHERE target_id = target.id ORDER BY captured_at DESC LIMIT 1
+    ) metric ON true
     WHERE post.owner_id = ${ownerId}
     ORDER BY target.created_at ASC
   `;
@@ -50,6 +67,7 @@ export async function listPostsForOwner(ownerId: string): Promise<RelayPost[]> {
     text: post.text,
     mediaType: post.media_type,
     mediaUrl: post.media_url ?? undefined,
+    mediaUrls: post.media_urls,
     status: post.status,
     scheduledAt: iso(post.scheduled_at),
     publishedAt: iso(post.published_at),
@@ -62,6 +80,17 @@ export async function listPostsForOwner(ownerId: string): Promise<RelayPost[]> {
       settings: target.settings,
       externalUrl: target.external_url ?? undefined,
       error: target.error ?? undefined,
+      analytics: target.analytics_captured_at ? {
+        capturedAt: new Date(target.analytics_captured_at).toISOString(),
+        views: target.analytics_views ?? undefined,
+        reach: target.analytics_reach ?? undefined,
+        likes: target.analytics_likes ?? undefined,
+        comments: target.analytics_comments ?? undefined,
+        shares: target.analytics_shares ?? undefined,
+        saves: target.analytics_saves ?? undefined,
+        watchTimeSeconds: target.analytics_watch_time_seconds ?? undefined,
+        averageWatchTimeSeconds: target.analytics_average_watch_time_seconds ?? undefined,
+      } : undefined,
     })),
   }));
 }

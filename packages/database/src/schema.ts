@@ -1,5 +1,5 @@
 import { sql as drizzleSql } from "drizzle-orm";
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const user = pgTable(
   "user",
@@ -65,6 +65,22 @@ export const verification = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
+);
+
+export const apiKey = pgTable(
+  "api_key",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull(),
+    scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [uniqueIndex("api_key_hash_unique").on(table.keyHash), index("api_key_owner_created_idx").on(table.ownerId, table.createdAt)],
 );
 
 export const brand = pgTable(
@@ -145,9 +161,11 @@ export const relayPost = pgTable(
     id: text("id").primaryKey(),
     ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
+    clientRequestId: text("client_request_id"),
     text: text("text").notNull(),
     mediaType: text("media_type").notNull().default("none"),
     mediaUrl: text("media_url"),
+    mediaUrls: jsonb("media_urls").$type<string[]>().notNull().default([]),
     status: text("status").notNull().default("draft"),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
     publishedAt: timestamp("published_at", { withTimezone: true }),
@@ -159,7 +177,23 @@ export const relayPost = pgTable(
     index("post_owner_scheduled_idx").on(table.ownerId, table.scheduledAt),
     index("post_owner_published_idx").on(table.ownerId, table.publishedAt),
     index("post_brand_id_idx").on(table.brandId),
+    uniqueIndex("post_owner_client_request_unique").on(table.ownerId, table.clientRequestId).where(drizzleSql`${table.clientRequestId} IS NOT NULL`),
   ],
+);
+
+export const slideshowProject = pgTable(
+  "slideshow_project",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    caption: text("caption").notNull().default(""),
+    slides: jsonb("slides").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("slideshow_project_owner_updated_idx").on(table.ownerId, table.updatedAt), index("slideshow_project_brand_id_idx").on(table.brandId)],
 );
 
 export const postTarget = pgTable(
@@ -180,12 +214,36 @@ export const postTarget = pgTable(
     publishAfter: timestamp("publish_after", { withTimezone: true }).notNull().defaultNow(),
     publishLeaseOwner: text("publish_lease_owner"),
     publishLeaseExpiresAt: timestamp("publish_lease_expires_at", { withTimezone: true }),
+    analyticsAfter: timestamp("analytics_after", { withTimezone: true }),
+    analyticsAttempts: integer("analytics_attempts").notNull().default(0),
+    analyticsLastError: text("analytics_last_error"),
+    analyticsLeaseOwner: text("analytics_lease_owner"),
+    analyticsLeaseExpiresAt: timestamp("analytics_lease_expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("post_target_post_id_idx").on(table.postId), index("post_target_social_account_id_idx").on(table.socialAccountId), index("post_target_publish_due_idx").on(table.publishAfter)],
 );
 
-export const schema = { user, session, account, verification, brand, socialAccount, notification, relayPost, postTarget };
+export const postMetricSnapshot = pgTable(
+  "post_metric_snapshot",
+  {
+    id: text("id").primaryKey(),
+    targetId: text("target_id").notNull().references(() => postTarget.id, { onDelete: "cascade" }),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+    views: bigint("views", { mode: "number" }),
+    reach: bigint("reach", { mode: "number" }),
+    likes: bigint("likes", { mode: "number" }),
+    comments: bigint("comments", { mode: "number" }),
+    shares: bigint("shares", { mode: "number" }),
+    saves: bigint("saves", { mode: "number" }),
+    watchTimeSeconds: bigint("watch_time_seconds", { mode: "number" }),
+    averageWatchTimeSeconds: integer("average_watch_time_seconds"),
+    rawMetrics: jsonb("raw_metrics").$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (table) => [index("post_metric_target_captured_idx").on(table.targetId, table.capturedAt)],
+);
+
+export const schema = { user, session, account, verification, apiKey, brand, socialAccount, notification, relayPost, slideshowProject, postTarget, postMetricSnapshot };
 
 export type RelayUser = typeof user.$inferSelect;

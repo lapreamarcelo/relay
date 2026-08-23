@@ -34,6 +34,25 @@ test("starts and then confirms a TikTok Direct Post", async () => {
   assert.deepEqual(await registry.check({ ...input, providerPostId: "publish-1" }), { state: "published", providerPostId: "video-1" });
 });
 
+test("preserves ordered slideshow images in a TikTok photo post", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const responses = [
+    { data: { privacy_level_options: ["SELF_ONLY"], comment_disabled: false }, error: { code: "ok" } },
+    { data: { publish_id: "photo-publish-1" }, error: { code: "ok" } },
+  ];
+  const fetchImpl: typeof fetch = async (url, init) => { requests.push({ url: String(url), init }); return Response.json(responses.shift()); };
+  const result = await new ProviderPublishRegistry(fetchImpl).publish({
+    provider: "tiktok", authMethod: "tiktok", providerAccountId: "open-id", providerMetadata: {}, accessToken: "token",
+    text: "A photo story", mediaType: "image", mediaUrl: "https://media.example.com/one.png",
+    mediaUrls: ["https://media.example.com/one.png", "https://media.example.com/two.png"],
+    settings: { kind: "tiktok", privacyLevel: "SELF_ONLY", allowComments: true, allowDuet: false, allowStitch: false },
+  });
+  assert.deepEqual(result, { state: "processing", providerPostId: "photo-publish-1" });
+  assert.equal(requests[1].url, "https://open.tiktokapis.com/v2/post/publish/content/init/");
+  const body = JSON.parse(String(requests[1].init?.body)) as { source_info: { photo_images: string[] } };
+  assert.deepEqual(body.source_info.photo_images, ["https://media.example.com/one.png", "https://media.example.com/two.png"]);
+});
+
 test("publishes a Facebook Page photo with the page token", async () => {
   let request: { url: string; init?: RequestInit } | undefined;
   const fetchImpl: typeof fetch = async (url, init) => { request = { url: String(url), init }; return Response.json({ post_id: "page_post" }); };

@@ -9,6 +9,7 @@ export interface ProviderPublishInput {
   text: string;
   mediaType: "none" | "image" | "video";
   mediaUrl?: string;
+  mediaUrls?: string[];
   settings: ProviderPostSettings;
   providerPostId?: string;
 }
@@ -119,7 +120,7 @@ async function publishTikTok(input: ProviderPublishInput, fetchImpl: Fetch): Pro
   } : {
     media_type: "PHOTO", post_mode: "DIRECT_POST",
     post_info: { title: input.text.slice(0, 90), description: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, auto_add_music: true },
-    source_info: { source: "PULL_FROM_URL", photo_cover_index: 0, photo_images: [input.mediaUrl] },
+    source_info: { source: "PULL_FROM_URL", photo_cover_index: 0, photo_images: input.mediaUrls?.length ? input.mediaUrls : [input.mediaUrl] },
   };
   const endpoint = input.mediaType === "video" ? "video/init" : "content/init";
   const payload = await requestJson<{ data?: { publish_id?: unknown } }>(fetchImpl, `https://open.tiktokapis.com/v2/post/publish/${endpoint}/`, { method: "POST", headers: { Authorization: `Bearer ${input.accessToken}`, "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(body) }, "TikTok publishing");

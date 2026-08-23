@@ -150,8 +150,8 @@ function createMetaAdapter(flow: "facebook" | "instagram", env: OAuthEnvironment
   const version = env.META_GRAPH_VERSION || "v23.0";
   const redirectUri = callbackUrl(appUrl, flow);
   const requestedScopes = flow === "facebook"
-    ? ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management"]
-    : ["pages_show_list", "pages_read_engagement", "business_management", "instagram_basic", "instagram_content_publish"];
+    ? ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management", "read_insights"]
+    : ["pages_show_list", "pages_read_engagement", "business_management", "instagram_basic", "instagram_content_publish", "instagram_manage_insights"];
 
   const exchangeLongLived = async (token: string) => {
     const url = new URL(`https://graph.facebook.com/${version}/oauth/access_token`);
@@ -233,7 +233,7 @@ function createInstagramStandaloneAdapter(env: OAuthEnvironment, appUrl: string)
   const clientId = env.INSTAGRAM_APP_ID ?? ""; const clientSecret = env.INSTAGRAM_APP_SECRET ?? "";
   const version = env.META_GRAPH_VERSION || "v23.0";
   const redirectUri = callbackUrl(appUrl, "instagram-standalone");
-  const requestedScopes = ["instagram_business_basic", "instagram_business_content_publish"];
+  const requestedScopes = ["instagram_business_basic", "instagram_business_content_publish", "instagram_business_manage_insights"];
   return {
     flow: "instagram-standalone", provider: "instagram", authMethod: "instagram-standalone", configured: Boolean(clientId && clientSecret), callbackUrl: redirectUri,
     authorizationUrl(state) {
@@ -274,7 +274,7 @@ function createInstagramStandaloneAdapter(env: OAuthEnvironment, appUrl: string)
 
 function createTikTokAdapter(env: OAuthEnvironment, appUrl: string): OAuthAdapter {
   const clientId = env.TIKTOK_CLIENT_ID ?? ""; const clientSecret = env.TIKTOK_CLIENT_SECRET ?? "";
-  const redirectUri = callbackUrl(appUrl, "tiktok"); const requestedScopes = ["user.info.basic", "video.publish", "video.upload"];
+  const redirectUri = callbackUrl(appUrl, "tiktok"); const requestedScopes = ["user.info.basic", "video.publish", "video.upload", "video.list"];
   const tokenRequest = async (body: URLSearchParams, action: string) => jsonRequest<{ access_token?: unknown; refresh_token?: unknown; expires_in?: unknown; refresh_expires_in?: unknown; open_id?: unknown; scope?: unknown }>("https://open.tiktokapis.com/v2/oauth/token/", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }, action);
   return {
     flow: "tiktok", provider: "tiktok", authMethod: "tiktok", configured: Boolean(clientId && clientSecret), callbackUrl: redirectUri,

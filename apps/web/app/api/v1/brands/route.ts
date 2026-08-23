@@ -25,7 +25,7 @@ function parseAccountIds(value: unknown): string[] | null {
 }
 
 export async function GET(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "brands:read" });
   if (authorization.response) return authorization.response;
   const rows = await sql<{ id: string; name: string; monogram: string; color: string; timezone: string }[]>`
     SELECT id, name, monogram, color, timezone FROM "brand" WHERE "owner_id" = ${authorization.session.user.id} ORDER BY "created_at" ASC

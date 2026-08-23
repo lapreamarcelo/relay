@@ -12,7 +12,7 @@ interface AccountRow {
 }
 
 export async function GET(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "accounts:read" });
   if (authorization.response) return authorization.response;
   const rows = await sql<AccountRow[]>`
     SELECT id, brand_id, provider, auth_method, provider_account_id, username, display_name, avatar_url, status,

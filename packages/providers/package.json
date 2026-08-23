@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./oauth": "./src/oauth.ts",
+    "./analytics": "./src/analytics.ts",
     "./publish": "./src/publish.ts",
     "./refresh-registry": "./src/refresh-registry.ts",
     "./token-refresh": "./src/token-refresh.ts"

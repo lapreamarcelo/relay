@@ -68,6 +68,19 @@ export interface PostTarget {
   settings: ProviderPostSettings;
   externalUrl?: string;
   error?: string;
+  analytics?: PostAnalytics;
+}
+
+export interface PostAnalytics {
+  capturedAt: string;
+  views?: number;
+  reach?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
+  watchTimeSeconds?: number;
+  averageWatchTimeSeconds?: number;
 }
 
 export interface RelayPost {
@@ -76,11 +89,37 @@ export interface RelayPost {
   text: string;
   mediaType: "image" | "video" | "none";
   mediaUrl?: string;
+  mediaUrls?: string[];
   status: PostStatus;
   scheduledAt?: string;
   publishedAt?: string;
   createdAt?: string;
   targets: PostTarget[];
+}
+
+export type SlideshowTextPosition = "top" | "center" | "bottom";
+export type SlideshowTextBackground = "none" | "dark" | "light";
+
+export interface SlideshowSlide {
+  id: string;
+  mediaUrl: string;
+  renderedUrl?: string;
+  text?: string;
+  fit: "cover" | "contain";
+  textPosition: SlideshowTextPosition;
+  textSize: number;
+  textColor: string;
+  textBackground: SlideshowTextBackground;
+}
+
+export interface SlideshowProject {
+  id: string;
+  brandId: string;
+  name: string;
+  caption: string;
+  slides: SlideshowSlide[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const brands: Brand[] = [];
