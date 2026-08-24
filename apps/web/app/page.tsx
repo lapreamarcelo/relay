@@ -6,11 +6,12 @@ import { redirect } from "next/navigation";
 import { auth } from "../lib/auth";
 import { listPostsForOwner } from "../lib/post-repository";
 import RelayApp from "./relay-app";
+import { parseRelayView } from "../lib/app-navigation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
 
   if (!session) redirect("/login");
@@ -28,5 +29,6 @@ export default async function HomePage() {
   const accounts: SocialAccount[] = accountRows.map((account) => ({ id: account.id, brandId: account.brand_id, provider: account.provider, authMethod: account.auth_method, providerAccountId: account.provider_account_id, handle: account.username.startsWith("@") ? account.username : `@${account.username}`, displayName: account.display_name, avatarUrl: account.avatar_url ?? undefined, status: account.status, followers: "", tokenExpiresAt: iso(account.token_expires_at), refreshTokenExpiresAt: iso(account.refresh_token_expires_at), lastCheckedAt: iso(account.last_checked_at) }));
   const posts = await listPostsForOwner(session.user.id);
 
-  return <RelayApp initialBrands={brands} initialAccounts={accounts} initialPosts={posts} initialNow={new Date().toISOString()} user={{ name: session.user.name, email: session.user.email, role: session.user.role ?? "MEMBER" }} />;
+  const query = await searchParams;
+  return <RelayApp initialBrands={brands} initialAccounts={accounts} initialPosts={posts} initialNow={new Date().toISOString()} initialView={parseRelayView(query.view)} user={{ name: session.user.name, email: session.user.email, role: session.user.role ?? "MEMBER" }} />;
 }

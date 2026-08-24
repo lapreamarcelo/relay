@@ -10,6 +10,7 @@ interface ClaimedTarget {
   publish_attempts: number; created_at: string | Date; text: string; media_type: "none" | "image" | "video";
   media_url: string | null; auth_method: ProviderAuthMethod | null; provider_account_id: string | null;
   media_urls: string[];
+  text_override: string | null;
   provider_metadata: Record<string, unknown> | null;
 }
 
@@ -41,7 +42,7 @@ export class PostPublishingService {
       `;
       const [row] = await transaction<ClaimedTarget[]>`
         SELECT target.id, target.post_id, post.owner_id, target.social_account_id, target.provider, target.status,
-          target.settings, target.provider_post_id, target.publish_attempts, target.created_at, post.text, post.media_type,
+          target.settings, target.text_override, target.provider_post_id, target.publish_attempts, target.created_at, post.text, post.media_type,
           post.media_url, post.media_urls, account.auth_method, account.provider_account_id, account.provider_metadata
         FROM "post_target" target INNER JOIN "post" post ON post.id = target.post_id
         LEFT JOIN "social_account" account ON account.id = target.social_account_id
@@ -127,7 +128,7 @@ export class PostPublishingService {
       if (target.status === "processing" && Date.now() - new Date(target.created_at).getTime() > 24 * 60 * 60_000) { const outcome = await this.fail(target, new ProviderPublishError("The provider did not finish processing this post within 24 hours.")); result[outcome] += 1; continue; }
       try {
         const providerResult = await withFreshAccountToken(this.lifecycle, target.social_account_id, (accessToken) => {
-          const input = { provider: target.provider, authMethod: target.auth_method!, providerAccountId: target.provider_account_id!, providerMetadata: target.provider_metadata ?? {}, accessToken, text: target.text, mediaType: target.media_type, mediaUrl: target.media_url ?? undefined, mediaUrls: target.media_urls, settings: target.settings, providerPostId: target.provider_post_id ?? undefined };
+          const input = { provider: target.provider, authMethod: target.auth_method!, providerAccountId: target.provider_account_id!, providerMetadata: target.provider_metadata ?? {}, accessToken, text: target.text_override ?? target.text, mediaType: target.media_type, mediaUrl: target.media_url ?? undefined, mediaUrls: target.media_urls, settings: target.settings, providerPostId: target.provider_post_id ?? undefined };
           return target.status === "processing" ? this.providers.check(input) : this.providers.publish(input);
         });
         if (providerResult.state === "published") { await this.complete(target, providerResult.providerPostId, providerResult.externalUrl); result.published += 1; }

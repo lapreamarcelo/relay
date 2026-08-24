@@ -33,7 +33,7 @@ export function normalizeSlides(value: unknown): SlideshowSlide[] | null {
     if (!mediaUrl) return null;
     const renderedUrl = webUrl(input.renderedUrl);
     const text = typeof input.text === "string" ? input.text.trim().slice(0, 500) : "";
-    const textSize = Math.min(120, Math.max(28, Math.round(Number(input.textSize) || 64)));
+    const textSize = Math.min(160, Math.max(28, Math.round(Number(input.textSize) || 64)));
     const requestedId = typeof input.id === "string" && /^[a-zA-Z0-9_-]{1,120}$/.test(input.id) ? input.id : "";
     const id = requestedId && !ids.has(requestedId) ? requestedId : crypto.randomUUID();
     ids.add(id);
@@ -44,9 +44,15 @@ export function normalizeSlides(value: unknown): SlideshowSlide[] | null {
       text: text || undefined,
       fit: input.fit === "contain" ? "contain" : "cover",
       textPosition: input.textPosition === "top" || input.textPosition === "center" ? input.textPosition : "bottom",
+      textX: Math.min(.92, Math.max(.08, Number(input.textX) || .5)),
+      textY: Math.min(.94, Math.max(.06, Number(input.textY) || (input.textPosition === "top" ? .18 : input.textPosition === "center" ? .5 : .78))),
+      textWidth: Math.min(.92, Math.max(.25, Number(input.textWidth) || .87)),
+      textHeight: Math.min(.35, Math.max(.06, Number(input.textHeight) || .12)),
       textSize,
+      textFont: input.textFont === "editorial" || input.textFont === "mono" ? input.textFont : "modern",
       textColor: color(input.textColor, "#FFFFFF"),
       textBackground: input.textBackground === "none" || input.textBackground === "light" ? input.textBackground : "dark",
+      textBackgroundColor: color(input.textBackgroundColor, input.textBackground === "light" ? "#FFFFFF" : "#000000"),
     });
   }
   return slides;

@@ -5,7 +5,7 @@ import { getR2Client, getR2Config } from "../../../../../lib/r2";
 
 export const runtime = "nodejs";
 
-interface MediaProjectManifest { id: string; name: string; createdAt: string }
+interface MediaProjectManifest { id: string; name: string; kind?: "media" | "music"; ownerId?: string; createdAt: string }
 
 function projectKey(id: string) { return `media-projects/${id}/.project.json`; }
 
@@ -21,26 +21,31 @@ export async function GET(request: Request) {
     const config = getR2Config(); const client = getR2Client();
     const listed = await client.send(new ListObjectsV2Command({ Bucket: config.bucket, Prefix: "media-projects/", MaxKeys: 1000 }));
     const manifestKeys = (listed.Contents ?? []).map((item) => item.Key).filter((key): key is string => Boolean(key?.endsWith("/.project.json")));
-    const manifests = await Promise.all(manifestKeys.map(async (key) => {
+    const requestedKind = new URL(request.url).searchParams.get("kind");
+    const manifests = (await Promise.all(manifestKeys.map(async (key) => {
       const result = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }));
       const manifest = JSON.parse(await result.Body!.transformToString()) as MediaProjectManifest;
-      const prefix = `media-projects/${manifest.id}/media/`;
+      const kind = manifest.kind === "music" ? "music" : "media";
+      if (manifest.ownerId && manifest.ownerId !== authorization.session.user.id) return null;
+      const prefix = `media-projects/${manifest.id}/${kind}/`;
       const count = (listed.Contents ?? []).filter((item) => item.Key?.startsWith(prefix) && !item.Key.endsWith("/")).length;
-      return { ...manifest, count };
-    }));
+      return { ...manifest, kind, count };
+    }))).filter((manifest): manifest is MediaProjectManifest & { kind: "media" | "music"; count: number } => Boolean(manifest))
+      .filter((manifest) => requestedKind !== "media" && requestedKind !== "music" || manifest.kind === requestedKind);
     manifests.sort((first, second) => first.name.localeCompare(second.name));
     return Response.json({ data: manifests });
   } catch (error) { return errorResponse(error); }
 }
 
 export async function POST(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "media:write" });
   if (authorization.response) return authorization.response;
   try {
-    const body = await request.json() as { name?: unknown };
+    const body = await request.json() as { name?: unknown; kind?: unknown };
     const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ").slice(0, 100) : "";
+    const kind = body.kind === "music" ? "music" as const : "media" as const;
     if (!name) return Response.json({ error: "A project name is required" }, { status: 400 });
-    const manifest: MediaProjectManifest = { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() };
+    const manifest: MediaProjectManifest = { id: crypto.randomUUID(), name, kind, ownerId: authorization.session.user.id, createdAt: new Date().toISOString() };
     const config = getR2Config();
     await getR2Client().send(new PutObjectCommand({ Bucket: config.bucket, Key: projectKey(manifest.id), Body: JSON.stringify(manifest), ContentType: "application/json" }));
     return Response.json({ data: { ...manifest, count: 0 } }, { status: 201 });

@@ -4,6 +4,8 @@ import { sql } from "@relay/database";
 interface PostRow {
   id: string;
   brand_id: string | null;
+  campaign_id: string | null;
+  campaign_name: string | null;
   text: string;
   media_type: "none" | "image" | "video";
   media_url: string | null;
@@ -23,6 +25,7 @@ interface TargetRow {
   settings: ProviderPostSettings;
   external_url: string | null;
   error: string | null;
+  text_override: string | null;
   analytics_captured_at: string | Date | null;
   analytics_views: number | null;
   analytics_reach: number | null;
@@ -40,13 +43,14 @@ function iso(value: string | Date | null): string | undefined {
 
 export async function listPostsForOwner(ownerId: string): Promise<RelayPost[]> {
   const posts = await sql<PostRow[]>`
-    SELECT id, brand_id, text, media_type, media_url, media_urls, status, scheduled_at, published_at, created_at
-    FROM "post" WHERE owner_id = ${ownerId} ORDER BY created_at DESC LIMIT 500
+    SELECT post.id, post.brand_id, post.campaign_id, campaign.name AS campaign_name, post.text, post.media_type, post.media_url, post.media_urls, post.status, post.scheduled_at, post.published_at, post.created_at
+    FROM "post" LEFT JOIN "campaign" campaign ON campaign.id = post.campaign_id
+    WHERE post.owner_id = ${ownerId} ORDER BY post.created_at DESC LIMIT 500
   `;
   if (posts.length === 0) return [];
   const targets = await sql<TargetRow[]>`
     SELECT target.id, target.post_id, target.social_account_id, target.provider, target.status,
-      target.settings, target.external_url, target.error, metric.captured_at AS analytics_captured_at,
+      target.settings, target.text_override, target.external_url, target.error, metric.captured_at AS analytics_captured_at,
       metric.views::float8 AS analytics_views, metric.reach::float8 AS analytics_reach, metric.likes::float8 AS analytics_likes,
       metric.comments::float8 AS analytics_comments, metric.shares::float8 AS analytics_shares, metric.saves::float8 AS analytics_saves,
       metric.watch_time_seconds::float8 AS analytics_watch_time_seconds, metric.average_watch_time_seconds AS analytics_average_watch_time_seconds
@@ -64,6 +68,8 @@ export async function listPostsForOwner(ownerId: string): Promise<RelayPost[]> {
   return posts.map((post) => ({
     id: post.id,
     brandId: post.brand_id ?? "",
+    campaignId: post.campaign_id ?? undefined,
+    campaignName: post.campaign_name ?? undefined,
     text: post.text,
     mediaType: post.media_type,
     mediaUrl: post.media_url ?? undefined,
@@ -80,6 +86,7 @@ export async function listPostsForOwner(ownerId: string): Promise<RelayPost[]> {
       settings: target.settings,
       externalUrl: target.external_url ?? undefined,
       error: target.error ?? undefined,
+      textOverride: target.text_override ?? undefined,
       analytics: target.analytics_captured_at ? {
         capturedAt: new Date(target.analytics_captured_at).toISOString(),
         views: target.analytics_views ?? undefined,

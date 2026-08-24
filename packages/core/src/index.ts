@@ -68,6 +68,7 @@ export interface PostTarget {
   settings: ProviderPostSettings;
   externalUrl?: string;
   error?: string;
+  textOverride?: string;
   analytics?: PostAnalytics;
 }
 
@@ -86,6 +87,8 @@ export interface PostAnalytics {
 export interface RelayPost {
   id: string;
   brandId: string;
+  campaignId?: string;
+  campaignName?: string;
   text: string;
   mediaType: "image" | "video" | "none";
   mediaUrl?: string;
@@ -97,8 +100,56 @@ export interface RelayPost {
   targets: PostTarget[];
 }
 
+export interface Campaign {
+  id: string;
+  brandId: string;
+  name: string;
+  color: string;
+  status: "active" | "archived";
+  postCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PostTemplate {
+  id: string;
+  brandId: string;
+  name: string;
+  text: string;
+  mediaType: "image" | "video" | "none";
+  settings: Partial<Record<ProviderId, ProviderPostSettings>>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type SlideshowTextPosition = "top" | "center" | "bottom";
 export type SlideshowTextBackground = "none" | "dark" | "light";
+export type LabelStylePreset = "dark" | "light" | "outline";
+export type LabelFont = "modern" | "editorial" | "mono";
+export type MediaAssetKind = "media" | "music";
+
+export interface AssetFolder {
+  id: string;
+  name: string;
+  kind: MediaAssetKind;
+  count: number;
+  createdAt: string;
+}
+
+export interface CreativeLabel {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height?: number;
+  fontSize: number;
+  font: LabelFont;
+  textColor: string;
+  background: SlideshowTextBackground;
+  backgroundColor?: string;
+  style: LabelStylePreset;
+}
 
 export interface SlideshowSlide {
   id: string;
@@ -107,9 +158,15 @@ export interface SlideshowSlide {
   text?: string;
   fit: "cover" | "contain";
   textPosition: SlideshowTextPosition;
+  textX?: number;
+  textY?: number;
+  textWidth?: number;
+  textHeight?: number;
   textSize: number;
+  textFont: LabelFont;
   textColor: string;
   textBackground: SlideshowTextBackground;
+  textBackgroundColor?: string;
 }
 
 export interface SlideshowProject {
@@ -121,6 +178,23 @@ export interface SlideshowProject {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface VideoProject {
+  id: string;
+  brandId: string;
+  name: string;
+  caption: string;
+  sourceUrl: string;
+  sourceFolderId?: string;
+  musicUrl?: string;
+  musicFolderId?: string;
+  labels: CreativeLabel[];
+  renderedUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type VideoMusicMode = "none" | "fixed" | "rotate" | "random";
 
 export const brands: Brand[] = [];
 export const accounts: SocialAccount[] = [];

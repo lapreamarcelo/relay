@@ -11,10 +11,13 @@ import { PostPublishingService } from "./post-publishing.ts";
 import { runPublishingLoop } from "./publishing-loop.ts";
 import { PostAnalyticsService } from "./post-analytics.ts";
 import { runAnalyticsLoop } from "./analytics-loop.ts";
+import { runHealthLoop } from "./health-loop.ts";
+import { runAnalyticsReportLoop } from "./analytics-report-loop.ts";
 
 const encryptionKey = process.env.ENCRYPTION_KEY;
 if (!encryptionKey) throw new Error("ENCRYPTION_KEY is required by the Relay worker");
 const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+const workerId = process.env.HOSTNAME ? `worker-${process.env.HOSTNAME}` : undefined;
 const abortController = new AbortController();
 for (const signal of ["SIGTERM", "SIGINT"] as const) process.on(signal, () => abortController.abort());
 
@@ -30,6 +33,8 @@ try {
     runTokenMaintenanceLoop(lifecycle, { intervalMs: Number(process.env.TOKEN_REFRESH_INTERVAL_MS ?? 300_000), signal: abortController.signal }),
     runPublishingLoop(new PostPublishingService(lifecycle, new ProviderPublishRegistry(), process.env.HOSTNAME ? `publisher-${process.env.HOSTNAME}` : undefined), { intervalMs: Number(process.env.PUBLISH_INTERVAL_MS ?? 5_000), signal: abortController.signal }),
     runAnalyticsLoop(new PostAnalyticsService(lifecycle, new ProviderAnalyticsRegistry(), process.env.HOSTNAME ? `analytics-${process.env.HOSTNAME}` : undefined), { intervalMs: Number(process.env.ANALYTICS_INTERVAL_MS ?? 60_000), signal: abortController.signal }),
+    runHealthLoop({ intervalMs: Number(process.env.HEALTH_INTERVAL_MS ?? 30_000), signal: abortController.signal, workerId }),
+    runAnalyticsReportLoop({ intervalMs: Number(process.env.REPORT_INTERVAL_MS ?? 3_600_000), signal: abortController.signal }),
   ]);
 } finally {
   await sql.end();

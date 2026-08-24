@@ -11,3 +11,5 @@ node_modules
 *.pfx
 *.tsbuildinfo
 .qa
+apps/web/test-results
+apps/web/playwright-report

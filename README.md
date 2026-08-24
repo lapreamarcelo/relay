@@ -9,7 +9,7 @@ Plan once, publish across Instagram, Facebook, TikTok, and YouTube, then see wha
 ## What Relay does
 
 - Composes, schedules, and publishes one post or a whole campaign.
-- Builds reusable 9:16 photo slideshows from R2 images, with optional per-slide text, bulk title generation, independent PNG rendering, and direct TikTok scheduling.
+- Builds reusable 9:16 photo slideshows from R2 images, with optional per-slide text, bulk title generation, ordered JPEG rendering, and multi-platform publishing through the shared composer.
 - Connects Instagram, Facebook Pages, TikTok, and YouTube through OAuth.
 - Tracks views, likes, comments, shares, saves, reach, and watch metrics when the platform exposes them.
 - Gives AI agents a scoped REST API with idempotent bulk operations.
@@ -60,7 +60,7 @@ Provider permissions and review rules still apply. After upgrading an existing R
 
 ## Agent API
 
-Create a scoped key under **Settings → API keys**, then let an agent discover accounts and media, build or bulk-generate slideshows, schedule up to 100 posts at once, reschedule, publish immediately, delete, or retrieve analytics history.
+Create a scoped key under **Settings → API keys**, then let an agent discover accounts and media, build or bulk-generate videos and slideshows, schedule up to 100 posts at once, reschedule, publish immediately, delete, or retrieve analytics history. The MCP adapter exposes these workflows directly; the same REST endpoints can be called from a shell with `curl` or any HTTP client.
 
 ```bash
 curl "$RELAY_URL/api/v1/analytics?postId=$POST_ID" \
@@ -107,6 +107,7 @@ pnpm dev
 - Production deployments can use `compose.coolify.yaml`; migrations run automatically.
 - `APP_URL` must exactly match each provider's registered OAuth callback origin.
 - `R2_PUBLIC_URL` must be HTTPS and reachable by the social platforms.
+- `R2_RESOLVED_IP` is an optional emergency override for a failing DNS-selected R2 edge; leave it empty normally and only use a trusted Cloudflare IP.
 - Keep `ENCRYPTION_KEY` unchanged or existing connected-account tokens cannot be decrypted.
 - Close public signup with `ALLOW_REGISTRATION=false` after creating the owner.
 

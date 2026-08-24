@@ -8,7 +8,8 @@
     "build": "next build --webpack",
     "start": "node scripts/start-standalone.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-transform-types --test lib/*.test.ts"
+    "test": "node --experimental-transform-types --test lib/*.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1113.0",
@@ -17,6 +18,7 @@
     "@relay/core": "workspace:*",
     "@relay/database": "workspace:*",
     "@relay/providers": "workspace:*",
+    "@smithy/node-http-handler": "^4.11.2",
     "better-auth": "^1.6.28",
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
@@ -25,6 +27,7 @@
     "sharp": "^0.35.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

@@ -61,9 +61,24 @@ async function publishInstagram(input: ProviderPublishInput, fetchImpl: Fetch): 
   const version = stringValue(input.providerMetadata.metaGraphVersion) ?? "v23.0";
   const base = input.authMethod === "instagram-standalone" ? `https://graph.instagram.com/${version}` : `https://graph.facebook.com/${version}`;
   const mediaType = input.settings.publishType === "story" ? "STORIES" : input.mediaType === "video" || input.settings.publishType === "reel" ? "REELS" : undefined;
-  const created = await requestJson<{ id?: unknown }>(fetchImpl, `${base}/${encodeURIComponent(input.providerAccountId)}/media`, {
-    method: "POST", body: graphForm({ access_token: input.accessToken, image_url: input.mediaType === "image" ? input.mediaUrl : undefined, video_url: input.mediaType === "video" ? input.mediaUrl : undefined, media_type: mediaType, caption: input.settings.publishType === "story" ? undefined : input.text }),
-  }, "Instagram media preparation");
+  const carouselUrls = input.mediaType === "image" && (input.mediaUrls?.length ?? 0) > 1 ? input.mediaUrls! : [];
+  if (carouselUrls.length > 10) throw new ProviderPublishError("Instagram carousels support up to 10 slides.");
+  if (carouselUrls.length && input.settings.publishType !== "feed") throw new ProviderPublishError("Instagram carousels publish as feed posts.");
+  let created: { id?: unknown };
+  if (carouselUrls.length) {
+    const children: string[] = [];
+    for (const imageUrl of carouselUrls) {
+      const child = await requestJson<{ id?: unknown }>(fetchImpl, `${base}/${encodeURIComponent(input.providerAccountId)}/media`, { method: "POST", body: graphForm({ access_token: input.accessToken, image_url: imageUrl, is_carousel_item: true }) }, "Instagram carousel item preparation");
+      const childId = stringValue(child.id);
+      if (!childId) throw new ProviderPublishError("Instagram did not return a carousel item container.");
+      children.push(childId);
+    }
+    created = await requestJson<{ id?: unknown }>(fetchImpl, `${base}/${encodeURIComponent(input.providerAccountId)}/media`, { method: "POST", body: graphForm({ access_token: input.accessToken, media_type: "CAROUSEL", children: children.join(","), caption: input.text }) }, "Instagram carousel preparation");
+  } else {
+    created = await requestJson<{ id?: unknown }>(fetchImpl, `${base}/${encodeURIComponent(input.providerAccountId)}/media`, {
+      method: "POST", body: graphForm({ access_token: input.accessToken, image_url: input.mediaType === "image" ? input.mediaUrl : undefined, video_url: input.mediaType === "video" ? input.mediaUrl : undefined, media_type: mediaType, caption: input.settings.publishType === "story" ? undefined : input.text }),
+    }, "Instagram media preparation");
+  }
   const containerId = stringValue(created.id);
   if (!containerId) throw new ProviderPublishError("Instagram did not return a media container.");
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -93,6 +108,20 @@ async function publishFacebook(input: ProviderPublishInput, fetchImpl: Fetch): P
     await requestJson(fetchImpl, uploadUrl, { method: "POST", headers: { Authorization: `OAuth ${input.accessToken}`, file_url: input.mediaUrl } }, "Facebook Reel upload");
     await requestJson(fetchImpl, `${base}/video_reels`, { method: "POST", body: graphForm({ access_token: input.accessToken, upload_phase: "finish", video_id: videoId, video_state: "PUBLISHED", description: input.text }) }, "Facebook Reel publishing");
     return { state: "published", providerPostId: videoId, externalUrl: `https://www.facebook.com/reel/${encodeURIComponent(videoId)}` };
+  }
+  const carouselUrls = input.mediaType === "image" && (input.mediaUrls?.length ?? 0) > 1 ? input.mediaUrls! : [];
+  if (carouselUrls.length) {
+    const mediaIds: string[] = [];
+    for (const imageUrl of carouselUrls) {
+      const uploaded = await requestJson<{ id?: unknown }>(fetchImpl, `${base}/photos`, { method: "POST", body: graphForm({ access_token: input.accessToken, url: imageUrl, published: false }) }, "Facebook slideshow image preparation");
+      const mediaId = stringValue(uploaded.id);
+      if (!mediaId) throw new ProviderPublishError("Facebook did not return an uploaded photo id.");
+      mediaIds.push(mediaId);
+    }
+    const published = await requestJson<{ id?: unknown; post_id?: unknown }>(fetchImpl, `${base}/feed`, { method: "POST", body: graphForm({ access_token: input.accessToken, message: input.text, attached_media: JSON.stringify(mediaIds.map((media_fbid) => ({ media_fbid }))) }) }, "Facebook slideshow publishing");
+    const postId = stringValue(published.post_id) ?? stringValue(published.id);
+    if (!postId) throw new ProviderPublishError("Facebook did not confirm the published slideshow.");
+    return { state: "published", providerPostId: postId, externalUrl: `https://www.facebook.com/${encodeURIComponent(postId)}` };
   }
   const path = input.mediaType === "image" ? "photos" : input.mediaType === "video" ? "videos" : "feed";
   const payload = await requestJson<{ id?: unknown; post_id?: unknown }>(fetchImpl, `${base}/${path}`, { method: "POST", body: graphForm({ access_token: input.accessToken, message: input.mediaType === "none" ? input.text : undefined, link: input.mediaType === "none" ? input.settings.linkUrl : undefined, url: input.mediaType === "image" ? input.mediaUrl : undefined, caption: input.mediaType === "image" ? input.text : undefined, file_url: input.mediaType === "video" ? input.mediaUrl : undefined, description: input.mediaType === "video" ? input.text : undefined, published: true }) }, "Facebook publishing");

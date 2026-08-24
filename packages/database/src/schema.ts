@@ -161,6 +161,7 @@ export const relayPost = pgTable(
     id: text("id").primaryKey(),
     ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
+    campaignId: text("campaign_id"),
     clientRequestId: text("client_request_id"),
     text: text("text").notNull(),
     mediaType: text("media_type").notNull().default("none"),
@@ -177,8 +178,40 @@ export const relayPost = pgTable(
     index("post_owner_scheduled_idx").on(table.ownerId, table.scheduledAt),
     index("post_owner_published_idx").on(table.ownerId, table.publishedAt),
     index("post_brand_id_idx").on(table.brandId),
+    index("post_campaign_id_idx").on(table.campaignId),
     uniqueIndex("post_owner_client_request_unique").on(table.ownerId, table.clientRequestId).where(drizzleSql`${table.clientRequestId} IS NOT NULL`),
   ],
+);
+
+export const campaign = pgTable(
+  "campaign",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    color: text("color").notNull().default("#ff5c35"),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("campaign_owner_updated_idx").on(table.ownerId, table.updatedAt), index("campaign_brand_id_idx").on(table.brandId)],
+);
+
+export const postTemplate = pgTable(
+  "post_template",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    text: text("text").notNull().default(""),
+    mediaType: text("media_type").notNull().default("none"),
+    settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("post_template_owner_updated_idx").on(table.ownerId, table.updatedAt), index("post_template_brand_id_idx").on(table.brandId)],
 );
 
 export const slideshowProject = pgTable(
@@ -196,6 +229,34 @@ export const slideshowProject = pgTable(
   (table) => [index("slideshow_project_owner_updated_idx").on(table.ownerId, table.updatedAt), index("slideshow_project_brand_id_idx").on(table.brandId)],
 );
 
+export const videoProject = pgTable(
+  "video_project",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    caption: text("caption").notNull().default(""),
+    sourceUrl: text("source_url").notNull().default(""),
+    sourceFolderId: text("source_folder_id"),
+    musicUrl: text("music_url"),
+    musicFolderId: text("music_folder_id"),
+    labels: jsonb("labels").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    renderedUrl: text("rendered_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("video_project_owner_updated_idx").on(table.ownerId, table.updatedAt), index("video_project_brand_id_idx").on(table.brandId)],
+);
+
+export const analyticsReportSchedule = pgTable(
+  "analytics_report_schedule",
+  {
+    id: text("id").primaryKey(), ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }), name: text("name").notNull(), cadence: text("cadence").notNull(), filters: jsonb("filters").$type<Record<string, unknown>>().notNull().default({}), nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull(), lastSentAt: timestamp("last_sent_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("analytics_report_due_idx").on(table.nextRunAt)],
+);
+
 export const postTarget = pgTable(
   "post_target",
   {
@@ -207,6 +268,7 @@ export const postTarget = pgTable(
     accountHandle: text("account_handle").notNull(),
     status: text("status").notNull(),
     settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+    textOverride: text("text_override"),
     providerPostId: text("provider_post_id"),
     externalUrl: text("external_url"),
     error: text("error"),
@@ -223,6 +285,18 @@ export const postTarget = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("post_target_post_id_idx").on(table.postId), index("post_target_social_account_id_idx").on(table.socialAccountId), index("post_target_publish_due_idx").on(table.publishAfter)],
+);
+
+export const workerHeartbeat = pgTable(
+  "worker_heartbeat",
+  {
+    id: text("id").primaryKey(),
+    workerId: text("worker_id").notNull(),
+    metrics: jsonb("metrics").$type<Record<string, unknown>>().notNull().default({}),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("worker_heartbeat_checked_idx").on(table.checkedAt)],
 );
 
 export const postMetricSnapshot = pgTable(
@@ -244,6 +318,6 @@ export const postMetricSnapshot = pgTable(
   (table) => [index("post_metric_target_captured_idx").on(table.targetId, table.capturedAt)],
 );
 
-export const schema = { user, session, account, verification, apiKey, brand, socialAccount, notification, relayPost, slideshowProject, postTarget, postMetricSnapshot };
+export const schema = { user, session, account, verification, apiKey, brand, socialAccount, notification, campaign, postTemplate, relayPost, slideshowProject, videoProject, analyticsReportSchedule, postTarget, postMetricSnapshot, workerHeartbeat };
 
 export type RelayUser = typeof user.$inferSelect;

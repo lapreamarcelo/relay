@@ -6,8 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./account-credentials": "./src/account-credentials.ts",
+    "./post-validation": "./src/post-validation.ts",
     "./token-encryption": "./src/token-encryption.ts"
   },
-  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit" },
+  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "test": "node --experimental-transform-types --test src/*.test.ts" },
   "devDependencies": { "@types/node": "^22.0.0", "typescript": "^5.8.0" }
 }
