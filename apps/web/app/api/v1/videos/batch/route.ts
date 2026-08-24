@@ -1,5 +1,5 @@
 import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
-import type { ProviderId, ProviderPostSettings, VideoMusicMode } from "@relay/core";
+import { normalizePublishingDefaults, type ProviderId, type ProviderPostSettings, type PublishingDefaults, type VideoMusicMode } from "@relay/core";
 import { sql } from "@relay/database";
 
 import { requireApiSession } from "../../../../../lib/api-session";
@@ -16,10 +16,10 @@ interface BatchInput {
 }
 
 const musicFile = /\.(mp3|m4a|aac|wav|ogg|flac)$/i;
-const settings = (provider: ProviderId, hook: string): ProviderPostSettings => provider === "instagram" ? { kind: "instagram", publishType: "reel" }
-  : provider === "facebook" ? { kind: "facebook", publishType: "reel" }
-    : provider === "youtube" ? { kind: "youtube", title: hook.slice(0, 100), tags: [], privacyStatus: "private", madeForKids: false }
-      : { kind: "tiktok", privacyLevel: "SELF_ONLY", allowComments: true, allowDuet: false, allowStitch: false };
+const settings = (provider: ProviderId, hook: string, defaults: PublishingDefaults): ProviderPostSettings => provider === "instagram" ? { kind: "instagram", publishType: defaults.instagram.videoPublishType }
+  : provider === "facebook" ? { kind: "facebook", publishType: defaults.facebook.videoPublishType }
+    : provider === "youtube" ? { kind: "youtube", title: hook.slice(0, 100), tags: [], privacyStatus: defaults.youtube.privacyStatus, madeForKids: defaults.youtube.madeForKids }
+      : { kind: "tiktok", ...defaults.tiktok };
 
 async function listKeys(prefix: string): Promise<string[]> {
   const config = getR2Config(); const client = getR2Client(); const keys: string[] = []; let cursor: string | undefined;
@@ -59,6 +59,8 @@ export async function POST(request: Request) {
   if (!projectId || !hooks.length) return Response.json({ error: "Choose a video project and provide between 1 and 20 hooks." }, { status: 400 });
   const [row] = await sql<VideoProjectRow[]>`SELECT * FROM "video_project" WHERE id=${projectId} AND owner_id=${authorization.session.user.id}`;
   if (!row) return Response.json({ error: "Video project not found." }, { status: 404 });
+  const [preferenceRow] = await sql<{ publishing_defaults: unknown }[]>`SELECT publishing_defaults FROM "user" WHERE id=${authorization.session.user.id}`;
+  const publishingDefaults = normalizePublishingDefaults(preferenceRow?.publishing_defaults);
   const accounts = accountIds.length ? await sql<{ id: string; provider: ProviderId }[]>`SELECT id, provider FROM "social_account" WHERE id=ANY(${accountIds}) AND owner_id=${authorization.session.user.id} AND status='connected'` : [];
   if (accounts.length !== accountIds.length) return Response.json({ error: "One or more scheduling destinations were not found or need reconnecting." }, { status: 400 });
   const project = serializeVideoProject(row); const mode: VideoMusicMode = body?.musicMode === "fixed" || body?.musicMode === "rotate" || body?.musicMode === "random" ? body.musicMode : "none";
@@ -86,7 +88,7 @@ export async function POST(request: Request) {
       if (accounts.length) {
         const scheduledAt = start ? new Date(start.getTime() + index * interval * 60_000).toISOString() : undefined; const status = scheduledAt ? "scheduled" : "publishing";
         const internalOrigin = `http://127.0.0.1:${process.env.PORT ?? "3000"}`;
-        const response = await fetch(new URL("/api/v1/posts", internalOrigin), { method: "POST", headers: { Authorization: request.headers.get("authorization") ?? "", Cookie: request.headers.get("cookie") ?? "", "Content-Type": "application/json" }, body: JSON.stringify({ clientRequestId: `${requestPrefix}-${index}`, brandId: project.brandId || undefined, text: template.replaceAll("{hook}", hook), mediaType: "video", mediaUrl: renderedUrl, status, scheduledAt, targets: accounts.map((account) => ({ accountId: account.id, settings: settings(account.provider, hook) })) }) });
+        const response = await fetch(new URL("/api/v1/posts", internalOrigin), { method: "POST", headers: { Authorization: request.headers.get("authorization") ?? "", Cookie: request.headers.get("cookie") ?? "", "Content-Type": "application/json" }, body: JSON.stringify({ clientRequestId: `${requestPrefix}-${index}`, brandId: project.brandId || undefined, text: template.replaceAll("{hook}", hook), mediaType: "video", mediaUrl: renderedUrl, status, scheduledAt, targets: accounts.map((account) => ({ accountId: account.id, settings: settings(account.provider, hook, publishingDefaults) })) }) });
         const payload = await response.json() as { data?: unknown; error?: string }; if (!response.ok) throw new Error(payload.error || "The video rendered but could not be scheduled."); post = payload.data;
       }
       results.push({ index, hook, renderedUrl, musicUrl: musicUrl ?? null, post, status: accounts.length ? "scheduled" : "rendered" });

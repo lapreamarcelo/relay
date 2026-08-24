@@ -1,0 +1,11 @@
+{
+  "name": "@relay/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "relay": "./src/relay.mjs" },
+  "scripts": {
+    "start": "node src/relay.mjs",
+    "test": "node --test src/*.test.mjs"
+  }
+}

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-export const agentApiKeyScopes = ["posts:read", "posts:write", "accounts:read", "brands:read", "media:read", "media:write", "analytics:read", "analytics:write", "slideshows:read", "slideshows:write", "videos:read", "videos:write"] as const;
+export const agentApiKeyScopes = ["posts:read", "posts:write", "accounts:read", "brands:read", "brands:write", "media:read", "media:write", "analytics:read", "analytics:write", "slideshows:read", "slideshows:write", "videos:read", "videos:write", "settings:read", "settings:write"] as const;
 export type AgentApiKeyScope = (typeof agentApiKeyScopes)[number];
 
 export function hashApiKey(value: string): string {

@@ -45,6 +45,20 @@ openssl rand -base64 32   # ENCRYPTION_KEY — keep this stable
 
 The minimum configuration is documented in [`.env.example`](.env.example). Add provider app credentials only for the networks you want to connect.
 
+## OAuth callback URLs
+
+Register the callback for every connection method you enable. Replace `<APP_URL>` with the browser-visible origin configured in `.env` (for example, `https://relay.example.com`) and do not add a trailing slash.
+
+| Platform / connection method | Callback URL |
+| --- | --- |
+| Facebook Pages | `<APP_URL>/api/oauth/facebook/callback` |
+| Instagram via Facebook Login | `<APP_URL>/api/oauth/instagram/callback` |
+| Instagram Login | `<APP_URL>/api/oauth/instagram-standalone/callback` |
+| TikTok | `<APP_URL>/api/oauth/tiktok/callback` |
+| YouTube | `<APP_URL>/api/oauth/youtube/callback` |
+
+For local development with the default configuration, the YouTube callback is `http://localhost:3000/api/oauth/youtube/callback`. If you change `RELAY_PORT` or `APP_URL`, update every callback registered with the providers to match.
+
 ## Publishing and analytics
 
 | Platform | Publishing | Analytics collected |
@@ -60,7 +74,18 @@ Provider permissions and review rules still apply. After upgrading an existing R
 
 ## Agent API
 
-Create a scoped key under **Settings → API keys**, then let an agent discover accounts and media, build or bulk-generate videos and slideshows, schedule up to 100 posts at once, reschedule, publish immediately, delete, or retrieve analytics history. The MCP adapter exposes these workflows directly; the same REST endpoints can be called from a shell with `curl` or any HTTP client.
+Create a scoped key under **Settings → API keys**, then let an agent discover accounts and media, build or bulk-generate videos and slideshows, schedule up to 100 posts at once, reschedule, publish immediately, delete, or retrieve analytics history. The CLI exposes these workflows directly; the same REST endpoints can be called from a shell with `curl` or any HTTP client.
+
+The first-party CLI is the recommended interface for agents and automation. It uses the Settings-generated key as a Bearer token and exposes posts, campaigns, templates, brands, media uploads, slideshow/video editors and rendering, bulk workflows, analytics, and publishing defaults as JSON commands:
+
+```bash
+export RELAY_URL="https://relay.example.com"
+export RELAY_API_KEY="relay_sk_..."
+pnpm relay -- accounts list
+pnpm relay -- posts create --data @post.json
+```
+
+See the complete [CLI guide](docs/CLI.md). MCP remains available as an optional compatibility adapter.
 
 ```bash
 curl "$RELAY_URL/api/v1/analytics?postId=$POST_ID" \
@@ -69,7 +94,7 @@ curl "$RELAY_URL/api/v1/analytics?postId=$POST_ID" \
 
 Every automated create request supports a stable `clientRequestId`, making retries safe. See the complete [Agent API guide](docs/AGENT_API.md).
 
-Relay includes a runnable stdio MCP adapter with media discovery, per-image slideshow text, rendering, and TikTok scheduling tools while keeping authorization and scheduling logic in one place.
+Relay also includes a runnable stdio MCP adapter for clients that specifically require MCP, while keeping authorization and scheduling logic in the REST API.
 
 ## Architecture
 
@@ -89,6 +114,7 @@ PostgreSQL ◀──────── Publishing & analytics worker
 This is a pnpm monorepo:
 
 - `apps/web` — Next.js dashboard and API
+- `apps/cli` — first-party JSON CLI for agents and automation
 - `apps/worker` — publishing, credential refresh, and analytics jobs
 - `packages/core` — shared domain types
 - `packages/database` — PostgreSQL schema and migrations

@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "brands:write" });
   if (authorization.response) return authorization.response;
 
   const body = await request.json().catch(() => null) as { name?: unknown; color?: unknown; timezone?: unknown; accountIds?: unknown } | null;
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "brands:write" });
   if (authorization.response) return authorization.response;
   const body = await request.json().catch(() => null) as { id?: unknown; name?: unknown; color?: unknown; timezone?: unknown; accountIds?: unknown } | null;
   const id = typeof body?.id === "string" ? body.id.trim() : "";
@@ -89,7 +89,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "brands:write" });
   if (authorization.response) return authorization.response;
   const body = await request.json().catch(() => null) as { id?: unknown } | null;
   const id = typeof body?.id === "string" ? body.id.trim() : "";

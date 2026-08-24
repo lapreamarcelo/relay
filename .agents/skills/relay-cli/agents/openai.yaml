@@ -1,0 +1,4 @@
+interface:
+  display_name: "Relay CLI"
+  short_description: "Operate Relay publishing workflows from agents"
+  default_prompt: "Use $relay-cli to schedule and manage social content in Relay."

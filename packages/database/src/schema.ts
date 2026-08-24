@@ -10,6 +10,7 @@ export const user = pgTable(
     emailVerified: boolean("email_verified").notNull().default(false),
     image: text("image"),
     role: text("role").notNull().default("MEMBER"),
+    publishingDefaults: jsonb("publishing_defaults").$type<Record<string, unknown>>().notNull().default({ instagram: { imagePublishType: "feed", videoPublishType: "reel" }, facebook: { videoPublishType: "reel" }, tiktok: { privacyLevel: "SELF_ONLY", allowComments: true, allowDuet: false, allowStitch: false }, youtube: { privacyStatus: "public", madeForKids: false } }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

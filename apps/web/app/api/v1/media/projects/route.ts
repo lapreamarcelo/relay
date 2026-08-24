@@ -51,3 +51,24 @@ export async function POST(request: Request) {
     return Response.json({ data: { ...manifest, count: 0 } }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
+
+export async function PATCH(request: Request) {
+  const authorization = await requireApiSession(request, { apiKeyScope: "media:write" });
+  if (authorization.response) return authorization.response;
+  try {
+    const body = await request.json() as { id?: unknown; name?: unknown };
+    const id = typeof body.id === "string" && /^[0-9a-f-]{36}$/i.test(body.id) ? body.id : "";
+    const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ").slice(0, 100) : "";
+    if (!id || !name) return Response.json({ error: "Folder id and name are required" }, { status: 400 });
+
+    const config = getR2Config(); const client = getR2Client();
+    const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: projectKey(id) }));
+    const manifest = JSON.parse(await object.Body!.transformToString()) as MediaProjectManifest;
+    if (!manifest.ownerId || manifest.ownerId !== authorization.session.user.id) return Response.json({ error: "Folder not found" }, { status: 404 });
+    const updated = { ...manifest, name };
+    await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: projectKey(id), Body: JSON.stringify(updated), ContentType: "application/json" }));
+    const listed = await client.send(new ListObjectsV2Command({ Bucket: config.bucket, Prefix: `media-projects/${id}/${manifest.kind === "music" ? "music" : "media"}/` }));
+    const count = (listed.Contents ?? []).filter((item) => item.Key && !item.Key.endsWith("/")).length;
+    return Response.json({ data: { ...updated, kind: manifest.kind === "music" ? "music" : "media", count } });
+  } catch (error) { return errorResponse(error); }
+}

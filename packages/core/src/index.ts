@@ -60,6 +60,58 @@ export type ProviderPostSettings =
   | TikTokPostSettings
   | YouTubePostSettings;
 
+export interface PublishingDefaults {
+  instagram: {
+    imagePublishType: "feed" | "story";
+    videoPublishType: "feed" | "reel" | "story";
+  };
+  facebook: {
+    videoPublishType: "feed" | "reel";
+  };
+  tiktok: {
+    privacyLevel: TikTokPostSettings["privacyLevel"];
+    allowComments: boolean;
+    allowDuet: boolean;
+    allowStitch: boolean;
+  };
+  youtube: {
+    privacyStatus: YouTubePostSettings["privacyStatus"];
+    madeForKids: boolean;
+  };
+}
+
+export const defaultPublishingDefaults: PublishingDefaults = {
+  instagram: { imagePublishType: "feed", videoPublishType: "reel" },
+  facebook: { videoPublishType: "reel" },
+  tiktok: { privacyLevel: "SELF_ONLY", allowComments: true, allowDuet: false, allowStitch: false },
+  youtube: { privacyStatus: "public", madeForKids: false },
+};
+
+export function normalizePublishingDefaults(value: unknown): PublishingDefaults {
+  const input = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const object = (key: string) => input[key] && typeof input[key] === "object" && !Array.isArray(input[key]) ? input[key] as Record<string, unknown> : {};
+  const instagram = object("instagram"); const facebook = object("facebook"); const tiktok = object("tiktok"); const youtube = object("youtube");
+  const oneOf = <T extends string>(candidate: unknown, options: readonly T[], fallback: T): T => typeof candidate === "string" && options.includes(candidate as T) ? candidate as T : fallback;
+  const bool = (candidate: unknown, fallback: boolean) => typeof candidate === "boolean" ? candidate : fallback;
+  return {
+    instagram: {
+      imagePublishType: oneOf(instagram.imagePublishType, ["feed", "story"] as const, defaultPublishingDefaults.instagram.imagePublishType),
+      videoPublishType: oneOf(instagram.videoPublishType, ["feed", "reel", "story"] as const, defaultPublishingDefaults.instagram.videoPublishType),
+    },
+    facebook: { videoPublishType: oneOf(facebook.videoPublishType, ["feed", "reel"] as const, defaultPublishingDefaults.facebook.videoPublishType) },
+    tiktok: {
+      privacyLevel: oneOf(tiktok.privacyLevel, ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"] as const, defaultPublishingDefaults.tiktok.privacyLevel),
+      allowComments: bool(tiktok.allowComments, defaultPublishingDefaults.tiktok.allowComments),
+      allowDuet: bool(tiktok.allowDuet, defaultPublishingDefaults.tiktok.allowDuet),
+      allowStitch: bool(tiktok.allowStitch, defaultPublishingDefaults.tiktok.allowStitch),
+    },
+    youtube: {
+      privacyStatus: oneOf(youtube.privacyStatus, ["private", "unlisted", "public"] as const, defaultPublishingDefaults.youtube.privacyStatus),
+      madeForKids: bool(youtube.madeForKids, defaultPublishingDefaults.youtube.madeForKids),
+    },
+  };
+}
+
 export interface PostTarget {
   id: string;
   accountId: string;

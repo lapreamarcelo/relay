@@ -10,7 +10,8 @@
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "test:e2e": "pnpm --filter @relay/web test:e2e",
-    "db:migrate": "pnpm --filter @relay/database db:migrate"
+    "db:migrate": "pnpm --filter @relay/database db:migrate",
+    "relay": "node apps/cli/src/relay.mjs"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

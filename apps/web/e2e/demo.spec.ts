@@ -52,7 +52,33 @@ test("composer previews network-specific captions and scheduling context", async
   await composer.locator(".network-variants label").filter({ hasText: "TikTok" }).locator("textarea").fill("TikTok-specific launch caption");
   await composer.locator(".preview-provider-tabs button").filter({ hasText: "TikTok" }).click();
   await expect(composer.locator(".social-preview > p")).toHaveText("TikTok-specific launch caption");
+  await composer.locator(".preview-provider-tabs button").filter({ hasText: "Instagram" }).click();
+  await composer.locator(".platform-card").filter({ hasText: "Instagram" }).getByLabel("Publish as").selectOption("reel");
+  await expect(composer.locator(".social-preview")).toHaveClass(/format-reel/);
+  await expect(composer.locator(".reel-topbar")).toContainText("Reels");
+  await expect(composer.locator(".social-preview .preview-account")).toHaveCount(0);
   await expect(composer.getByLabel(/Publish date and time in Europe\/Madrid/)).toBeVisible();
+});
+
+test("publishing defaults are configurable and flow into new posts", async ({ page }) => {
+  let saved: Record<string, unknown> | null = null;
+  await page.route("**/api/v1/settings/publishing", async (route) => {
+    saved = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({ json: { data: saved } });
+  });
+  await page.goto("/demo?view=settings");
+  await page.getByRole("button", { name: "Publishing", exact: true }).click();
+  await expect(page.getByLabel("Instagram video default")).toHaveValue("reel");
+  await expect(page.getByLabel("TikTok visibility default")).toHaveValue("SELF_ONLY");
+  await expect(page.getByLabel("YouTube visibility default")).toHaveValue("public");
+  await page.getByLabel("YouTube visibility default").selectOption("private");
+  await page.getByRole("button", { name: "Save publishing defaults" }).click();
+  await expect(page.getByText("Defaults saved")).toBeVisible();
+  expect(saved).toMatchObject({ youtube: { privacyStatus: "private", madeForKids: false } });
+  await page.getByRole("button", { name: /Create post/ }).first().click();
+  const composer = page.getByRole("dialog", { name: "Create post" });
+  await composer.locator(".destination-list button").filter({ hasText: "YouTube" }).click();
+  await expect(composer.locator(".platform-card").filter({ hasText: "YouTube" }).getByLabel("Visibility")).toHaveValue("private");
 });
 
 test("account and OAuth dialogs keep keyboard focus and close with Escape", async ({ page }) => {
@@ -97,6 +123,49 @@ test("media library exposes upload and project organization controls", async ({ 
   ]);
   await expect.poll(() => preparedUploads).toBe(4);
   await expect(page.getByRole("button", { name: /Unsorted/ })).toBeHidden();
+});
+
+test("media folders can be renamed and assets moved between them", async ({ page }) => {
+  const sourceId = "11111111-1111-4111-8111-111111111111";
+  const destinationId = "22222222-2222-4222-8222-222222222222";
+  let renamedFolder; let movedMedia;
+  await page.route("**/api/v1/media/projects", async (route) => {
+    if (route.request().method() === "PATCH") {
+      renamedFolder = route.request().postDataJSON();
+      return route.fulfill({ json: { data: { id: sourceId, name: renamedFolder.name, kind: "media", count: 1, createdAt: "2026-08-20T10:00:00.000Z" } } });
+    }
+    return route.fulfill({ json: { data: [
+      { id: sourceId, name: "Source assets", kind: "media", count: 1, createdAt: "2026-08-20T10:00:00.000Z" },
+      { id: destinationId, name: "Destination assets", kind: "media", count: 0, createdAt: "2026-08-20T10:00:00.000Z" },
+    ] } });
+  });
+  await page.route("**/api/v1/media", async (route) => {
+    movedMedia = route.request().postDataJSON();
+    return route.fulfill({ json: { key: `media-projects/${destinationId}/media/clip.png`, name: "clip.png", url: "https://media.example.com/moved.png" } });
+  });
+  await page.route("**/api/v1/media?**", async (route) => {
+    return route.fulfill({ json: { data: [{ key: `media-projects/${sourceId}/media/clip.png`, name: "clip.png", size: 1200, lastModified: null, etag: "asset", url: "https://media.example.com/clip.png" }], pagination: { nextCursor: null } } });
+  });
+  await page.route("https://media.example.com/clip.png", (route) => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") }));
+
+  await page.goto("/demo?view=media");
+  await page.getByRole("button", { name: /Source assets/ }).click();
+  await page.getByRole("button", { name: "Preview clip.png" }).click();
+  const previewDialog = page.getByRole("dialog", { name: "clip.png" });
+  await expect(previewDialog.getByRole("img", { name: "clip.png" })).toBeVisible();
+  await expect(previewDialog.getByRole("link", { name: /Open original/ })).toHaveAttribute("href", "https://media.example.com/clip.png");
+  await page.keyboard.press("Escape");
+  await expect(previewDialog).toBeHidden();
+  await page.getByRole("button", { name: "Rename folder" }).click();
+  const renameDialog = page.getByRole("dialog", { name: "Rename asset folder" });
+  await renameDialog.getByRole("textbox").fill("Renamed assets");
+  await renameDialog.getByRole("button", { name: "Rename folder" }).click();
+  await expect.poll(() => renamedFolder).toEqual({ id: sourceId, name: "Renamed assets" });
+
+  await page.getByRole("button", { name: "Move clip.png" }).click();
+  await page.getByLabel("Destination folder").selectOption(destinationId);
+  await page.getByRole("button", { name: "Move file" }).click();
+  await expect.poll(() => movedMedia).toEqual({ key: `media-projects/${sourceId}/media/clip.png`, projectId: destinationId, kind: "media" });
 });
 
 test("historical analytics filters persist in the URL and reports can be scheduled", async ({ page }) => {
@@ -190,6 +259,8 @@ test("video studio exposes draggable labels, style shortcuts, and bulk music pol
   await expect(composer.getByRole("group", { name: /Brand/ })).toBeVisible();
   await expect(composer.locator(".destination-list button").filter({ hasText: "Instagram" })).toBeEnabled();
   await expect(composer.locator(".destination-list button").filter({ hasText: "YouTube" })).toBeEnabled();
+  await composer.locator(".destination-list button").filter({ hasText: "Instagram" }).click();
+  await expect(composer.locator(".platform-card").filter({ hasText: "Instagram" }).getByLabel("Publish as")).toHaveValue("reel");
 });
 
 test("slideshow and video use the same label controls", async ({ page }) => {

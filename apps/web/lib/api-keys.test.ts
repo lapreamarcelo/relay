@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createApiKeySecret, hashApiKey, readBearerToken } from "./api-keys.ts";
+import { agentApiKeyScopes, createApiKeySecret, hashApiKey, readBearerToken } from "./api-keys.ts";
 
 test("creates opaque Relay API keys and stores only a digest", () => {
   const first = createApiKeySecret();
@@ -17,4 +17,10 @@ test("reads only Relay bearer tokens", () => {
   assert.equal(readBearerToken(new Request("https://relay.test", { headers: { authorization: "Bearer relay_sk_abc-123_DEF" } })), "relay_sk_abc-123_DEF");
   assert.equal(readBearerToken(new Request("https://relay.test", { headers: { authorization: "Basic abc" } })), null);
   assert.equal(readBearerToken(new Request("https://relay.test", { headers: { authorization: "Bearer something_else" } })), null);
+});
+
+test("agent keys cover brand and publishing-default CLI workflows", () => {
+  assert.ok(agentApiKeyScopes.includes("brands:write"));
+  assert.ok(agentApiKeyScopes.includes("settings:read"));
+  assert.ok(agentApiKeyScopes.includes("settings:write"));
 });

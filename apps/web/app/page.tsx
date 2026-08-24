@@ -1,4 +1,4 @@
-import type { ProviderAuthMethod, ProviderId, SocialAccount } from "@relay/core";
+import { normalizePublishingDefaults, type ProviderAuthMethod, type ProviderId, type SocialAccount } from "@relay/core";
 import { sql } from "@relay/database";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -16,6 +16,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   if (!session) redirect("/login");
 
+  const [userPreferences] = await sql<{ publishing_defaults: unknown }[]>`
+    SELECT publishing_defaults FROM "user" WHERE id = ${session.user.id}
+  `;
+
   const brandRows = await sql<{ id: string; name: string; monogram: string; color: string; timezone: string }[]>`
     SELECT id, name, monogram, color, timezone FROM "brand" WHERE "owner_id" = ${session.user.id} ORDER BY "created_at" ASC
   `;
@@ -30,5 +34,5 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const posts = await listPostsForOwner(session.user.id);
 
   const query = await searchParams;
-  return <RelayApp initialBrands={brands} initialAccounts={accounts} initialPosts={posts} initialNow={new Date().toISOString()} initialView={parseRelayView(query.view)} user={{ name: session.user.name, email: session.user.email, role: session.user.role ?? "MEMBER" }} />;
+  return <RelayApp initialBrands={brands} initialAccounts={accounts} initialPosts={posts} initialPublishingDefaults={normalizePublishingDefaults(userPreferences?.publishing_defaults)} initialNow={new Date().toISOString()} initialView={parseRelayView(query.view)} user={{ name: session.user.name, email: session.user.email, role: session.user.role ?? "MEMBER" }} />;
 }

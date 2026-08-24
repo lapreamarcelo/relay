@@ -7,6 +7,7 @@ import {
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { sql } from "@relay/database";
 
 import { requireApiSession } from "../../../../lib/api-session";
 import { getR2Client, getR2Config, publicObjectUrl } from "../../../../lib/r2";
@@ -34,6 +35,62 @@ async function assertProjectAccess(projectId: string | null | undefined, ownerId
   const object = await getR2Client().send(new GetObjectCommand({ Bucket: config.bucket, Key: `media-projects/${projectId}/.project.json` }));
   const manifest = JSON.parse(await object.Body!.transformToString()) as { ownerId?: string; kind?: string };
   if (!manifest.ownerId || manifest.ownerId !== ownerId || (manifest.kind === "music" ? "music" : "media") !== kind) throw new Error("Media project not found");
+}
+
+function projectIdForKey(key: string): string | null {
+  const match = /^media-projects\/([0-9a-f-]{36})\/(media|music)\//i.exec(key);
+  return match?.[1] ?? null;
+}
+
+function kindForKey(key: string): AssetKind | null {
+  if (/^music\/[^/]+$/i.test(key) || /^media-projects\/[0-9a-f-]{36}\/music\/[^/]+$/i.test(key)) return "music";
+  if (/^media\/[^/]+$/i.test(key) || /^media-projects\/[0-9a-f-]{36}\/media\/[^/]+$/i.test(key)) return "media";
+  return null;
+}
+
+async function assertObjectAccess(key: string, ownerId: string, expectedKind?: AssetKind): Promise<AssetKind> {
+  const kind = kindForKey(key);
+  if (!kind || expectedKind && kind !== expectedKind) throw new Error("Media object not found");
+  const projectId = projectIdForKey(key);
+  if (projectId) await assertProjectAccess(projectId, ownerId, kind);
+  return kind;
+}
+
+function replaceUrl(value: unknown, currentUrl: string, nextUrl: string): unknown {
+  if (value === currentUrl) return nextUrl;
+  if (Array.isArray(value)) return value.map((item) => replaceUrl(item, currentUrl, nextUrl));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replaceUrl(item, currentUrl, nextUrl)]));
+  return value;
+}
+
+async function updateMediaReferences(ownerId: string, currentUrl: string, nextUrl: string, destinationProjectId: string | null): Promise<void> {
+  await sql.begin(async (transaction) => {
+    const posts = await transaction<{ id: string; media_url: string | null; media_urls: string[] }[]>`SELECT id, media_url, media_urls FROM "post" WHERE owner_id = ${ownerId}`;
+    for (const post of posts) {
+      const mediaUrl = post.media_url === currentUrl ? nextUrl : post.media_url;
+      const mediaUrls = post.media_urls.map((url) => url === currentUrl ? nextUrl : url);
+      if (mediaUrl !== post.media_url || mediaUrls.some((url, index) => url !== post.media_urls[index])) {
+        await transaction`UPDATE "post" SET media_url = ${mediaUrl}, media_urls = ${JSON.stringify(mediaUrls)}::jsonb, updated_at = NOW() WHERE id = ${post.id} AND owner_id = ${ownerId}`;
+      }
+    }
+
+    const slideshows = await transaction<{ id: string; slides: unknown }[]>`SELECT id, slides FROM "slideshow_project" WHERE owner_id = ${ownerId}`;
+    for (const project of slideshows) {
+      const slides = replaceUrl(project.slides, currentUrl, nextUrl);
+      if (JSON.stringify(slides) !== JSON.stringify(project.slides)) await transaction`UPDATE "slideshow_project" SET slides = ${JSON.stringify(slides)}::jsonb, updated_at = NOW() WHERE id = ${project.id} AND owner_id = ${ownerId}`;
+    }
+
+    await transaction`
+      UPDATE "video_project"
+      SET source_folder_id = CASE WHEN source_url = ${currentUrl} THEN ${destinationProjectId} ELSE source_folder_id END,
+          music_folder_id = CASE WHEN music_url = ${currentUrl} THEN ${destinationProjectId} ELSE music_folder_id END,
+          source_url = CASE WHEN source_url = ${currentUrl} THEN ${nextUrl} ELSE source_url END,
+          music_url = CASE WHEN music_url = ${currentUrl} THEN ${nextUrl} ELSE music_url END,
+          rendered_url = CASE WHEN rendered_url = ${currentUrl} THEN ${nextUrl} ELSE rendered_url END,
+          updated_at = NOW()
+      WHERE owner_id = ${ownerId} AND (source_url = ${currentUrl} OR music_url = ${currentUrl} OR rendered_url = ${currentUrl})
+    `;
+  });
 }
 
 const musicExtension = /\.(mp3|m4a|aac|wav|ogg|flac)$/i;
@@ -162,13 +219,22 @@ export async function PATCH(request: Request) {
   if (authorization.response) return authorization.response;
 
   try {
-    const body = await request.json() as { key?: unknown; name?: unknown };
+    const body = await request.json() as { key?: unknown; name?: unknown; projectId?: unknown; kind?: unknown };
     const key = typeof body.key === "string" ? body.key : "";
-    const name = typeof body.name === "string" ? sanitizeFileName(body.name) : "";
-    if (!key || !name) return Response.json({ error: "Object key and a valid name are required" }, { status: 400 });
+    const requestedName = typeof body.name === "string" ? sanitizeFileName(body.name) : "";
+    const moving = Object.prototype.hasOwnProperty.call(body, "projectId");
+    const projectId = body.projectId === null || body.projectId === "unfiled" ? "unfiled" : typeof body.projectId === "string" ? body.projectId : undefined;
+    if (!key || !requestedName && !moving) return Response.json({ error: "Object key and a new name or destination folder are required" }, { status: 400 });
+    if (moving && (!projectId || projectId === "all" || projectId !== "unfiled" && !PROJECT_ID_PATTERN.test(projectId))) return Response.json({ error: "A valid destination folder is required" }, { status: 400 });
+
+    const expectedKind: AssetKind | undefined = body.kind === "music" ? "music" : body.kind === "media" ? "media" : undefined;
+    const kind = await assertObjectAccess(key, authorization.session.user.id, expectedKind);
+    if (projectId && projectId !== "unfiled") await assertProjectAccess(projectId, authorization.session.user.id, kind);
 
     const slash = key.lastIndexOf("/");
-    const prefix = slash >= 0 ? key.slice(0, slash + 1) : "";
+    const currentName = slash >= 0 ? key.slice(slash + 1) : key;
+    const name = requestedName || currentName;
+    const prefix = moving ? mediaPrefix(projectId, kind)! : slash >= 0 ? key.slice(0, slash + 1) : "";
     const nextKey = `${prefix}${name}`;
     if (nextKey === key) return Response.json({ key, name, url: publicObjectUrl(key) });
 
@@ -187,8 +253,16 @@ export async function PATCH(request: Request) {
       Key: nextKey,
       CopySource: copySource(config.bucket, key),
     }));
+    const currentUrl = publicObjectUrl(key);
+    const nextUrl = publicObjectUrl(nextKey);
+    try {
+      await updateMediaReferences(authorization.session.user.id, currentUrl, nextUrl, projectId && projectId !== "unfiled" ? projectId : null);
+    } catch (error) {
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: nextKey })).catch(() => undefined);
+      throw error;
+    }
     await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
-    return Response.json({ key: nextKey, name, url: publicObjectUrl(nextKey) });
+    return Response.json({ key: nextKey, name, url: nextUrl, projectId: projectId && projectId !== "unfiled" ? projectId : null });
   } catch (error) {
     return errorResponse(error);
   }
@@ -202,6 +276,7 @@ export async function DELETE(request: Request) {
     const body = await request.json() as { key?: unknown };
     const key = typeof body.key === "string" ? body.key : "";
     if (!key) return Response.json({ error: "Object key is required" }, { status: 400 });
+    await assertObjectAccess(key, authorization.session.user.id);
     const config = getR2Config();
     await getR2Client().send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
     return new Response(null, { status: 204 });

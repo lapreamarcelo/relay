@@ -11,7 +11,7 @@ Authorization: Bearer relay_sk_...
 Content-Type: application/json
 ```
 
-Agent keys can read brands and connected destinations and can read, create, reschedule, publish, and delete posts. They cannot manage users, brands, provider credentials, or social connections.
+Agent keys can manage brands, publishing defaults, media, creative projects, analytics, and posts. They cannot manage users, API keys, provider credentials, OAuth connections, or connected-account deletion.
 
 Set these values in the agent environment rather than its prompt:
 
@@ -19,6 +19,8 @@ Set these values in the agent environment rather than its prompt:
 RELAY_URL=https://relay.example.com
 RELAY_API_KEY=relay_sk_...
 ```
+
+Use the first-party [Relay CLI](CLI.md) for agent and shell workflows. It provides stable JSON commands for the complete API, direct media uploads, and render-then-schedule helpers. The curl examples below document the underlying REST contract; the MCP adapter remains optional for clients that specifically require MCP.
 
 ## Discover destination IDs
 
@@ -153,6 +155,12 @@ Instagram `publishType` supports `feed`, `reel`, or `story`. Facebook supports `
 
 Relay validates media requirements and caption limits before saving. YouTube requires video, TikTok requires media, and Reel or Story settings may require a specific media type. `textOverride` stores a destination-specific caption; omit it to use the post's shared `text`.
 
+### Publishing defaults
+
+`GET /api/v1/settings/publishing` returns the workspace owner's normalized Instagram image/video formats, Facebook video format, TikTok privacy/interactions, and YouTube privacy/audience defaults. `PUT /api/v1/settings/publishing` replaces them. These endpoints require `settings:read` and `settings:write`; Settings-generated keys include both.
+
+Defaults are starting values for new composer and batch workflows. Explicit settings saved in a post or template remain authoritative.
+
 ## Campaigns and templates
 
 Use `GET /api/v1/campaigns` to list campaign IDs. Create one with a name, optional brand, and optional color:
@@ -226,7 +234,7 @@ curl -X DELETE "$RELAY_URL/api/v1/posts" \
 
 Deletion is all-or-nothing. Relay refuses the request if any post does not belong to the key owner or has already entered provider publishing/processing.
 
-## MCP adapter
+## Optional MCP adapter
 
 Relay includes a runnable stdio adapter in `apps/mcp`. Configure it in an MCP client with the Relay origin and an API key:
 
@@ -254,6 +262,10 @@ The adapter exposes `list_destinations`, `list_media`, `list_asset_folders`, `cr
 ```json
 { "name": "Product launch", "kind": "media" }
 ```
+
+Rename a folder with `PATCH /api/v1/media/projects` and `{ "id": "...", "name": "New name" }`. Folder IDs and object URLs remain stable.
+
+Rename an object with `PATCH /api/v1/media` and `{ "key": "...", "name": "new-name.mp4" }`. Move it between folders with `{ "key": "...", "projectId": "destination-folder-id", "kind": "media" }`; use `"unfiled"` as the destination for the general Media or Music area. Relay copies the R2 object, updates owned post and creative-project references to its new public URL, and then deletes the old key.
 
 Use `kind=music` for licensed audio libraries. `GET /api/v1/media?kind=music&project=<folder-id>` returns the tracks agents may assign to videos. Upload signing and fallback uploads accept `kind`, and audio files are accepted only for music folders.
 
