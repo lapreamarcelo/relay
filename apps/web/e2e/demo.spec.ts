@@ -170,9 +170,15 @@ test("video studio exposes draggable labels, style shortcuts, and bulk music pol
   await expect(page.getByRole("dialog", { name: "Turn hooks into scheduled videos" })).toBeVisible();
   await expect(page.getByText("One song for all")).toBeVisible();
   await expect(page.getByText("Different in order")).toBeVisible();
-  await expect(page.getByText("Random from folder")).toBeVisible();
+  await expect(page.getByText("Random from source")).toBeVisible();
+  await page.getByText("One song for all").click();
+  await expect(page.getByLabel("Batch music source").locator('option[value="all"]')).toHaveText("All music");
+  await expect(page.getByLabel("Batch music source").locator('option[value="unfiled"]')).toHaveText("General music (no folder)");
+  await page.getByLabel("Batch music source").selectOption("unfiled");
+  await page.getByLabel("Batch music track").selectOption("https://media.example.com/track.mp3");
   await page.getByText("Different in order").click();
-  await expect(page.getByLabel("Batch music folder")).toHaveValue("music-folder");
+  await expect(page.getByLabel("Batch music source")).toHaveValue("unfiled");
+  await expect(page.getByText("1 track available from this source")).toBeVisible();
   await page.getByRole("button", { name: "Create batch" }).click();
   await expect(page.locator(".video-batch-error")).toContainText("Add at least one hook");
   await page.getByLabel(/Hooks/).fill("First hook\nSecond hook");

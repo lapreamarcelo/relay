@@ -21,13 +21,33 @@ const settings = (provider: ProviderId, hook: string): ProviderPostSettings => p
     : provider === "youtube" ? { kind: "youtube", title: hook.slice(0, 100), tags: [], privacyStatus: "private", madeForKids: false }
       : { kind: "tiktok", privacyLevel: "SELF_ONLY", allowComments: true, allowDuet: false, allowStitch: false };
 
+async function listKeys(prefix: string): Promise<string[]> {
+  const config = getR2Config(); const client = getR2Client(); const keys: string[] = []; let cursor: string | undefined;
+  do {
+    const listed = await client.send(new ListObjectsV2Command({ Bucket: config.bucket, Prefix: prefix, MaxKeys: 1_000, ContinuationToken: cursor }));
+    keys.push(...(listed.Contents ?? []).map((object) => object.Key).filter((key): key is string => Boolean(key)));
+    cursor = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (cursor);
+  return keys;
+}
+
 async function musicUrls(folderId: string, ownerId: string): Promise<string[]> {
-  if (!/^[0-9a-f-]{36}$/i.test(folderId)) return [];
   const config = getR2Config(); const client = getR2Client();
+  if (folderId === "unfiled") return (await listKeys("music/")).filter((key) => musicFile.test(key)).map(publicObjectUrl);
+  if (folderId === "all") {
+    const [rootKeys, projectKeys] = await Promise.all([listKeys("music/"), listKeys("media-projects/")]);
+    const manifestKeys = projectKeys.filter((key) => key.endsWith("/.project.json"));
+    const ownedMusicPrefixes = (await Promise.all(manifestKeys.map(async (key) => {
+      const manifest = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key })).then(async (object) => JSON.parse(await object.Body!.transformToString()) as { id?: string; ownerId?: string; kind?: string }).catch(() => null);
+      return manifest?.ownerId === ownerId && manifest.kind === "music" && manifest.id ? `media-projects/${manifest.id}/music/` : null;
+    }))).filter((prefix): prefix is string => Boolean(prefix));
+    return [...rootKeys, ...projectKeys.filter((key) => ownedMusicPrefixes.some((prefix) => key.startsWith(prefix)))]
+      .filter((key) => musicFile.test(key)).map(publicObjectUrl);
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(folderId)) return [];
   const manifest = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: `media-projects/${folderId}/.project.json` })).then(async (object) => JSON.parse(await object.Body!.transformToString()) as { ownerId?: string; kind?: string }).catch(() => null);
   if (!manifest || manifest.ownerId !== ownerId || manifest.kind !== "music") return [];
-  const listed = await client.send(new ListObjectsV2Command({ Bucket: config.bucket, Prefix: `media-projects/${folderId}/music/`, MaxKeys: 1_000 }));
-  return (listed.Contents ?? []).map((object) => object.Key).filter((key): key is string => Boolean(key && musicFile.test(key))).map(publicObjectUrl);
+  return (await listKeys(`media-projects/${folderId}/music/`)).filter((key) => musicFile.test(key)).map(publicObjectUrl);
 }
 
 export async function POST(request: Request) {
@@ -46,7 +66,7 @@ export async function POST(request: Request) {
   const folderMusic = mode === "rotate" || mode === "random" ? await musicUrls(folderId, authorization.session.user.id) : [];
   const fixedMusic = safeWebUrl(body?.musicUrl) || project.musicUrl;
   if (mode === "fixed" && !fixedMusic) return Response.json({ error: "Choose one music track for fixed music mode." }, { status: 400 });
-  if ((mode === "rotate" || mode === "random") && !folderMusic.length) return Response.json({ error: "The selected music folder has no supported audio files." }, { status: 400 });
+  if ((mode === "rotate" || mode === "random") && !folderMusic.length) return Response.json({ error: "The selected music source has no supported audio files." }, { status: 400 });
   const start = typeof body?.scheduledAt === "string" && !Number.isNaN(new Date(body.scheduledAt).getTime()) ? new Date(body.scheduledAt) : null;
   const interval = Math.min(10_080, Math.max(1, Math.round(Number(body?.intervalMinutes) || 1_440)));
   const template = typeof body?.captionTemplate === "string" ? body.captionTemplate.slice(0, 2_200) : project.caption || "{hook}";
