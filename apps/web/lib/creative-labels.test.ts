@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeCreativeLabels, presetChanges } from "./creative-labels.ts";
+import { creativeLabelHeight, normalizeCreativeLabels, presetChanges } from "./creative-labels.ts";
 
 test("normalizes draggable labels and clamps their canvas position", () => {
   const labels = normalizeCreativeLabels([{ text: " Hook ", x: 2, y: -1, width: .1, height: .9, fontSize: 300, style: "outline" }]);
@@ -21,4 +21,11 @@ test("label fonts normalize to bundled render-safe choices", () => {
 
 test("label height defaults to twelve percent of the canvas", () => {
   assert.equal(normalizeCreativeLabels([{ text: "Default height" }])?.[0].height, .12);
+});
+
+test("label backgrounds grow beyond their minimum height when text wraps", () => {
+  const short = { text: "Short hook", width: .84, height: .12, fontSize: 72 };
+  const long = { ...short, text: "A longer hook that wraps across several lines and needs the background to grow with the words" };
+  assert.equal(creativeLabelHeight(short), Math.round(1920 * .12));
+  assert.ok(creativeLabelHeight(long) > creativeLabelHeight(short));
 });

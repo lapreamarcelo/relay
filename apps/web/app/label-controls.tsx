@@ -23,6 +23,6 @@ export function LabelControls({ value, disabled = false, helper, placeholder = "
     <label>Font<select aria-label="Label font" disabled={disabled} value={value.font} onChange={(event) => onChange({ font: event.target.value as LabelFont })}>{(Object.keys(labelFonts) as LabelFont[]).map((font) => <option value={font} key={font}>{labelFonts[font].name}</option>)}</select></label>
     <label>Size<input aria-label="Label size" disabled={disabled} type="range" min="28" max="160" value={value.fontSize} onChange={(event) => onChange({ fontSize: Number(event.target.value) })}/><span>{value.fontSize}px</span></label>
     <label>Width<input aria-label="Label width" disabled={disabled} type="range" min="25" max="92" value={Math.round(value.width * 100)} onChange={(event) => onChange({ width: Number(event.target.value) / 100 })}/><span>{Math.round(value.width * 100)}%</span></label>
-    <label>Height<input aria-label="Label height" disabled={disabled} type="range" min="6" max="35" value={Math.round(value.height * 100)} onChange={(event) => onChange({ height: Number(event.target.value) / 100 })}/><span>{Math.round(value.height * 100)}%</span></label>
+    <label>Min height<input aria-label="Label minimum height" disabled={disabled} type="range" min="6" max="35" value={Math.round(value.height * 100)} onChange={(event) => onChange({ height: Number(event.target.value) / 100 })}/><span>{Math.round(value.height * 100)}%</span></label>
   </div>;
 }

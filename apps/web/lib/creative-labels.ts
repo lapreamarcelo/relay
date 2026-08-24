@@ -15,6 +15,28 @@ export const labelPresets: Record<LabelStylePreset, { name: string; textColor: s
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
 const color = (value: unknown, fallback: string) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toUpperCase() : fallback;
 
+export function wrapCreativeLabel(value: string, fontSize: number, width: number): string[] {
+  const limit = Math.max(8, Math.floor(width / (fontSize * .56)));
+  const lines: string[] = [];
+  for (const paragraph of value.split(/\n/)) {
+    let current = "";
+    for (const word of paragraph.trim().split(/\s+/).filter(Boolean)) {
+      if (!current || `${current} ${word}`.length <= limit) current = current ? `${current} ${word}` : word;
+      else { lines.push(current); current = word; }
+    }
+    if (current) lines.push(current);
+  }
+  return lines.slice(0, 10);
+}
+
+export function creativeLabelHeight(label: Pick<CreativeLabel, "text" | "width" | "height" | "fontSize">, canvasWidth = 1080, canvasHeight = 1920): number {
+  const boxWidth = Math.round(canvasWidth * label.width);
+  const lines = wrapCreativeLabel(label.text, label.fontSize, boxWidth - 70);
+  const minimum = Math.round(canvasHeight * (label.height ?? .12));
+  const content = Math.round(lines.length * label.fontSize * 1.16 + label.fontSize);
+  return Math.min(Math.round(canvasHeight * .88), Math.max(minimum, content));
+}
+
 export function normalizeCreativeLabels(value: unknown): CreativeLabel[] | null {
   if (!Array.isArray(value) || value.length > 12) return null;
   const labels: CreativeLabel[] = [];

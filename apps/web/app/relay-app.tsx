@@ -336,6 +336,7 @@ function MediaView({ onCompose }: { onCompose: (media: ComposerMedia) => void })
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false); const [projectName, setProjectName] = useState(""); const [projectBusy, setProjectBusy] = useState(false); const [projectError, setProjectError] = useState("");
   const [renameItem, setRenameItem] = useState<MediaObject | null>(null); const [renameName, setRenameName] = useState("");
@@ -363,27 +364,41 @@ function MediaView({ onCompose }: { onCompose: (media: ComposerMedia) => void })
   useEffect(() => { void loadProjects(); }, []);
   useEffect(() => { void load(cursor); }, [cursor, projectId, assetKind]);
 
-  const upload = async (file: File) => {
+  const uploadOne = async (file: File, uploadProjectId: string | undefined, uploadKind: "media" | "music") => {
+    const signedResponse = await fetch("/api/v1/media", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, contentType: file.type, projectId: uploadProjectId, kind: uploadKind }) });
+    const signed = await signedResponse.json() as { uploadUrl?: string; error?: string };
+    if (!signedResponse.ok || !signed.uploadUrl) throw new Error(signed.error || `Could not prepare ${file.name}`);
+    let uploadedDirectly = false;
+    try {
+      const uploadResponse = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      uploadedDirectly = uploadResponse.ok;
+    } catch { uploadedDirectly = false; }
+    if (!uploadedDirectly) {
+      const form = new FormData(); form.append("file", file); form.append("kind", uploadKind); if (uploadProjectId) form.append("projectId", uploadProjectId);
+      const fallbackResponse = await fetch("/api/v1/media", { method: "POST", body: form });
+      const fallback = await fallbackResponse.json() as { error?: string };
+      if (!fallbackResponse.ok) throw new Error(fallback.error || `R2 rejected ${file.name}`);
+    }
+  };
+
+  const uploadFiles = async (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? []);
+    if (!files.length) return;
+    const uploadProjectId = projectId !== "all" && projectId !== "unfiled" ? projectId : undefined;
+    const uploadKind = assetKind;
+    const failures: string[] = [];
     setBusyKey("upload"); setError("");
     try {
-      const uploadProjectId = projectId !== "all" && projectId !== "unfiled" ? projectId : undefined;
-      const signedResponse = await fetch("/api/v1/media", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, contentType: file.type, projectId: uploadProjectId, kind: assetKind }) });
-      const signed = await signedResponse.json() as { uploadUrl?: string; error?: string };
-      if (!signedResponse.ok || !signed.uploadUrl) throw new Error(signed.error || "Could not prepare upload");
-      let uploadedDirectly = false;
-      try {
-        const uploadResponse = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-        uploadedDirectly = uploadResponse.ok;
-      } catch { uploadedDirectly = false; }
-      if (!uploadedDirectly) {
-        const form = new FormData(); form.append("file", file); form.append("kind", assetKind); if (uploadProjectId) form.append("projectId", uploadProjectId);
-        const fallbackResponse = await fetch("/api/v1/media", { method: "POST", body: form });
-        const fallback = await fallbackResponse.json() as { error?: string };
-        if (!fallbackResponse.ok) throw new Error(fallback.error || "R2 rejected the upload");
+      for (let index = 0; index < files.length; index += 1) {
+        setUploadProgress(files.length > 1 ? `Uploading ${index + 1} of ${files.length}…` : "Uploading…");
+        try { await uploadOne(files[index], uploadProjectId, uploadKind); }
+        catch (cause) { failures.push(cause instanceof Error ? cause.message : `${files[index].name} failed`); }
       }
       setCursor(null); setHistory([]); await Promise.all([load(null), loadProjects()]);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Upload failed"); }
-    finally { setBusyKey(null); if (inputRef.current) inputRef.current.value = ""; }
+      if (failures.length) setError(`${files.length - failures.length} of ${files.length} files uploaded. ${failures.join(" ")}`);
+    } finally {
+      setBusyKey(null); setUploadProgress(""); if (inputRef.current) inputRef.current.value = "";
+    }
   };
 
   const rename = async () => {
@@ -421,13 +436,13 @@ function MediaView({ onCompose }: { onCompose: (media: ComposerMedia) => void })
   const visibleProjects = projects.filter((project) => (project.kind ?? "media") === assetKind);
   const selectedName = projectId === "all" ? assetKind === "music" ? "All music" : "All media" : projectId === "unfiled" ? "Unsorted" : projects.find((project) => project.id === projectId)?.name ?? "Asset folder";
 
-  return <div className="page page-enter"><div className="inline-heading"><div><h2>Asset library</h2><p>Keep videos, images, and licensed music in named R2 folders that you and your agents can reuse.</p></div><button className="primary-button" disabled={busyKey === "upload"} onClick={() => inputRef.current?.click()}>{busyKey === "upload" ? <LoaderCircle className="spin" /> : <Upload />} {busyKey === "upload" ? "Uploading…" : `Upload to ${selectedName}`}</button><input ref={inputRef} className="visually-hidden" type="file" accept={assetKind === "music" ? "audio/*" : "image/*,video/*"} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} /></div>
+  return <div className="page page-enter"><div className="inline-heading"><div><h2>Asset library</h2><p>Keep videos, images, and licensed music in named R2 folders that you and your agents can reuse.</p></div><button className="primary-button" disabled={busyKey === "upload"} onClick={() => inputRef.current?.click()}>{busyKey === "upload" ? <LoaderCircle className="spin" /> : <Upload />} {busyKey === "upload" ? uploadProgress : `Upload to ${selectedName}`}</button><input ref={inputRef} className="visually-hidden" type="file" multiple accept={assetKind === "music" ? "audio/*" : "image/*,video/*"} onChange={(event) => void uploadFiles(event.target.files)} /></div>
     <div className="asset-kind-tabs"><button className={assetKind === "media" ? "active" : ""} onClick={() => switchAssetKind("media")}><Images/> Images & videos</button><button className={assetKind === "music" ? "active" : ""} onClick={() => switchAssetKind("music")}><Music2/> Music</button></div>
     <section className="media-projects"><header><div><p className="eyebrow">R2 folders</p><h3>Choose a reusable asset folder</h3></div><button className="secondary-button" onClick={() => { setProjectName(""); setProjectError(""); setCreateOpen(true); }}><Plus /> New folder</button></header><div><button className={projectId === "all" ? "active" : ""} onClick={() => chooseProject("all")}><span><Images /></span><b>{assetKind === "music" ? "All music" : "All media"}</b><small>{assetKind === "music" ? "Every audio track" : "Every visual asset"}</small></button><button className={projectId === "unfiled" ? "active" : ""} onClick={() => chooseProject("unfiled")}><span><FolderOpen /></span><b>Unsorted</b><small>Existing and loose files</small></button>{visibleProjects.map((project) => <button className={projectId === project.id ? "active" : ""} onClick={() => chooseProject(project.id)} key={project.id}><span><Folder /></span><b>{project.name}</b><small>{project.count} item{project.count === 1 ? "" : "s"}</small></button>)}</div></section>
     {error && <div className="media-error"><CircleAlert />{error}<button onClick={() => void load(cursor)}>Retry</button></div>}
     {loading ? <div className="media-loading"><LoaderCircle className="spin" />Loading media from R2…</div> : items.length === 0 ? <Empty title={`${selectedName} is empty`} body={assetKind === "music" ? "Upload an audio track here, or choose another music folder." : "Upload an image or video here, or choose another media folder."} /> : <div className="media-grid">{items.map((item) => { const kind = mediaKind(item.name); const busy = busyKey === item.key; return <article key={item.key}><div className="media-image">{kind === "image" ? <img src={item.url} alt={item.name} loading="lazy" /> : kind === "video" ? <video src={item.url} preload="metadata" muted /> : kind === "audio" ? <div className="media-audio"><Music2/><audio src={item.url} controls preload="metadata"/></div> : <span className="media-file"><FileIcon /></span>}<span>{kind === "video" ? <Video /> : kind === "image" ? <ImageIcon /> : kind === "audio" ? <Music2/> : <FileIcon />}{kind}</span><div className="media-actions"><button className="icon-button" disabled={busy} onClick={() => { setRenameItem(item); setRenameName(item.name); }} aria-label={`Rename ${item.name}`}><Pencil /></button><button className="icon-button danger" disabled={busy} onClick={() => setDeleteItem(item)} aria-label={`Delete ${item.name}`}>{busy ? <LoaderCircle className="spin" /> : <Trash2 />}</button></div></div><div><b title={item.key}>{item.name}</b><span>{formatBytes(item.size)}{item.lastModified ? ` · ${new Date(item.lastModified).toLocaleDateString()}` : ""}</span></div>{kind === "audio" ? <button className="secondary-button" disabled>Ready for Video Studio</button> : kind === "file" ? <button className="secondary-button" disabled>Unsupported file</button> : <button className="secondary-button" onClick={() => onCompose({ name: item.name, url: item.url, previewUrl: item.url, type: kind })}>Use in post</button>}</article>; })}</div>}
     <div className="media-pagination"><button className="secondary-button" disabled={loading || history.length === 0} onClick={() => { const previous = history.at(-1) ?? null; setHistory((current) => current.slice(0, -1)); setCursor(previous); }}><ChevronLeft /> Previous</button><span><Cloud />Page {history.length + 1}</span><button className="secondary-button" disabled={loading || !nextCursor} onClick={() => { setHistory((current) => [...current, cursor]); setCursor(nextCursor); }}>Next <ChevronRight /></button></div>
-    {createOpen && <PromptModal title="Create an asset folder" body="Name it after an app, brand, campaign, music mood, or anything else. Agents will see the same folder name." value={projectName} placeholder="e.g. Racketly" confirmLabel="Create folder" busy={projectBusy} error={projectError} onChange={setProjectName} onClose={() => setCreateOpen(false)} onConfirm={() => void createProject()} />}
+    {createOpen && <PromptModal title="Create an asset folder" body="Name it after an app, brand, campaign, music mood, or anything else. Agents will see the same folder name." value={projectName} placeholder="e.g. Product launch" confirmLabel="Create folder" busy={projectBusy} error={projectError} onChange={setProjectName} onClose={() => setCreateOpen(false)} onConfirm={() => void createProject()} />}
     {renameItem && <PromptModal title="Rename media" body="Update the file name without changing where it is used." value={renameName} confirmLabel="Save name" busy={busyKey === renameItem.key} onChange={setRenameName} onClose={() => setRenameItem(null)} onConfirm={() => void rename()} />}
     {deleteItem && <ConfirmModal eyebrow="Delete media" title={`Delete ${deleteItem.name}?`} body="This permanently removes the file from Cloudflare. Posts already using this URL may lose their media." confirmLabel="Delete media" busy={busyKey === deleteItem.key} onClose={() => setDeleteItem(null)} onConfirm={() => void remove()} />}
   </div>;

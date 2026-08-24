@@ -1,32 +1,18 @@
 import "server-only";
 
 import type { CreativeLabel } from "@relay/core";
-import { labelFonts } from "./creative-labels";
+import { creativeLabelHeight, labelFonts, wrapCreativeLabel } from "./creative-labels";
 
 function escapeXml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 }
 
-function wrap(value: string, size: number, width: number): string[] {
-  const limit = Math.max(8, Math.floor(width / (size * .56)));
-  const lines: string[] = [];
-  for (const paragraph of value.split(/\n/)) {
-    let current = "";
-    for (const word of paragraph.trim().split(/\s+/).filter(Boolean)) {
-      if (!current || `${current} ${word}`.length <= limit) current = current ? `${current} ${word}` : word;
-      else { lines.push(current); current = word; }
-    }
-    if (current) lines.push(current);
-  }
-  return lines.slice(0, 10);
-}
-
 export function creativeLabelsSvg(labels: CreativeLabel[], width = 1080, height = 1920): Buffer {
   const elements = labels.map((label, index) => {
     const boxWidth = Math.round(width * label.width);
-    const lines = wrap(label.text, label.fontSize, boxWidth - 70);
+    const lines = wrapCreativeLabel(label.text, label.fontSize, boxWidth - 70);
     const lineHeight = Math.round(label.fontSize * 1.16);
-    const boxHeight = Math.round(height * (label.height ?? .12));
+    const boxHeight = creativeLabelHeight(label, width, height);
     const left = Math.round(width * label.x - boxWidth / 2);
     const top = Math.round(height * label.y - boxHeight / 2);
     const fill = label.background === "none" ? "none" : label.backgroundColor ?? (label.background === "dark" ? "#000000" : "#FFFFFF");

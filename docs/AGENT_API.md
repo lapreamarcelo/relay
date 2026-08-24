@@ -252,7 +252,7 @@ The adapter exposes `list_destinations`, `list_media`, `list_asset_folders`, `cr
 `GET /api/v1/media/projects` lists every named R2 folder. Add `?kind=media` or `?kind=music` to narrow the result. Create a folder with:
 
 ```json
-{ "name": "Racketly launch", "kind": "media" }
+{ "name": "Product launch", "kind": "media" }
 ```
 
 Use `kind=music` for licensed audio libraries. `GET /api/v1/media?kind=music&project=<folder-id>` returns the tracks agents may assign to videos. Upload signing and fallback uploads accept `kind`, and audio files are accepted only for music folders.
