@@ -72,20 +72,66 @@ Metrics are saved as timestamped snapshots, so Relay can show both the latest to
 
 Provider permissions and review rules still apply. After upgrading an existing Relay installation, reconnect social accounts so the new analytics scopes are granted.
 
-## Agent API
+## Relay CLI
 
-Create a scoped key under **Settings → API keys**, then let an agent discover accounts and media, build or bulk-generate videos and slideshows, schedule up to 100 posts at once, reschedule, publish immediately, delete, or retrieve analytics history. The CLI exposes these workflows directly; the same REST endpoints can be called from a shell with `curl` or any HTTP client.
+The first-party CLI is the recommended interface for agents, scripts, and CI. It exposes accounts, posts, campaigns, templates, brands, R2 media and folders, slideshow/video editors, bulk workflows, analytics, and publishing defaults as JSON commands.
 
-The first-party CLI is the recommended interface for agents and automation. It uses the Settings-generated key as a Bearer token and exposes posts, campaigns, templates, brands, media uploads, slideshow/video editors and rendering, bulk workflows, analytics, and publishing defaults as JSON commands:
+### Install
+
+Relay requires Node.js 22 and pnpm 11. From a cloned Relay repository, install the workspace and run the CLI locally:
+
+```bash
+corepack enable
+pnpm install
+pnpm relay -- --help
+```
+
+To make `relay` available outside the repository, install the workspace CLI from the repository root:
+
+```bash
+npm install --global ./apps/cli
+relay --help
+```
+
+The global install is local—it installs the checked-out `apps/cli` package and does not download or publish a separate npm package.
+
+### Configure
+
+In Relay, open **Settings → API keys**, create a key, and copy it when it is shown. Configure the Relay origin and key in the shell that will run the CLI:
 
 ```bash
 export RELAY_URL="https://relay.example.com"
 export RELAY_API_KEY="relay_sk_..."
-pnpm relay -- accounts list
-pnpm relay -- posts create --data @post.json
 ```
 
-See the complete [CLI guide](docs/CLI.md). MCP remains available as an optional compatibility adapter.
+Keep the key out of prompts, command arguments, source files, and committed `.env` files. Confirm the connection with read-only commands before mutating content:
+
+```bash
+relay health check
+relay accounts list
+relay folders list
+```
+
+When using the repository-local command, replace `relay` with `pnpm relay --`.
+
+### Use with agents
+
+Relay ships a Codex-compatible skill at [`.agents/skills/relay-cli/SKILL.md`](.agents/skills/relay-cli/SKILL.md). Its optional creative and analytics workflow reference is in [`.agents/skills/relay-cli/references/workflows.md`](.agents/skills/relay-cli/references/workflows.md).
+
+Codex discovers the repository copy while working inside this checkout. Ask for it explicitly with `$relay-cli`, for example:
+
+```text
+$relay-cli list my connected destinations and media folders.
+$relay-cli create a draft from the rendered video in folder <id>; do not publish it.
+```
+
+To make the skill available from other repositories, copy the complete `relay-cli` folder into `$CODEX_HOME/skills/relay-cli` (normally `~/.codex/skills/relay-cli`). Keep `SKILL.md` and its `references` directory together.
+
+See the complete [CLI guide](docs/CLI.md) for every command and the [Agent API guide](docs/AGENT_API.md) for request bodies. MCP remains available only as an optional compatibility adapter.
+
+## Agent API
+
+Create a scoped key under **Settings → API keys**, then let an agent discover accounts and media, build or bulk-generate videos and slideshows, schedule up to 100 posts at once, reschedule, publish immediately, delete, or retrieve analytics history. The CLI uses these same REST endpoints, which can also be called from a shell with `curl` or any HTTP client.
 
 ```bash
 curl "$RELAY_URL/api/v1/analytics?postId=$POST_ID" \

@@ -51,13 +51,27 @@ test("composer previews network-specific captions and scheduling context", async
   await composer.locator(".destination-list button").filter({ hasText: "TikTok" }).click();
   await composer.locator(".network-variants label").filter({ hasText: "TikTok" }).locator("textarea").fill("TikTok-specific launch caption");
   await composer.locator(".preview-provider-tabs button").filter({ hasText: "TikTok" }).click();
-  await expect(composer.locator(".social-preview > p")).toHaveText("TikTok-specific launch caption");
+  await expect(composer.locator(".social-preview")).toHaveClass(/format-reel/);
+  await expect(composer.locator(".reel-topbar")).toContainText("For You");
+  await expect(composer.locator(".preview-caption-text")).toHaveText("TikTok-specific launch caption");
+  await expect(composer.locator(".social-preview .preview-account")).toHaveCount(0);
   await composer.locator(".preview-provider-tabs button").filter({ hasText: "Instagram" }).click();
   await composer.locator(".platform-card").filter({ hasText: "Instagram" }).getByLabel("Publish as").selectOption("reel");
   await expect(composer.locator(".social-preview")).toHaveClass(/format-reel/);
   await expect(composer.locator(".reel-topbar")).toContainText("Reels");
   await expect(composer.locator(".social-preview .preview-account")).toHaveCount(0);
+  await composer.locator(".destination-list button").filter({ hasText: "YouTube" }).click();
+  await composer.locator(".preview-provider-tabs button").filter({ hasText: "YouTube" }).click();
+  await expect(composer.locator(".social-preview")).toHaveClass(/provider-youtube.*format-watch/);
+  await expect(composer.locator(".youtube-watch-copy")).toBeVisible();
   await expect(composer.getByLabel(/Publish date and time in Europe\/Madrid/)).toBeVisible();
+  await composer.locator(".brand-select button").filter({ hasText: "Field Notes" }).click();
+  await composer.locator(".destination-list button").filter({ hasText: "Facebook" }).click();
+  const facebookFormat = composer.locator(".platform-card").filter({ hasText: "Facebook" }).getByLabel("Publish as");
+  await expect(facebookFormat).toHaveValue("feed");
+  await expect(facebookFormat.locator('option[value="reel"]')).toHaveCount(0);
+  await expect(composer.locator(".social-preview")).toHaveClass(/provider-facebook/);
+  await expect(composer.locator(".social-preview")).not.toHaveClass(/format-reel/);
 });
 
 test("publishing defaults are configurable and flow into new posts", async ({ page }) => {
@@ -69,6 +83,9 @@ test("publishing defaults are configurable and flow into new posts", async ({ pa
   await page.goto("/demo?view=settings");
   await page.getByRole("button", { name: "Publishing", exact: true }).click();
   await expect(page.getByLabel("Instagram video default")).toHaveValue("reel");
+  await expect(page.getByLabel("Facebook image default")).toHaveValue("feed");
+  await expect(page.getByLabel("Facebook image default")).toBeDisabled();
+  await expect(page.getByLabel("Facebook video default")).toHaveValue("reel");
   await expect(page.getByLabel("TikTok visibility default")).toHaveValue("SELF_ONLY");
   await expect(page.getByLabel("YouTube visibility default")).toHaveValue("public");
   await page.getByLabel("YouTube visibility default").selectOption("private");
