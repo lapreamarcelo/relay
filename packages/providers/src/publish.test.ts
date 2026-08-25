@@ -37,7 +37,7 @@ test("starts and then confirms a TikTok Direct Post", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
   const fetchImpl: typeof fetch = async (url, init) => {
     requests.push({ url: String(url), init });
-    if (String(url).includes("creator_info")) return Response.json({ data: { privacy_level_options: ["SELF_ONLY"], comment_disabled: false, duet_disabled: false, stitch_disabled: false }, error: { code: "ok" } });
+    if (String(url).includes("creator_info")) return Response.json({ data: { privacy_level_options: ["MUTUAL_FOLLOW_FRIENDS"], comment_disabled: false, duet_disabled: false, stitch_disabled: false }, error: { code: "ok" } });
     if (init?.method === "HEAD") return new Response(null, { headers: { "content-length": "12" } });
     if (String(url).endsWith("video/init/")) return Response.json({ data: { publish_id: "publish-1", upload_url: "https://upload.tiktok.example/video" }, error: { code: "ok" } });
     if (String(url) === "https://media.example.com/video.mp4") return new Response("video bytes!", { status: 206, headers: { "content-type": "video/mp4" } });
@@ -45,24 +45,21 @@ test("starts and then confirms a TikTok Direct Post", async () => {
     return Response.json({ data: { status: "PUBLISH_COMPLETE", publicaly_available_post_id: ["video-1"] }, error: { code: "ok" } });
   };
   const registry = new ProviderPublishRegistry(fetchImpl);
-  const input = { provider: "tiktok" as const, authMethod: "tiktok" as const, providerAccountId: "open-id", providerMetadata: {}, accessToken: "token", text: "A video", mediaType: "video" as const, mediaUrl: "https://media.example.com/video.mp4", settings: { kind: "tiktok" as const, privacyLevel: "SELF_ONLY" as const, allowComments: true, allowDuet: false, allowStitch: false } };
+  const input = { provider: "tiktok" as const, authMethod: "tiktok" as const, providerAccountId: "open-id", providerMetadata: {}, accessToken: "token", text: "A video", mediaType: "video" as const, mediaUrl: "https://media.example.com/video.mp4", settings: { kind: "tiktok" as const, privacyLevel: "MUTUAL_FOLLOW_FRIENDS" as const, allowComments: true, allowDuet: false, allowStitch: false } };
   assert.deepEqual(await registry.publish(input), { state: "processing", providerPostId: "publish-1" });
   assert.deepEqual(await registry.check({ ...input, providerPostId: "publish-1" }), { state: "published", providerPostId: "video-1" });
   const init = requests.find((request) => request.url.endsWith("video/init/"));
   const initBody = JSON.parse(String(init?.init?.body)) as { post_info: { privacy_level: string; brand_content_toggle: boolean; brand_organic_toggle: boolean; is_aigc: boolean }; source_info: { source: string; video_size: number; chunk_size: number; total_chunk_count: number } };
-  assert.equal(initBody.post_info.privacy_level, "SELF_ONLY");
+  assert.equal(initBody.post_info.privacy_level, "MUTUAL_FOLLOW_FRIENDS");
   assert.deepEqual({ brandContent: initBody.post_info.brand_content_toggle, brandOrganic: initBody.post_info.brand_organic_toggle, ai: initBody.post_info.is_aigc }, { brandContent: false, brandOrganic: false, ai: false });
   assert.deepEqual(initBody.source_info, { source: "FILE_UPLOAD", video_size: 12, chunk_size: 12, total_chunk_count: 1 });
   const upload = requests.find((request) => request.url.startsWith("https://upload.tiktok.example"));
   assert.equal((upload?.init?.headers as Record<string, string>)["Content-Range"], "bytes 0-11/12");
 });
 
-test("preserves ordered slideshow images in a TikTok photo post", async () => {
+test("sends Only me photo posts to the TikTok inbox for manual publishing", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
-  const responses = [
-    { data: { privacy_level_options: ["SELF_ONLY"], comment_disabled: false }, error: { code: "ok" } },
-    { data: { publish_id: "photo-publish-1" }, error: { code: "ok" } },
-  ];
+  const responses = [{ data: { publish_id: "photo-upload-1" }, error: { code: "ok" } }];
   const fetchImpl: typeof fetch = async (url, init) => { requests.push({ url: String(url), init }); return Response.json(responses.shift()); };
   const result = await new ProviderPublishRegistry(fetchImpl).publish({
     provider: "tiktok", authMethod: "tiktok", providerAccountId: "open-id", providerMetadata: {}, accessToken: "token",
@@ -70,25 +67,47 @@ test("preserves ordered slideshow images in a TikTok photo post", async () => {
     mediaUrls: ["https://media.example.com/one.png", "https://media.example.com/two.png"],
     settings: { kind: "tiktok", privacyLevel: "SELF_ONLY", allowComments: true, allowDuet: false, allowStitch: false },
   });
-  assert.deepEqual(result, { state: "processing", providerPostId: "photo-publish-1" });
-  assert.equal(requests[1].url, "https://open.tiktokapis.com/v2/post/publish/content/init/");
-  const body = JSON.parse(String(requests[1].init?.body)) as { source_info: { photo_images: string[] } };
+  assert.deepEqual(result, { state: "processing", providerPostId: "photo-upload-1" });
+  assert.equal(requests[0].url, "https://open.tiktokapis.com/v2/post/publish/content/init/");
+  const body = JSON.parse(String(requests[0].init?.body)) as { post_mode: string; post_info: Record<string, unknown>; source_info: { photo_images: string[] } };
+  assert.equal(body.post_mode, "MEDIA_UPLOAD");
+  assert.equal(body.post_info.privacy_level, undefined);
   assert.deepEqual(body.source_info.photo_images, ["https://media.example.com/one.png", "https://media.example.com/two.png"]);
+});
+
+test("sends Only me videos to TikTok's inbox endpoint and completes on inbox delivery", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchImpl: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init });
+    if (init?.method === "HEAD") return new Response(null, { headers: { "content-length": "12" } });
+    if (String(url).endsWith("inbox/video/init/")) return Response.json({ data: { publish_id: "inbox-1", upload_url: "https://upload.tiktok.example/inbox" }, error: { code: "ok" } });
+    if (String(url) === "https://media.example.com/video.mp4") return new Response("video bytes!", { status: 206, headers: { "content-type": "video/mp4" } });
+    if (String(url).startsWith("https://upload.tiktok.example")) return new Response(null, { status: 201 });
+    return Response.json({ data: { status: "SEND_TO_USER_INBOX" }, error: { code: "ok" } });
+  };
+  const registry = new ProviderPublishRegistry(fetchImpl);
+  const input = { provider: "tiktok" as const, authMethod: "tiktok" as const, providerAccountId: "open-id", providerMetadata: {}, accessToken: "token", text: "Manual video", mediaType: "video" as const, mediaUrl: "https://media.example.com/video.mp4", settings: { kind: "tiktok" as const, privacyLevel: "SELF_ONLY" as const, allowComments: false, allowDuet: false, allowStitch: false } };
+  assert.deepEqual(await registry.publish(input), { state: "processing", providerPostId: "inbox-1" });
+  assert.deepEqual(await registry.check({ ...input, providerPostId: "inbox-1" }), { state: "published", providerPostId: "inbox-1", externalUrl: "https://www.tiktok.com/messages?lang=en" });
+  assert.equal(requests.some((request) => request.url.includes("creator_info")), false);
+  const init = requests.find((request) => request.url.endsWith("inbox/video/init/"));
+  const body = JSON.parse(String(init?.init?.body)) as Record<string, unknown>;
+  assert.equal(body.post_info, undefined);
 });
 
 test("explains TikTok's unaudited-client restriction and preserves the provider log id", async () => {
   const responses = [
-    { data: { privacy_level_options: ["SELF_ONLY"], comment_disabled: false }, error: { code: "ok" } },
+    { data: { privacy_level_options: ["MUTUAL_FOLLOW_FRIENDS"], comment_disabled: false }, error: { code: "ok" } },
     { data: {}, error: { code: "unaudited_client_can_only_post_to_private_accounts", message: "Please review our integration guidelines.", log_id: "tiktok-log-123" } },
   ];
   const fetchImpl: typeof fetch = async () => Response.json(responses.shift());
   await assert.rejects(() => new ProviderPublishRegistry(fetchImpl).publish({
     provider: "tiktok", authMethod: "tiktok", providerAccountId: "open-id", providerMetadata: {}, accessToken: "token",
     text: "Private test", mediaType: "image", mediaUrl: "https://media.example.com/one.png",
-    settings: { kind: "tiktok", privacyLevel: "SELF_ONLY", allowComments: false, allowDuet: false, allowStitch: false },
+    settings: { kind: "tiktok", privacyLevel: "MUTUAL_FOLLOW_FRIENDS", allowComments: false, allowDuet: false, allowStitch: false },
   }), (error: unknown) => {
-    assert.match(String(error), /account must itself be Private/);
-    assert.match(String(error), /SELF_ONLY/);
+    assert.match(String(error), /request used TikTok Direct Post/);
+    assert.match(String(error), /Choose Only me in Relay/);
     assert.match(String(error), /Direct Post audit/);
     assert.match(String(error), /unaudited_client_can_only_post_to_private_accounts/);
     assert.match(String(error), /tiktok-log-123/);

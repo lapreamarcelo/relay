@@ -31,11 +31,11 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function tiktokErrorMessage(code: string | undefined, fallback: string | undefined): string | undefined {
-  if (code === "unaudited_client_can_only_post_to_private_accounts") return "This TikTok app has not passed the Direct Post audit. During sandbox testing, the connected TikTok account must itself be Private and the post visibility must be Only me (SELF_ONLY). To post from public accounts, move the app to Production and complete TikTok's Direct Post audit.";
+  if (code === "unaudited_client_can_only_post_to_private_accounts") return "This request used TikTok Direct Post, but the app has not passed the Direct Post audit. Choose Only me in Relay to send the media to your TikTok inbox and publish it manually. To publish directly from Relay, move the app to Production and complete TikTok's Direct Post audit.";
   if (code === "privacy_level_option_mismatch") return "TikTok rejected the visibility choice. Reopen the post, choose one of the creator's currently available visibility options, and use Only me (SELF_ONLY) for an unaudited app.";
   if (code === "reached_active_user_cap") return "This TikTok app reached its daily active-creator limit. An unaudited client can be used by at most five creator accounts in a 24-hour window.";
   if (code === "spam_risk_too_many_posts") return "This TikTok creator reached its 24-hour Direct Post limit. Wait before trying again.";
-  if (code === "scope_not_authorized" || code === "scope_permission_missed") return "The TikTok connection does not include the video.publish permission. Reconnect the account after enabling Direct Post for the TikTok app.";
+  if (code === "scope_not_authorized" || code === "scope_permission_missed") return "The TikTok connection is missing a Content Posting permission. Enable video.upload for Only me inbox uploads or video.publish for Direct Post, then reconnect the TikTok account.";
   return fallback;
 }
 
@@ -196,23 +196,29 @@ async function uploadTikTokVideo(uploadUrl: string, mediaUrl: string, videoSize:
 async function publishTikTok(input: ProviderPublishInput, fetchImpl: Fetch): Promise<ProviderPublishResult> {
   if (input.settings.kind !== "tiktok") throw new ProviderPublishError("TikTok settings are invalid.");
   if (!input.mediaUrl || input.mediaType === "none") throw new ProviderPublishError("TikTok requires an image or video.");
-  const creator = await tiktokCreator(input, fetchImpl);
-  if (!creator.privacy_level_options?.includes(input.settings.privacyLevel)) throw new ProviderPublishError("The selected TikTok visibility is not available for this creator.");
-  if (input.settings.allowComments && creator.comment_disabled) throw new ProviderPublishError("This TikTok creator has disabled comments.");
-  if (input.mediaType === "video" && input.settings.allowDuet && creator.duet_disabled) throw new ProviderPublishError("This TikTok creator cannot enable Duet.");
-  if (input.mediaType === "video" && input.settings.allowStitch && creator.stitch_disabled) throw new ProviderPublishError("This TikTok creator cannot enable Stitch.");
+  const inboxUpload = input.settings.privacyLevel === "SELF_ONLY";
+  if (!inboxUpload) {
+    const creator = await tiktokCreator(input, fetchImpl);
+    if (!creator.privacy_level_options?.includes(input.settings.privacyLevel)) throw new ProviderPublishError("The selected TikTok visibility is not available for this creator.");
+    if (input.settings.allowComments && creator.comment_disabled) throw new ProviderPublishError("This TikTok creator has disabled comments.");
+    if (input.mediaType === "video" && input.settings.allowDuet && creator.duet_disabled) throw new ProviderPublishError("This TikTok creator cannot enable Duet.");
+    if (input.mediaType === "video" && input.settings.allowStitch && creator.stitch_disabled) throw new ProviderPublishError("This TikTok creator cannot enable Stitch.");
+  }
   const videoSize = input.mediaType === "video" ? await tiktokVideoSize(input.mediaUrl, fetchImpl) : undefined;
   const videoChunks = videoSize ? tiktokChunkPlan(videoSize) : undefined;
   const body = input.mediaType === "video" ? {
-    post_info: { title: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, disable_duet: !input.settings.allowDuet, disable_stitch: !input.settings.allowStitch, brand_content_toggle: false, brand_organic_toggle: false, is_aigc: false },
+    ...(!inboxUpload ? { post_info: { title: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, disable_duet: !input.settings.allowDuet, disable_stitch: !input.settings.allowStitch, brand_content_toggle: false, brand_organic_toggle: false, is_aigc: false } } : {}),
     source_info: { source: "FILE_UPLOAD", video_size: videoSize, chunk_size: videoChunks!.chunkSize, total_chunk_count: videoChunks!.totalChunkCount },
   } : {
-    media_type: "PHOTO", post_mode: "DIRECT_POST",
-    post_info: { title: input.text.slice(0, 90), description: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, brand_content_toggle: false, brand_organic_toggle: false, auto_add_music: true },
+    media_type: "PHOTO", post_mode: inboxUpload ? "MEDIA_UPLOAD" : "DIRECT_POST",
+    post_info: inboxUpload
+      ? { title: input.text.slice(0, 90), description: input.text }
+      : { title: input.text.slice(0, 90), description: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, brand_content_toggle: false, brand_organic_toggle: false, auto_add_music: true },
     source_info: { source: "PULL_FROM_URL", photo_cover_index: 0, photo_images: input.mediaUrls?.length ? input.mediaUrls : [input.mediaUrl] },
   };
-  const endpoint = input.mediaType === "video" ? "video/init" : "content/init";
-  const payload = await requestJson<{ data?: { publish_id?: unknown; upload_url?: unknown } }>(fetchImpl, `https://open.tiktokapis.com/v2/post/publish/${endpoint}/`, { method: "POST", headers: { Authorization: `Bearer ${input.accessToken}`, "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(body) }, "TikTok publishing");
+  const endpoint = input.mediaType === "video" ? inboxUpload ? "inbox/video/init" : "video/init" : "content/init";
+  const action = inboxUpload ? "TikTok inbox upload" : "TikTok publishing";
+  const payload = await requestJson<{ data?: { publish_id?: unknown; upload_url?: unknown } }>(fetchImpl, `https://open.tiktokapis.com/v2/post/publish/${endpoint}/`, { method: "POST", headers: { Authorization: `Bearer ${input.accessToken}`, "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(body) }, action);
   const publishId = stringValue(payload.data?.publish_id);
   if (!publishId) throw new ProviderPublishError("TikTok did not return a publishing id.");
   if (input.mediaType === "video") {
@@ -228,6 +234,7 @@ async function checkTikTok(input: ProviderPublishInput, fetchImpl: Fetch): Promi
   const payload = await requestJson<{ data?: { status?: unknown; fail_reason?: unknown; publicaly_available_post_id?: unknown[] } }>(fetchImpl, "https://open.tiktokapis.com/v2/post/publish/status/fetch/", { method: "POST", headers: { Authorization: `Bearer ${input.accessToken}`, "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ publish_id: input.providerPostId }) }, "TikTok status check");
   const status = stringValue(payload.data?.status);
   if (status === "FAILED") throw new ProviderPublishError(`TikTok rejected the post${stringValue(payload.data?.fail_reason) ? `: ${stringValue(payload.data?.fail_reason)}` : ""}.`);
+  if (status === "SEND_TO_USER_INBOX") return { state: "published", providerPostId: input.providerPostId, externalUrl: "https://www.tiktok.com/messages?lang=en" };
   if (status !== "PUBLISH_COMPLETE") return { state: "processing", providerPostId: input.providerPostId };
   const postId = stringValue(payload.data?.publicaly_available_post_id?.[0]);
   return { state: "published", providerPostId: postId ?? input.providerPostId };

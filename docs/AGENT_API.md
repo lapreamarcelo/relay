@@ -96,7 +96,7 @@ For an image slideshow, keep `mediaType: "image"`, set `mediaUrl` to the first r
   "scheduledAt": "2026-09-01T10:00:00Z",
   "targets": [{
     "accountId": "connected-tiktok-account-id",
-    "settings": { "kind": "tiktok", "privacyLevel": "SELF_ONLY", "allowComments": true, "allowDuet": false, "allowStitch": false }
+    "settings": { "kind": "tiktok", "privacyLevel": "SELF_ONLY", "allowComments": false, "allowDuet": false, "allowStitch": false }
   }]
 }
 ```
@@ -147,11 +147,11 @@ Each target needs settings matching its connected provider:
 ```json
 { "kind": "instagram", "publishType": "feed" }
 { "kind": "facebook", "publishType": "feed", "linkUrl": "https://example.com" }
-{ "kind": "tiktok", "privacyLevel": "SELF_ONLY", "allowComments": true, "allowDuet": false, "allowStitch": false }
+{ "kind": "tiktok", "privacyLevel": "SELF_ONLY", "allowComments": false, "allowDuet": false, "allowStitch": false }
 { "kind": "youtube", "title": "Video title", "tags": ["relay"], "privacyStatus": "private", "madeForKids": false }
 ```
 
-Instagram `publishType` supports `feed`, `reel`, or `story`. Facebook supports `feed` or `reel`. YouTube privacy supports `private`, `unlisted`, or `public`. TikTok validates the requested options against the creator's current capabilities at publish time.
+Instagram `publishType` supports `feed`, `reel`, or `story`. Facebook supports `feed` or `reel`. YouTube privacy supports `private`, `unlisted`, or `public`. TikTok `SELF_ONLY` sends media to the creator's TikTok inbox for manual review and publishing; visibility and interactions are chosen in TikTok. Other TikTok privacy levels use Direct Post and are validated against the creator's current capabilities at publish time.
 
 Relay validates media requirements and caption limits before saving. YouTube requires video, TikTok requires media, and Reel or Story settings may require a specific media type. `textOverride` stores a destination-specific caption; omit it to use the post's shared `text`.
 

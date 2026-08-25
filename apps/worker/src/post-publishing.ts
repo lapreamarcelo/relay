@@ -18,6 +18,10 @@ export interface PublishingSweepResult { examined: number; published: number; pr
 
 function isoAfter(milliseconds: number): string { return new Date(Date.now() + milliseconds).toISOString(); }
 
+function isTikTokInboxUpload(target: ClaimedTarget): boolean {
+  return target.provider === "tiktok" && target.settings.kind === "tiktok" && target.settings.privacyLevel === "SELF_ONLY";
+}
+
 export class PostPublishingService {
   private readonly workerId: string;
   constructor(private readonly lifecycle: TokenLifecycleService, private readonly providers: ProviderPublishRegistry, workerId = `publisher-${crypto.randomUUID()}`) { this.workerId = workerId; }
@@ -71,7 +75,10 @@ export class PostPublishingService {
   }
 
   private async notify(target: ClaimedTarget, kind: "success" | "error", message: string, externalUrl?: string): Promise<void> {
-    const title = kind === "success" ? `Post published on ${target.provider[0].toUpperCase() + target.provider.slice(1)}` : `${target.provider[0].toUpperCase() + target.provider.slice(1)} could not publish the post`;
+    const inboxUpload = isTikTokInboxUpload(target);
+    const title = inboxUpload
+      ? kind === "success" ? "Sent to your TikTok inbox" : "TikTok could not receive the inbox upload"
+      : kind === "success" ? `Post published on ${target.provider[0].toUpperCase() + target.provider.slice(1)}` : `${target.provider[0].toUpperCase() + target.provider.slice(1)} could not publish the post`;
     await sql`
       INSERT INTO "notification" (id, owner_id, event_key, post_id, target_id, provider, kind, title, message, external_url)
       VALUES (${crypto.randomUUID()}, ${target.owner_id}, ${`${target.post_id}:${target.id}:${kind === "success" ? "published" : "failed"}`}, ${target.post_id}, ${target.id}, ${target.provider}, ${kind}, ${title}, ${message}, ${externalUrl ?? null})
@@ -80,13 +87,16 @@ export class PostPublishingService {
   }
 
   private async complete(target: ClaimedTarget, providerPostId: string, externalUrl?: string): Promise<void> {
+    const inboxUpload = isTikTokInboxUpload(target);
     await sql`
       UPDATE "post_target" SET status = 'published', provider_post_id = ${providerPostId}, external_url = ${externalUrl ?? null}, error = NULL,
-        publish_lease_owner = NULL, publish_lease_expires_at = NULL, analytics_after = ${isoAfter(5 * 60_000)}, updated_at = NOW()
+        publish_lease_owner = NULL, publish_lease_expires_at = NULL, analytics_after = ${inboxUpload ? null : isoAfter(5 * 60_000)}, updated_at = NOW()
       WHERE id = ${target.id} AND publish_lease_owner = ${this.workerId}
     `;
     await this.updatePostStatus(target.post_id);
-    await this.notify(target, "success", `The provider confirmed this post was published${providerPostId ? ` (id ${providerPostId})` : ""}.`, externalUrl);
+    await this.notify(target, "success", inboxUpload
+      ? "TikTok received the media. Open TikTok to review and publish it manually."
+      : `The provider confirmed this post was published${providerPostId ? ` (id ${providerPostId})` : ""}.`, externalUrl);
   }
 
   private async processing(target: ClaimedTarget, providerPostId: string): Promise<void> {
