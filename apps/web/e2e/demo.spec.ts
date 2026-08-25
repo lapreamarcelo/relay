@@ -17,6 +17,22 @@ test("planner is URL-backed and exposes campaign operations", async ({ page }) =
   await expect(page.getByLabel("Account")).toHaveValue("account-instagram");
 });
 
+test("opening a completed calendar post does not create a draft and each card can be deleted", async ({ page }) => {
+  let postMutations = 0;
+  await page.route("**/api/v1/posts", async (route) => {
+    if (route.request().method() === "POST") postMutations += 1;
+    await route.fulfill({ status: 500, json: { error: "Unexpected post mutation" } });
+  });
+  await page.goto("/demo?view=calendar");
+  const published = page.locator(".planning-event.published").first();
+  await published.locator(".planning-event-main").click();
+  await expect(page.getByRole("dialog", { name: "Create post" }).getByText("Post again")).toBeVisible();
+  expect(postMutations).toBe(0);
+  await page.keyboard.press("Escape");
+  await published.getByRole("button", { name: "Delete published post" }).click();
+  await expect(page.getByRole("alertdialog")).toContainText("Delete this post from Relay?");
+});
+
 test("command menu searches real posts and supports the keyboard", async ({ page }) => {
   await page.goto("/demo?view=calendar");
   await page.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");

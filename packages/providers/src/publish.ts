@@ -30,6 +30,15 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value ? value : typeof value === "number" ? String(value) : undefined;
 }
 
+function tiktokErrorMessage(code: string | undefined, fallback: string | undefined): string | undefined {
+  if (code === "unaudited_client_can_only_post_to_private_accounts") return "This TikTok app has not passed the Direct Post audit. During sandbox testing, the connected TikTok account must itself be Private and the post visibility must be Only me (SELF_ONLY). To post from public accounts, move the app to Production and complete TikTok's Direct Post audit.";
+  if (code === "privacy_level_option_mismatch") return "TikTok rejected the visibility choice. Reopen the post, choose one of the creator's currently available visibility options, and use Only me (SELF_ONLY) for an unaudited app.";
+  if (code === "reached_active_user_cap") return "This TikTok app reached its daily active-creator limit. An unaudited client can be used by at most five creator accounts in a 24-hour window.";
+  if (code === "spam_risk_too_many_posts") return "This TikTok creator reached its 24-hour Direct Post limit. Wait before trying again.";
+  if (code === "scope_not_authorized" || code === "scope_permission_missed") return "The TikTok connection does not include the video.publish permission. Reconnect the account after enabling Direct Post for the TikTok app.";
+  return fallback;
+}
+
 async function requestJson<T>(fetchImpl: Fetch, url: string | URL, init: RequestInit, action: string): Promise<T> {
   let response: Response;
   try { response = await fetchImpl(url, init); }
@@ -37,12 +46,15 @@ async function requestJson<T>(fetchImpl: Fetch, url: string | URL, init: Request
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   const nested = payload.error && typeof payload.error === "object" ? payload.error as Record<string, unknown> : undefined;
   const code = stringValue(nested?.code);
+  const providerLogId = stringValue(nested?.log_id) ?? stringValue(nested?.logid);
   const providerCode = stringValue(nested?.error_subcode) ?? stringValue(nested?.type) ?? stringValue(payload.code);
   const providerMessage = stringValue(nested?.message) ?? stringValue(payload.message);
   const tiktokError = nested && stringValue(nested.code) && stringValue(nested.code) !== "ok";
   if (!response.ok || tiktokError) {
-    const retryable = response.status === 429 || response.status >= 500 || code === "1" || providerCode === "internal_error" || providerCode === "rate_limit_exceeded";
-    throw new ProviderPublishError(`${action} failed${providerMessage ? `: ${providerMessage}` : providerCode ? ` (${providerCode})` : ` (HTTP ${response.status})`}.`, retryable);
+    const retryable = response.status === 429 || response.status >= 500 || code === "1" || code === "internal_error" || code === "rate_limit_exceeded" || providerCode === "internal_error" || providerCode === "rate_limit_exceeded";
+    const message = tiktokErrorMessage(tiktokError ? code : undefined, providerMessage);
+    const details = message ? `: ${message}` : providerCode ? ` (${providerCode})` : code ? ` (${code})` : ` (HTTP ${response.status})`;
+    throw new ProviderPublishError(`${action} failed${details}.${tiktokError && code ? ` TikTok code: ${code}.` : ""}${providerLogId ? ` TikTok log ID: ${providerLogId}.` : ""}`, retryable);
   }
   return payload as T;
 }
@@ -135,6 +147,52 @@ async function tiktokCreator(input: ProviderPublishInput, fetchImpl: Fetch): Pro
   return payload.data ?? {};
 }
 
+const tiktokMaxSingleChunk = 64 * 1024 * 1024;
+const tiktokChunkSize = 10 * 1024 * 1024;
+
+function tiktokChunkPlan(videoSize: number): { chunkSize: number; totalChunkCount: number } {
+  if (videoSize <= tiktokMaxSingleChunk) return { chunkSize: videoSize, totalChunkCount: 1 };
+  return { chunkSize: tiktokChunkSize, totalChunkCount: Math.floor(videoSize / tiktokChunkSize) };
+}
+
+async function tiktokVideoSize(mediaUrl: string, fetchImpl: Fetch): Promise<number> {
+  let response: Response;
+  try { response = await fetchImpl(mediaUrl, { method: "HEAD", headers: { "Accept-Encoding": "identity" } }); }
+  catch { throw new ProviderPublishError("Relay could not inspect the TikTok video in media storage.", true); }
+  const size = Number(response.headers.get("content-length"));
+  if (!response.ok || !Number.isSafeInteger(size) || size <= 0) throw new ProviderPublishError(`Relay could not determine the TikTok video size (HTTP ${response.status}).`, response.status >= 500);
+  return size;
+}
+
+async function uploadTikTokVideo(uploadUrl: string, mediaUrl: string, videoSize: number, fetchImpl: Fetch): Promise<void> {
+  const { chunkSize, totalChunkCount } = tiktokChunkPlan(videoSize);
+  for (let index = 0; index < totalChunkCount; index += 1) {
+    const start = index * chunkSize;
+    const end = index === totalChunkCount - 1 ? videoSize - 1 : start + chunkSize - 1;
+    let media: Response;
+    try { media = await fetchImpl(mediaUrl, { headers: { Range: `bytes=${start}-${end}`, "Accept-Encoding": "identity" } }); }
+    catch { throw new ProviderPublishError("Relay could not read the TikTok video from media storage.", true); }
+    if (media.status !== 206 || !media.body) throw new ProviderPublishError("Media storage could not provide the byte range required by TikTok.");
+    let uploaded: Response;
+    try {
+      uploaded = await fetchImpl(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": media.headers.get("content-type") || "video/mp4", "Content-Length": String(end - start + 1), "Content-Range": `bytes ${start}-${end}/${videoSize}` },
+        body: media.body,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" });
+    } catch {
+      // TikTok may have received the bytes despite a broken response. The status
+      // endpoint is authoritative, so do not re-init and risk a duplicate post.
+      return;
+    }
+    if (![200, 201, 206].includes(uploaded.status)) {
+      const detail = await uploaded.text().catch(() => "");
+      throw new ProviderPublishError(`TikTok rejected the video upload${detail ? `: ${detail.slice(0, 300)}` : ` (HTTP ${uploaded.status})`}.`, uploaded.status >= 500);
+    }
+  }
+}
+
 async function publishTikTok(input: ProviderPublishInput, fetchImpl: Fetch): Promise<ProviderPublishResult> {
   if (input.settings.kind !== "tiktok") throw new ProviderPublishError("TikTok settings are invalid.");
   if (!input.mediaUrl || input.mediaType === "none") throw new ProviderPublishError("TikTok requires an image or video.");
@@ -143,18 +201,25 @@ async function publishTikTok(input: ProviderPublishInput, fetchImpl: Fetch): Pro
   if (input.settings.allowComments && creator.comment_disabled) throw new ProviderPublishError("This TikTok creator has disabled comments.");
   if (input.mediaType === "video" && input.settings.allowDuet && creator.duet_disabled) throw new ProviderPublishError("This TikTok creator cannot enable Duet.");
   if (input.mediaType === "video" && input.settings.allowStitch && creator.stitch_disabled) throw new ProviderPublishError("This TikTok creator cannot enable Stitch.");
+  const videoSize = input.mediaType === "video" ? await tiktokVideoSize(input.mediaUrl, fetchImpl) : undefined;
+  const videoChunks = videoSize ? tiktokChunkPlan(videoSize) : undefined;
   const body = input.mediaType === "video" ? {
-    post_info: { title: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, disable_duet: !input.settings.allowDuet, disable_stitch: !input.settings.allowStitch },
-    source_info: { source: "PULL_FROM_URL", video_url: input.mediaUrl },
+    post_info: { title: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, disable_duet: !input.settings.allowDuet, disable_stitch: !input.settings.allowStitch, brand_content_toggle: false, brand_organic_toggle: false, is_aigc: false },
+    source_info: { source: "FILE_UPLOAD", video_size: videoSize, chunk_size: videoChunks!.chunkSize, total_chunk_count: videoChunks!.totalChunkCount },
   } : {
     media_type: "PHOTO", post_mode: "DIRECT_POST",
-    post_info: { title: input.text.slice(0, 90), description: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, auto_add_music: true },
+    post_info: { title: input.text.slice(0, 90), description: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, brand_content_toggle: false, brand_organic_toggle: false, auto_add_music: true },
     source_info: { source: "PULL_FROM_URL", photo_cover_index: 0, photo_images: input.mediaUrls?.length ? input.mediaUrls : [input.mediaUrl] },
   };
   const endpoint = input.mediaType === "video" ? "video/init" : "content/init";
-  const payload = await requestJson<{ data?: { publish_id?: unknown } }>(fetchImpl, `https://open.tiktokapis.com/v2/post/publish/${endpoint}/`, { method: "POST", headers: { Authorization: `Bearer ${input.accessToken}`, "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(body) }, "TikTok publishing");
+  const payload = await requestJson<{ data?: { publish_id?: unknown; upload_url?: unknown } }>(fetchImpl, `https://open.tiktokapis.com/v2/post/publish/${endpoint}/`, { method: "POST", headers: { Authorization: `Bearer ${input.accessToken}`, "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(body) }, "TikTok publishing");
   const publishId = stringValue(payload.data?.publish_id);
   if (!publishId) throw new ProviderPublishError("TikTok did not return a publishing id.");
+  if (input.mediaType === "video") {
+    const uploadUrl = stringValue(payload.data?.upload_url);
+    if (!uploadUrl) throw new ProviderPublishError("TikTok did not return a video upload URL.");
+    await uploadTikTokVideo(uploadUrl, input.mediaUrl, videoSize!, fetchImpl);
+  }
   return { state: "processing", providerPostId: publishId };
 }
 
