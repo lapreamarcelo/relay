@@ -1,6 +1,6 @@
 "use client";
 
-import { GrowthCat, type SponsorCreative } from "@growthcat/web";
+import { GrowthCat, type GrowthCatSponsorData, type SponsorCreative } from "@growthcat/web";
 import { useSponsor } from "@growthcat/web/react";
 import { ArrowUpRight, CalendarDays, Crown, Medal, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -52,7 +52,7 @@ function SponsorSlot({ slotKey, tier }: { slotKey: string; tier: SponsorTier }) 
     };
   }, [sponsor, tier, trackImpression]);
 
-  if (state === "loading") return <div className={`sponsor-card sponsor-${tier} sponsor-loading`} aria-hidden="true" />;
+  if (state === "loading") return null;
   if (!sponsor) return null;
 
   if (sponsor.status === "available" || sponsor.status === "empty") {
@@ -151,16 +151,13 @@ export function CommunitySponsors() {
   </section>;
 }
 
-function SponsorMarketOption({ slotKey, tier }: { slotKey: string; tier: "gold" | "silver" }) {
-  const sessionId = useMemo(() => GrowthCat.makeSessionId(), []);
-  const { sponsor, state } = useSponsor({ slotKey, sessionId });
-
-  if (state === "loading") return <div className={`sponsor-market-option ${tier} loading`} aria-hidden="true" />;
+function SponsorMarketOption({ sponsor, tier }: { sponsor: GrowthCatSponsorData | null; tier: "gold" | "silver" }) {
   if (!sponsor?.bookingUrl) return null;
 
-  const period = sponsor.period === "weekly" ? "week" : sponsor.period === "monthly" ? "month" : sponsor.period;
-  const price = sponsor.priceUsd != null ? `$${sponsor.priceUsd} / ${period}` : `View ${period}ly pricing`;
-  const status = sponsor.status === "live" ? "Future dates open" : sponsor.status === "available" ? "Booking now" : "View openings";
+  const period = sponsor.period === "weekly" ? "week" : sponsor.period === "monthly" ? "month" : sponsor.period || "period";
+  const price = sponsor.priceUsd != null ? `$${sponsor.priceUsd} / ${period}` : "See live pricing";
+  const hasCurrentCapacity = tier === "silver" && sponsor.status === "live" && (sponsor.creatives?.length ?? 1) < (sponsor.capacityPerPeriod ?? 2);
+  const status = sponsor.status === "available" || hasCurrentCapacity ? "Booking now" : sponsor.status === "live" ? "Future dates open" : "View openings";
   const Icon = tier === "gold" ? Crown : Medal;
 
   return <a className={`sponsor-market-option ${tier}`} href={sponsor.bookingUrl} target="_blank" rel="noopener noreferrer">
@@ -176,6 +173,10 @@ function SponsorMarketOption({ slotKey, tier }: { slotKey: string; tier: "gold" 
 
 export function SponsorMarketplace() {
   const [open, setOpen] = useState(false);
+  const sessionId = useMemo(() => GrowthCat.makeSessionId(), []);
+  const gold = useSponsor({ slotKey: "gold_sponsor", sessionId });
+  const silver = useSponsor({ slotKey: "silver_sponsor", sessionId });
+  const loading = gold.state === "idle" || gold.state === "loading" || silver.state === "idle" || silver.state === "loading";
   useModalAccessibility();
   if (!publicSDKKey) return null;
 
@@ -189,8 +190,10 @@ export function SponsorMarketplace() {
           <button className="icon-button" onClick={() => setOpen(false)} aria-label="Close"><X /></button>
         </header>
         <div className="sponsor-market-options">
-          <SponsorMarketOption slotKey="gold_sponsor" tier="gold" />
-          <SponsorMarketOption slotKey="silver_sponsor" tier="silver" />
+          {loading ? <p className="sponsor-market-loading" role="status">Loading live availability…</p> : <>
+            <SponsorMarketOption sponsor={gold.sponsor} tier="gold" />
+            <SponsorMarketOption sponsor={silver.sponsor} tier="silver" />
+          </>}
         </div>
         <footer><span><Sparkles /> Prices and availability come live from GrowthCat.</span><small>Bookings open in a secure new tab.</small></footer>
       </section>
