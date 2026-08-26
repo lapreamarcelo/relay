@@ -1,6 +1,6 @@
 "use client";
 
-import { GrowthCat } from "@growthcat/web";
+import { GrowthCat, type SponsorCreative } from "@growthcat/web";
 import { useSponsor } from "@growthcat/web/react";
 import { ArrowUpRight, CalendarDays, Crown, Medal, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,15 +22,19 @@ if (typeof window !== "undefined" && publicSDKKey && !GrowthCat.isConfigured) {
   });
 }
 
-type SponsorTier = "gold" | "supporter";
+type SponsorTier = "gold" | "featured-gold" | "supporter";
 
 function SponsorSlot({ slotKey, tier }: { slotKey: string; tier: SponsorTier }) {
+  const isGold = tier === "gold" || tier === "featured-gold";
   const sessionId = useMemo(() => GrowthCat.makeSessionId(), []);
   const { sponsor, state, trackImpression, trackClick } = useSponsor({ slotKey, sessionId });
   const cardRef = useRef<HTMLAnchorElement>(null);
+  const multiCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (sponsor?.status !== "live" || !cardRef.current) return;
+    const isSimultaneousSilver = tier === "supporter" && sponsor?.deliveryMode === "all" && Boolean(sponsor.creatives?.length);
+    const impressionTarget = isSimultaneousSilver ? multiCardRef.current : cardRef.current;
+    if (sponsor?.status !== "live" || !impressionTarget) return;
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const observer = new IntersectionObserver(([entry]) => {
@@ -41,27 +45,40 @@ function SponsorSlot({ slotKey, tier }: { slotKey: string; tier: SponsorTier }) 
       }, 1_000);
     }, { threshold: 0.5 });
 
-    observer.observe(cardRef.current);
+    observer.observe(impressionTarget);
     return () => {
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [sponsor, trackImpression]);
+  }, [sponsor, tier, trackImpression]);
 
   if (state === "loading") return <div className={`sponsor-card sponsor-${tier} sponsor-loading`} aria-hidden="true" />;
-  if (!sponsor || sponsor.status === "empty") return null;
+  if (!sponsor) return null;
 
-  if (sponsor.status === "available") {
+  if (sponsor.status === "available" || sponsor.status === "empty") {
     if (!sponsor.bookingUrl) return null;
     return <a className={`sponsor-card sponsor-${tier} sponsor-available`} href={sponsor.bookingUrl} target="_blank" rel="noopener noreferrer">
-      <span className="sponsor-art">{tier === "gold" ? <Crown /> : <Sparkles />}</span>
+      <span className="sponsor-art">{isGold ? <Crown /> : <Sparkles />}</span>
       <span className="sponsor-copy">
-        <small>{tier === "gold" ? "Gold partner · Available" : "Partner slot · Available"}</small>
-        <b>{tier === "gold" ? "Put your brand beside Relay" : "Support open-source publishing"}</b>
+        <small>{isGold ? "Gold partner · Available" : "Silver partner · Available"}</small>
+        <b>{isGold ? "Become Relay’s flagship partner" : "Support open-source publishing"}</b>
         <em>{sponsor.priceUsd != null ? `From $${sponsor.priceUsd} · View calendar` : "View dates and reserve"}</em>
       </span>
       <CalendarDays className="sponsor-action" />
     </a>;
+  }
+
+  const simultaneousCreatives = tier === "supporter" && sponsor.deliveryMode === "all" ? sponsor.creatives?.slice(0, 2) ?? [] : [];
+  if (simultaneousCreatives.length > 0) {
+    const vacancies = Math.max(0, Math.min(2, sponsor.capacityPerPeriod ?? 2) - simultaneousCreatives.length);
+    return <div ref={multiCardRef} className="silver-sponsor-grid" aria-label="Silver partners">
+      {simultaneousCreatives.map((creative) => <SponsorCreativeCard creative={creative} onClick={() => { void trackClick(creative); }} key={creative.bookingId ?? creative.sponsorName ?? creative.headline} />)}
+      {vacancies > 0 && sponsor.bookingUrl && <a className="sponsor-card sponsor-supporter sponsor-available sponsor-vacancy" href={sponsor.bookingUrl} target="_blank" rel="noopener noreferrer">
+        <span className="sponsor-art"><Sparkles /></span>
+        <span className="sponsor-copy"><small>Silver partner · Available</small><b>Reserve the second Silver spot</b><em>View dates and reserve</em></span>
+        <CalendarDays className="sponsor-action" />
+      </a>}
+    </div>;
   }
 
   const creative = sponsor.creative;
@@ -76,9 +93,28 @@ function SponsorSlot({ slotKey, tier }: { slotKey: string; tier: SponsorTier }) 
     aria-label={creative.headline ?? creative.sponsorName ?? "Sponsored partner"}
     onClick={() => { void trackClick(); }}
   >
-    {creative.logoUrl ? <img src={creative.logoUrl} alt="" /> : <span className="sponsor-art">{tier === "gold" ? <Crown /> : <Sparkles />}</span>}
+    {creative.logoUrl ? <img src={creative.logoUrl} alt="" /> : <span className="sponsor-art">{isGold ? <Crown /> : <Sparkles />}</span>}
     <span className="sponsor-copy">
-      <small>{tier === "gold" ? "Gold partner · Sponsored" : "Community partner · Sponsored"}</small>
+      <small>{isGold ? "Gold partner · Sponsored" : "Silver partner · Sponsored"}</small>
+      <b>{creative.headline ?? creative.sponsorName ?? "Relay partner"}</b>
+      {(creative.body || creative.ctaText) && <em>{creative.body ?? creative.ctaText}</em>}
+    </span>
+    <ArrowUpRight className="sponsor-action" />
+  </a>;
+}
+
+function SponsorCreativeCard({ creative, onClick }: { creative: SponsorCreative; onClick: () => void }) {
+  return <a
+    className="sponsor-card sponsor-supporter sponsor-live"
+    href={creative.clickUrl}
+    target={creative.clickUrl ? "_blank" : undefined}
+    rel={creative.clickUrl ? "noopener noreferrer" : undefined}
+    aria-label={creative.headline ?? creative.sponsorName ?? "Silver partner"}
+    onClick={onClick}
+  >
+    {creative.logoUrl ? <img src={creative.logoUrl} alt="" /> : <span className="sponsor-art"><Sparkles /></span>}
+    <span className="sponsor-copy">
+      <small>Silver partner · Sponsored</small>
       <b>{creative.headline ?? creative.sponsorName ?? "Relay partner"}</b>
       {(creative.body || creative.ctaText) && <em>{creative.body ?? creative.ctaText}</em>}
     </span>
@@ -88,18 +124,29 @@ function SponsorSlot({ slotKey, tier }: { slotKey: string; tier: SponsorTier }) 
 
 export function GoldSponsor() {
   if (!publicSDKKey) return null;
-  return <SponsorSlot slotKey="relay_gold" tier="gold" />;
+  return <SponsorSlot slotKey="gold_sponsor" tier="gold" />;
+}
+
+export function FeaturedGoldSponsor() {
+  if (!publicSDKKey) return null;
+  return <section className="gold-sponsor-section" aria-labelledby="gold-sponsor-title">
+    <div className="section-heading">
+      <div><p className="eyebrow">Flagship supporter</p><h3 id="gold-sponsor-title">Gold partner</h3></div>
+      <span>Relay’s most prominent partner, visible throughout the workspace.</span>
+    </div>
+    <SponsorSlot slotKey="gold_sponsor" tier="featured-gold" />
+  </section>;
 }
 
 export function CommunitySponsors() {
   if (!publicSDKKey) return null;
   return <section className="community-sponsors" aria-labelledby="community-sponsors-title">
     <div className="section-heading">
-      <div><p className="eyebrow">Built with support</p><h3 id="community-sponsors-title">Silver partner</h3></div>
-      <span>One thoughtful tool supporting independent publishing.</span>
+      <div><p className="eyebrow">Built with support</p><h3 id="community-sponsors-title">Silver partners</h3></div>
+      <span>Two focused placements for products supporting independent publishing.</span>
     </div>
     <div className="community-sponsor-row">
-      <SponsorSlot slotKey="relay_silver" tier="supporter" />
+      <SponsorSlot slotKey="silver_sponsor" tier="supporter" />
     </div>
   </section>;
 }
@@ -121,7 +168,7 @@ function SponsorMarketOption({ slotKey, tier }: { slotKey: string; tier: "gold" 
     <span className="sponsor-market-copy">
       <small>{tier === "gold" ? "Flagship placement" : "Home-page placement"}</small>
       <b>{tier === "gold" ? "Gold Partner" : "Silver Partner"}</b>
-      <em>{tier === "gold" ? "Visible throughout Relay on desktop and in the mobile menu." : "A calm, dedicated placement after the publishing queue."}</em>
+      <em>{tier === "gold" ? "Visible throughout Relay on desktop and in the mobile menu." : "Two calm, simultaneous placements after the publishing queue."}</em>
     </span>
     <span className="sponsor-market-price"><small>{status}</small><b>{price}</b><em>Open calendar <ArrowUpRight /></em></span>
   </a>;
@@ -142,8 +189,8 @@ export function SponsorMarketplace() {
           <button className="icon-button" onClick={() => setOpen(false)} aria-label="Close"><X /></button>
         </header>
         <div className="sponsor-market-options">
-          <SponsorMarketOption slotKey="relay_gold" tier="gold" />
-          <SponsorMarketOption slotKey="relay_silver" tier="silver" />
+          <SponsorMarketOption slotKey="gold_sponsor" tier="gold" />
+          <SponsorMarketOption slotKey="silver_sponsor" tier="silver" />
         </div>
         <footer><span><Sparkles /> Prices and availability come live from GrowthCat.</span><small>Bookings open in a secure new tab.</small></footer>
       </section>

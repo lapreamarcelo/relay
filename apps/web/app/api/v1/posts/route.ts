@@ -60,8 +60,9 @@ function parseSettings(provider: ProviderId, value: unknown): ProviderPostSettin
   }
   const title = optionalString(settings.title, 100);
   const tags = Array.isArray(settings.tags) ? settings.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 50).map((tag) => tag.trim().slice(0, 100)).filter(Boolean) : null;
-  return settings.kind === "youtube" && title && tags && ["private", "unlisted", "public"].includes(String(settings.privacyStatus)) && typeof settings.madeForKids === "boolean"
-    ? { kind: "youtube", title, tags, privacyStatus: settings.privacyStatus as "private" | "unlisted" | "public", madeForKids: settings.madeForKids } : null;
+  const thumbnailUrl = optionalString(settings.thumbnailUrl, 2_000);
+  return settings.kind === "youtube" && title && tags && ["private", "unlisted", "public"].includes(String(settings.privacyStatus)) && typeof settings.madeForKids === "boolean" && (!thumbnailUrl || isHttpsUrl(thumbnailUrl))
+    ? { kind: "youtube", title, tags, privacyStatus: settings.privacyStatus as "private" | "unlisted" | "public", madeForKids: settings.madeForKids, thumbnailUrl: thumbnailUrl ?? undefined } : null;
 }
 
 export async function GET(request: Request) {

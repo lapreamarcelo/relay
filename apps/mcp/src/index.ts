@@ -158,10 +158,10 @@ server.registerTool("schedule_video", {
   inputSchema: {
     projectId: z.string().min(1), scheduledAt: z.string().datetime().nullable().describe("ISO time, or null to publish now"), clientRequestId: z.string().max(240).optional(),
     targets: z.array(z.object({ accountId: z.string().min(1), settings: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("instagram"), publishType: z.enum(["feed", "reel"]).default("reel") }),
+      z.object({ kind: z.literal("instagram"), publishType: z.enum(["feed", "reel"]).default("reel"), coverUrl: z.string().url().refine((value) => value.startsWith("https://"), "Cover URL must use HTTPS").optional(), thumbOffsetMs: z.number().int().min(0).max(900_000).optional() }),
       z.object({ kind: z.literal("facebook"), publishType: z.enum(["feed", "reel"]).default("reel"), linkUrl: z.string().url().optional() }),
-      z.object({ kind: z.literal("youtube"), title: z.string().min(1).max(100), tags: z.array(z.string()).max(30).default([]), privacyStatus: z.enum(["private", "public", "unlisted"]).default("private"), madeForKids: z.boolean().default(false) }),
-      z.object({ kind: z.literal("tiktok"), privacyLevel: z.enum(["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]).default("SELF_ONLY"), allowComments: z.boolean().default(true), allowDuet: z.boolean().default(false), allowStitch: z.boolean().default(false) }),
+      z.object({ kind: z.literal("youtube"), title: z.string().min(1).max(100), tags: z.array(z.string()).max(30).default([]), privacyStatus: z.enum(["private", "public", "unlisted"]).default("private"), madeForKids: z.boolean().default(false), thumbnailUrl: z.string().url().refine((value) => value.startsWith("https://"), "Thumbnail URL must use HTTPS").optional() }),
+      z.object({ kind: z.literal("tiktok"), privacyLevel: z.enum(["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]).default("SELF_ONLY"), allowComments: z.boolean().default(true), allowDuet: z.boolean().default(false), allowStitch: z.boolean().default(false), thumbOffsetMs: z.number().int().min(0).max(900_000).optional() }),
     ]) })).min(1).max(20),
   },
 }, async ({ projectId, targets, scheduledAt, clientRequestId }) => {

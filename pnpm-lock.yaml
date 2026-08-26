@@ -45,8 +45,8 @@ importers:
         specifier: ^3.1113.0
         version: 3.1113.0
       '@growthcat/web':
-        specifier: ^0.0.5
-        version: 0.0.5(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 0.0.6
+        version: 0.0.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@node-rs/argon2':
         specifier: ^2.1.0
         version: 2.1.0
@@ -788,8 +788,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@growthcat/web@0.0.5':
-    resolution: {integrity: sha512-68JlxGgYRlTA5oxk2incCmoccTN8muEUiQExJSJfseEuMNV8Y0ZKw5qtUzjnZazKlh4RQ2YeDJqcUBIefs9LXA==}
+  '@growthcat/web@0.0.6':
+    resolution: {integrity: sha512-wmVcmKP8Z6YGFRoYP1E6IR0fpto8yWMdOJgoKF4CGRpGX/TnnwEHSedeB5kJPkyYYCM5CXyh9Hf1RcfTR90jFg==}
     peerDependencies:
       react: '>=18.0.0'
       react-dom: '>=18.0.0'
@@ -2601,7 +2601,7 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@growthcat/web@0.0.5(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@growthcat/web@0.0.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     optionalDependencies:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)

@@ -13,6 +13,7 @@ import { labelFonts } from "../lib/creative-labels";
 
 interface MediaObject { key: string; name: string; url: string }
 interface MediaProject { id: string; name: string; kind?: "media" | "music" }
+interface StagedMedia { key: string; url: string; projectId?: string }
 
 function newSlide(mediaUrl: string, text = ""): SlideshowSlide {
   return { id: crypto.randomUUID(), mediaUrl, text: text || undefined, fit: "cover", textPosition: "bottom", textX: .5, textY: .78, textWidth: .87, textHeight: .12, textSize: 64, textFont: "modern", textColor: "#FFFFFF", textBackground: "dark", textBackgroundColor: "#000000" };
@@ -29,7 +30,7 @@ function SlideCanvas({ slide, compact = false, onMove }: { slide: SlideshowSlide
   </div>;
 }
 
-function MediaPicker({ onAdd, onClose }: { onAdd: (url: string) => void; onClose: () => void }) {
+function MediaPicker({ onAdd, onClose }: { onAdd: (asset: { url: string; staged?: StagedMedia }) => void; onClose: () => void }) {
   const [items, setItems] = useState<MediaObject[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
   const [projects, setProjects] = useState<MediaProject[]>([]); const [projectId, setProjectId] = useState("all");
   const [uploading, setUploading] = useState(false); const [uploadProgress, setUploadProgress] = useState(""); const fileInput = useRef<HTMLInputElement>(null);
@@ -46,18 +47,18 @@ function MediaPicker({ onAdd, onClose }: { onAdd: (url: string) => void; onClose
   useEffect(() => { void fetch("/api/v1/media/projects?kind=media", { cache: "no-store" }).then(async (response) => { const payload = await response.json() as { data?: MediaProject[] }; if (response.ok) setProjects(payload.data ?? []); }); }, []);
   const uploadOne = async (file: File) => {
     const uploadProjectId = projectId !== "all" && projectId !== "unfiled" ? projectId : undefined;
-    const signedResponse = await fetch("/api/v1/media", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, contentType: file.type, projectId: uploadProjectId }) });
-    const signed = await signedResponse.json() as { uploadUrl?: string; url?: string; error?: string };
-    if (!signedResponse.ok || !signed.uploadUrl || !signed.url) throw new Error(signed.error || `Could not prepare ${file.name}.`);
+    const signedResponse = await fetch("/api/v1/media", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, contentType: file.type, staged: true }) });
+    const signed = await signedResponse.json() as { key?: string; uploadUrl?: string; url?: string; error?: string };
+    if (!signedResponse.ok || !signed.key || !signed.uploadUrl || !signed.url) throw new Error(signed.error || `Could not prepare ${file.name}.`);
     try {
       const direct = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
-      if (direct.ok) return signed.url;
+      if (direct.ok) return { url: signed.url, staged: { key: signed.key, url: signed.url, projectId: uploadProjectId } };
     } catch { /* The server upload below handles browsers where R2 CORS blocks direct PUTs. */ }
-    const form = new FormData(); form.append("file", file); if (uploadProjectId) form.append("projectId", uploadProjectId);
+    const form = new FormData(); form.append("file", file); form.append("staged", "true");
     const fallbackResponse = await fetch("/api/v1/media", { method: "POST", body: form });
-    const fallback = await fallbackResponse.json() as { url?: string; error?: string };
-    if (!fallbackResponse.ok || !fallback.url) throw new Error(fallback.error || `Could not upload ${file.name}.`);
-    return fallback.url;
+    const fallback = await fallbackResponse.json() as { key?: string; url?: string; error?: string };
+    if (!fallbackResponse.ok || !fallback.key || !fallback.url) throw new Error(fallback.error || `Could not upload ${file.name}.`);
+    return { url: fallback.url, staged: { key: fallback.key, url: fallback.url, projectId: uploadProjectId } };
   };
   const uploadFiles = async (fileList: FileList | null) => {
     const files = Array.from(fileList ?? []).filter((file) => file.type.startsWith("image/")).slice(0, 35);
@@ -66,29 +67,42 @@ function MediaPicker({ onAdd, onClose }: { onAdd: (url: string) => void; onClose
     try {
       for (let index = 0; index < files.length; index += 1) {
         setUploadProgress(`Uploading ${index + 1} of ${files.length}…`);
-        const url = await uploadOne(files[index]);
-        onAdd(url);
+        onAdd(await uploadOne(files[index]));
       }
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not upload the selected images."); }
     finally { setUploading(false); setUploadProgress(""); if (fileInput.current) fileInput.current.value = ""; }
   };
-  return <div className="modal-layer slideshow-media-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close media library" /><section className="slideshow-media-picker" role="dialog" aria-modal="true" aria-labelledby="slide-media-title"><header><div><p className="eyebrow">Add media</p><h2 id="slide-media-title">Add images to the slideshow</h2><p>Upload new images or choose ones already in your Media library.</p></div><button className="icon-button" onClick={onClose}><X /></button></header><div className="slideshow-upload-source"><div><Upload /><span><b>Upload from computer</b><small>Select several images and they’ll be added in order.</small></span></div><input ref={fileInput} hidden type="file" accept="image/*" multiple onChange={(event) => void uploadFiles(event.target.files)} /><button className="primary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle className="spin" /> : <Upload />}{uploading ? uploadProgress : "Choose files"}</button></div><div className="slideshow-media-body"><label className="media-project-select"><Folder />Media project<select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="all">All media</option><option value="unfiled">Unsorted</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}</select></label><div className="slideshow-media-label"><div><Images /><span><b>Media library</b><small>Your existing images stored in Cloudflare.</small></span></div><span>{items.length} available</span></div>{error && <p className="composer-error">{error}</p>}{loading ? <div className="media-loading"><LoaderCircle className="spin" />Loading images…</div> : <div className="slideshow-media-grid">{items.map((item) => <button key={item.key} onClick={() => onAdd(item.url)}><img src={item.url} alt={item.name} /><span><Plus /> Add</span><b>{item.name}</b></button>)}{!items.length && <p>No images in this project yet. Upload some above.</p>}</div>}</div><footer><span>Select as many images as you need</span><button className="primary-button" onClick={onClose}>Done</button></footer></section></div>;
+  return <div className="modal-layer slideshow-media-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close media library" /><section className="slideshow-media-picker" role="dialog" aria-modal="true" aria-labelledby="slide-media-title"><header><div><p className="eyebrow">Add media</p><h2 id="slide-media-title">Add images to the slideshow</h2><p>Device uploads stay temporary until you save or render.</p></div><button className="icon-button" onClick={onClose}><X /></button></header><div className="slideshow-upload-source"><div><Upload /><span><b>Upload from computer</b><small>Select several images and they’ll be added in order.</small></span></div><input ref={fileInput} hidden type="file" accept="image/*" multiple onChange={(event) => void uploadFiles(event.target.files)} /><button className="primary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle className="spin" /> : <Upload />}{uploading ? uploadProgress : "Choose files"}</button></div><div className="slideshow-media-body"><label className="media-project-select"><Folder />Media project<select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="all">All media</option><option value="unfiled">Unsorted</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}</select></label><div className="slideshow-media-label"><div><Images /><span><b>Media library</b><small>Your existing images stored in Cloudflare.</small></span></div><span>{items.length} available</span></div>{error && <p className="composer-error">{error}</p>}{loading ? <div className="media-loading"><LoaderCircle className="spin" />Loading images…</div> : <div className="slideshow-media-grid">{items.map((item) => <button key={item.key} onClick={() => onAdd({ url: item.url })}><img src={item.url} alt={item.name} /><span><Plus /> Add</span><b>{item.name}</b></button>)}{!items.length && <p>No images in this project yet. Upload some above.</p>}</div>}</div><footer><span>Select as many images as you need</span><button className="primary-button" onClick={onClose}>Done</button></footer></section></div>;
 }
 
 interface SlideshowComposerSeed { media: { name: string; url: string; previewUrl: string; type: "image"; urls: string[] }; text: string; brandId: string }
 
 function ProjectEditor({ initial, onBack, onSaved, onCompose }: { initial: SlideshowProject; onBack: () => void; onSaved: (project: SlideshowProject) => void; onCompose: (seed: SlideshowComposerSeed) => void }) {
   const [project, setProject] = useState(initial); const [activeId, setActiveId] = useState(initial.slides[0]?.id ?? "");
+  const [stagedMedia, setStagedMedia] = useState<Record<string, StagedMedia>>({});
   const [picker, setPicker] = useState(false); const [bulkOpen, setBulkOpen] = useState(false); const [bulkTitles, setBulkTitles] = useState("");
   const [busy, setBusy] = useState<"save" | "render" | "compose" | null>(null); const [error, setError] = useState(""); const [message, setMessage] = useState("");
   const active = project.slides.find((slide) => slide.id === activeId) ?? project.slides[0];
 
   const replace = (next: SlideshowProject) => { setProject(next); onSaved(next); setActiveId((current) => next.slides.some((slide) => slide.id === current) ? current : next.slides[0]?.id ?? ""); };
   const updateSlide = (changes: Partial<SlideshowSlide>) => setProject((current) => ({ ...current, slides: current.slides.map((slide) => slide.id === active?.id ? { ...slide, ...changes, renderedUrl: undefined } : slide) }));
-  const addImage = (url: string) => { const slide = newSlide(url); setProject((current) => { if (current.slides.length >= 35) return current; setActiveId(slide.id); return { ...current, slides: [...current.slides, slide] }; }); };
+  const addImage = (asset: { url: string; staged?: StagedMedia }) => { const slide = newSlide(asset.url); if (asset.staged) setStagedMedia((current) => ({ ...current, [asset.url]: asset.staged! })); setProject((current) => { if (current.slides.length >= 35) return current; setActiveId(slide.id); return { ...current, slides: [...current.slides, slide] }; }); };
+  const discardStaged = async (assets = Object.values(stagedMedia)) => { await Promise.all(assets.map((asset) => fetch("/api/v1/media", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: asset.key }) }).catch(() => undefined))); };
+  const commitStaged = async (): Promise<SlideshowProject> => {
+    let next = project; const remaining = { ...stagedMedia }; const referenced = new Set(project.slides.map((slide) => slide.mediaUrl));
+    for (const asset of Object.values(stagedMedia)) {
+      if (!referenced.has(asset.url)) { await discardStaged([asset]); delete remaining[asset.url]; setStagedMedia({ ...remaining }); continue; }
+      const response = await fetch("/api/v1/media", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: asset.key, kind: "media", projectId: asset.projectId ?? "unfiled", commit: true }) });
+      const payload = await response.json() as { url?: string; error?: string }; if (!response.ok || !payload.url) throw new Error(payload.error || "Could not save a staged slideshow image.");
+      next = { ...next, slides: next.slides.map((slide) => slide.mediaUrl === asset.url ? { ...slide, mediaUrl: payload.url! } : slide) };
+      delete remaining[asset.url]; setProject(next); setStagedMedia({ ...remaining });
+    }
+    return next;
+  };
   const save = async (): Promise<SlideshowProject | null> => {
     setError(""); setMessage("");
-    const response = await fetch("/api/v1/slideshows", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(project) });
+    let savable: SlideshowProject; try { savable = await commitStaged(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save staged images."); return null; }
+    const response = await fetch("/api/v1/slideshows", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(savable) });
     const payload = await response.json() as { data?: SlideshowProject; folder?: { id: string; name: string }; error?: string };
     if (!response.ok || !payload.data) { setError(payload.error || "Could not save the slideshow."); return null; }
     replace(payload.data); return payload.data;
@@ -136,7 +150,7 @@ function ProjectEditor({ initial, onBack, onSaved, onCompose }: { initial: Slide
   });
 
   return <div className="slideshow-editor page-enter">
-    <header className="slideshow-editor-head"><button className="icon-button" onClick={onBack}><ArrowLeft /></button><div><p className="eyebrow">Slideshow studio</p><input aria-label="Project name" value={project.name} maxLength={120} onChange={(event) => setProject({ ...project, name: event.target.value })} /></div><div><button className="secondary-button" onClick={() => setBulkOpen(true)}><WandSparkles /> Bulk titles</button><button className="secondary-button" disabled={busy !== null} onClick={() => void saveOnly()}>{busy === "save" ? <LoaderCircle className="spin" /> : <Save />} Save</button><button className="primary-button" disabled={busy !== null || !project.slides.length} onClick={() => void renderOnly()}>{busy === "render" ? <LoaderCircle className="spin" /> : <Sparkles />} Save to Media</button></div></header>
+    <header className="slideshow-editor-head"><button className="icon-button" onClick={() => void discardStaged().finally(onBack)}><ArrowLeft /></button><div><p className="eyebrow">Slideshow studio</p><input aria-label="Project name" value={project.name} maxLength={120} onChange={(event) => setProject({ ...project, name: event.target.value })} /></div><div><button className="secondary-button" onClick={() => setBulkOpen(true)}><WandSparkles /> Bulk titles</button><button className="secondary-button" disabled={busy !== null} onClick={() => void saveOnly()}>{busy === "save" ? <LoaderCircle className="spin" /> : <Save />} Save</button><button className="primary-button" disabled={busy !== null || !project.slides.length} onClick={() => void renderOnly()}>{busy === "render" ? <LoaderCircle className="spin" /> : <Sparkles />} Save to Media</button></div></header>
     {(error || message) && <div className={`slideshow-notice ${error ? "error" : "success"}`}>{error || message}<button onClick={() => { setError(""); setMessage(""); }}><X /></button></div>}
     <div className="slideshow-workbench">
       <aside className="slide-rail"><div><b>Slides</b><span>{project.slides.length}/35</span></div>{project.slides.map((slide, index) => <button key={slide.id} className={active?.id === slide.id ? "active" : ""} onClick={() => setActiveId(slide.id)}><em>{index + 1}</em><SlideCanvas slide={slide} compact /><span>{slide.text || "No text"}</span></button>)}<button className="add-slide" disabled={project.slides.length >= 35} onClick={() => setPicker(true)}><Plus /> Add images</button></aside>

@@ -18,6 +18,7 @@ export interface ProviderPublishResult {
   state: "published" | "processing";
   providerPostId: string;
   externalUrl?: string;
+  warning?: string;
 }
 
 export class ProviderPublishError extends Error {
@@ -272,7 +273,27 @@ async function publishYouTube(input: ProviderPublishInput, fetchImpl: Fetch): Pr
   if (!uploaded.ok) throw new ProviderPublishError(`YouTube upload failed${result.error?.message ? `: ${result.error.message}` : ` (HTTP ${uploaded.status})`}.`, uploaded.status === 429 || uploaded.status >= 500);
   const videoId = stringValue(result.id);
   if (!videoId) throw new ProviderPublishError("YouTube did not return a video id.");
-  return { state: "published", providerPostId: videoId, externalUrl: `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}` };
+  let warning: string | undefined;
+  if (input.settings.thumbnailUrl) {
+    try {
+      const thumbnail = await fetchImpl(input.settings.thumbnailUrl);
+      const thumbnailType = thumbnail.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+      const thumbnailLength = Number(thumbnail.headers.get("content-length"));
+      if (!thumbnail.ok || !thumbnail.body) throw new Error(`Relay could not read the thumbnail (HTTP ${thumbnail.status})`);
+      if (thumbnailType !== "image/jpeg" && thumbnailType !== "image/png") throw new Error("the thumbnail must be JPEG or PNG");
+      if (Number.isFinite(thumbnailLength) && thumbnailLength > 2 * 1024 * 1024) throw new Error("the thumbnail is larger than YouTube's 2 MB limit");
+      const headers: Record<string, string> = { Authorization: `Bearer ${input.accessToken}`, "Content-Type": thumbnailType };
+      if (Number.isFinite(thumbnailLength) && thumbnailLength > 0) headers["Content-Length"] = String(thumbnailLength);
+      const response = await fetchImpl(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?uploadType=media&videoId=${encodeURIComponent(videoId)}`, { method: "POST", headers, body: thumbnail.body, duplex: "half" } as RequestInit & { duplex: "half" });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(detail.error?.message || `YouTube returned HTTP ${response.status}`);
+      }
+    } catch (error) {
+      warning = `The video was published, but its custom thumbnail could not be set: ${error instanceof Error ? error.message : "unknown thumbnail error"}. Update it in YouTube Studio.`;
+    }
+  }
+  return { state: "published", providerPostId: videoId, externalUrl: `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, ...(warning ? { warning } : {}) };
 }
 
 export class ProviderPublishRegistry {

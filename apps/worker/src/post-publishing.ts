@@ -86,17 +86,17 @@ export class PostPublishingService {
     `;
   }
 
-  private async complete(target: ClaimedTarget, providerPostId: string, externalUrl?: string): Promise<void> {
+  private async complete(target: ClaimedTarget, providerPostId: string, externalUrl?: string, warning?: string): Promise<void> {
     const inboxUpload = isTikTokInboxUpload(target);
     await sql`
-      UPDATE "post_target" SET status = 'published', provider_post_id = ${providerPostId}, external_url = ${externalUrl ?? null}, error = NULL,
+      UPDATE "post_target" SET status = 'published', provider_post_id = ${providerPostId}, external_url = ${externalUrl ?? null}, error = ${warning ?? null},
         publish_lease_owner = NULL, publish_lease_expires_at = NULL, analytics_after = ${inboxUpload ? null : isoAfter(5 * 60_000)}, updated_at = NOW()
       WHERE id = ${target.id} AND publish_lease_owner = ${this.workerId}
     `;
     await this.updatePostStatus(target.post_id);
     await this.notify(target, "success", inboxUpload
       ? "TikTok received the media. Open TikTok to review and publish it manually."
-      : `The provider confirmed this post was published${providerPostId ? ` (id ${providerPostId})` : ""}.`, externalUrl);
+      : warning ?? `The provider confirmed this post was published${providerPostId ? ` (id ${providerPostId})` : ""}.`, externalUrl);
   }
 
   private async processing(target: ClaimedTarget, providerPostId: string): Promise<void> {
@@ -141,7 +141,7 @@ export class PostPublishingService {
           const input = { provider: target.provider, authMethod: target.auth_method!, providerAccountId: target.provider_account_id!, providerMetadata: target.provider_metadata ?? {}, accessToken, text: target.text_override ?? target.text, mediaType: target.media_type, mediaUrl: target.media_url ?? undefined, mediaUrls: target.media_urls, settings: target.settings, providerPostId: target.provider_post_id ?? undefined };
           return target.status === "processing" ? this.providers.check(input) : this.providers.publish(input);
         });
-        if (providerResult.state === "published") { await this.complete(target, providerResult.providerPostId, providerResult.externalUrl); result.published += 1; }
+        if (providerResult.state === "published") { await this.complete(target, providerResult.providerPostId, providerResult.externalUrl, providerResult.warning); result.published += 1; }
         else { await this.processing(target, providerResult.providerPostId); result.processing += 1; }
       } catch (error) { const outcome = await this.fail(target, error); result[outcome] += 1; }
     }

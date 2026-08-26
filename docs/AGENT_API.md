@@ -148,10 +148,10 @@ Each target needs settings matching its connected provider:
 { "kind": "instagram", "publishType": "feed" }
 { "kind": "facebook", "publishType": "feed", "linkUrl": "https://example.com" }
 { "kind": "tiktok", "privacyLevel": "SELF_ONLY", "allowComments": false, "allowDuet": false, "allowStitch": false }
-{ "kind": "youtube", "title": "Video title", "tags": ["relay"], "privacyStatus": "private", "madeForKids": false }
+{ "kind": "youtube", "title": "Video title", "tags": ["relay"], "privacyStatus": "private", "madeForKids": false, "thumbnailUrl": "https://media.example.com/thumbnail.jpg" }
 ```
 
-Instagram `publishType` supports `feed`, `reel`, or `story`. For an Instagram Reel, set either `coverUrl` to a public HTTPS JPEG or `thumbOffsetMs` to a frame position in milliseconds; `coverUrl` takes precedence. TikTok Direct Posts accept `thumbOffsetMs` for the video cover frame. Facebook supports `feed` or `reel`. YouTube privacy supports `private`, `unlisted`, or `public`. TikTok `SELF_ONLY` sends media to the creator's TikTok inbox for manual review and publishing; visibility, interactions, and the cover are chosen in TikTok. Other TikTok privacy levels use Direct Post and are validated against the creator's current capabilities at publish time.
+Instagram `publishType` supports `feed`, `reel`, or `story`. For an Instagram Reel, set either `coverUrl` to a public HTTPS JPEG or `thumbOffsetMs` to a frame position in milliseconds; `coverUrl` takes precedence. TikTok Direct Posts accept `thumbOffsetMs` for the video cover frame. Facebook supports `feed` or `reel`, but Meta's Reel publishing endpoint does not accept a cover. YouTube privacy supports `private`, `unlisted`, or `public`; `thumbnailUrl` may be a public HTTPS JPEG or PNG no larger than 2 MB. TikTok `SELF_ONLY` sends media to the creator's TikTok inbox for manual review and publishing; visibility, interactions, and the cover are chosen in TikTok. Other TikTok privacy levels use Direct Post and are validated against the creator's current capabilities at publish time.
 
 Relay validates media requirements and caption limits before saving. YouTube requires video, TikTok requires media, and Reel or Story settings may require a specific media type. `textOverride` stores a destination-specific caption; omit it to use the post's shared `text`.
 

@@ -185,12 +185,12 @@ pnpm dev
 
 ### Sponsorships
 
-Relay loads public sponsor inventory through GrowthCat using its bundled publishable SDK key. A deployment can override it with `NEXT_PUBLIC_GROWTHCAT_API_KEY`. Create these slots in the GrowthCat dashboard:
+Relay loads public sponsor inventory through `@growthcat/web` 0.0.6 using its bundled publishable SDK key. A deployment can override it with `NEXT_PUBLIC_GROWTHCAT_API_KEY`. Create these slots in the GrowthCat dashboard:
 
-- `relay_gold` — premium placement shown throughout the desktop app and in the mobile menu.
-- `relay_silver` — lower-cost placement shown after the Home publishing queue.
+- `gold_sponsor` — one exclusive premium sponsor shown in the desktop sidebar, repeated as the dominant Home partner, and included in the mobile experience.
+- `silver_sponsor` — two simultaneous, lower-cost sponsors shown after the Home publishing queue; configure the GrowthCat slot with capacity `2` and simultaneous delivery.
 
-Live slots render the current sponsor and track qualified impressions and clicks. The “Sponsor Relay” navigation action presents both tiers and links to each GrowthCat booking calendar, including future availability while the current period is occupied. Missing or unavailable slots render nothing.
+Live slots render the current sponsor and track qualified impressions and clicks. Empty or available slots with a GrowthCat booking URL become “reserve this placement” cards. The “Sponsor Relay” navigation action presents both tiers and links to each GrowthCat booking calendar, including future availability while the current period is occupied. Missing or inactive slots render nothing.
 
 ## Contributing
 

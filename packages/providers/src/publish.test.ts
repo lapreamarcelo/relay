@@ -175,3 +175,41 @@ test("preserves image order in a Facebook Page multi-photo post", async () => {
   const attached = new URLSearchParams(String(requests[2].init?.body)).get("attached_media");
   assert.deepEqual(JSON.parse(attached || "[]"), [{ media_fbid: "photo-1" }, { media_fbid: "photo-2" }]);
 });
+
+test("uploads a custom YouTube thumbnail after the video is created", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchImpl: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init });
+    if (String(url) === "https://media.example.com/video.mp4") return new Response("video", { headers: { "content-type": "video/mp4", "content-length": "5" } });
+    if (String(url).includes("upload/youtube/v3/videos")) return new Response(null, { status: 200, headers: { location: "https://upload.youtube.example/session" } });
+    if (String(url) === "https://upload.youtube.example/session") return Response.json({ id: "youtube-video-1" });
+    if (String(url) === "https://media.example.com/thumbnail.png") return new Response("thumbnail", { headers: { "content-type": "image/png", "content-length": "9" } });
+    return Response.json({ items: [{ default: { url: "https://img.youtube.example/default.png" } }] });
+  };
+  const result = await new ProviderPublishRegistry(fetchImpl).publish({
+    provider: "youtube", authMethod: "youtube", providerAccountId: "channel-1", providerMetadata: {}, accessToken: "token", text: "Description", mediaType: "video", mediaUrl: "https://media.example.com/video.mp4",
+    settings: { kind: "youtube", title: "Title", tags: ["relay"], privacyStatus: "public", madeForKids: false, thumbnailUrl: "https://media.example.com/thumbnail.png" },
+  });
+  assert.deepEqual(result, { state: "published", providerPostId: "youtube-video-1", externalUrl: "https://www.youtube.com/watch?v=youtube-video-1" });
+  const thumbnail = requests.find((request) => request.url.includes("thumbnails/set"));
+  assert.equal(thumbnail?.url, "https://www.googleapis.com/upload/youtube/v3/thumbnails/set?uploadType=media&videoId=youtube-video-1");
+  assert.equal(thumbnail?.init?.method, "POST");
+  assert.deepEqual(thumbnail?.init?.headers, { Authorization: "Bearer token", "Content-Type": "image/png", "Content-Length": "9" });
+});
+
+test("reports a thumbnail warning without retrying an already-uploaded YouTube video", async () => {
+  let videoUploads = 0;
+  const fetchImpl: typeof fetch = async (url) => {
+    if (String(url) === "https://media.example.com/video.mp4") return new Response("video", { headers: { "content-type": "video/mp4", "content-length": "5" } });
+    if (String(url).includes("upload/youtube/v3/videos")) return new Response(null, { status: 200, headers: { location: "https://upload.youtube.example/session" } });
+    if (String(url) === "https://upload.youtube.example/session") { videoUploads += 1; return Response.json({ id: "youtube-video-1" }); }
+    return new Response("too large", { headers: { "content-type": "image/jpeg", "content-length": String(2 * 1024 * 1024 + 1) } });
+  };
+  const result = await new ProviderPublishRegistry(fetchImpl).publish({
+    provider: "youtube", authMethod: "youtube", providerAccountId: "channel-1", providerMetadata: {}, accessToken: "token", text: "Description", mediaType: "video", mediaUrl: "https://media.example.com/video.mp4",
+    settings: { kind: "youtube", title: "Title", tags: [], privacyStatus: "private", madeForKids: false, thumbnailUrl: "https://media.example.com/thumbnail.jpg" },
+  });
+  assert.equal(result.state, "published");
+  assert.match(result.warning ?? "", /video was published.*larger than YouTube's 2 MB limit.*YouTube Studio/i);
+  assert.equal(videoUploads, 1);
+});

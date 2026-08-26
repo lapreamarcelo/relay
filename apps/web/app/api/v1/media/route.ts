@@ -1,6 +1,7 @@
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
@@ -18,6 +19,8 @@ const DEFAULT_PAGE_SIZE = 24;
 const MAX_PAGE_SIZE = 100;
 const MAX_SERVER_UPLOAD_SIZE = 100 * 1024 * 1024;
 const PROJECT_ID_PATTERN = /^[0-9a-f-]{36}$/i;
+const STAGING_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
+const stagingCleanupAt = new Map<string, number>();
 
 type AssetKind = "media" | "music";
 
@@ -26,6 +29,24 @@ function mediaPrefix(projectId: string | null | undefined, kind: AssetKind): str
   if (projectId === "unfiled") return kind === "music" ? "music/" : "media/";
   if (!PROJECT_ID_PATTERN.test(projectId)) throw new Error("Invalid media project");
   return `media-projects/${projectId}/${kind}/`;
+}
+
+function stagingPrefix(ownerId: string, kind?: AssetKind): string {
+  return `staging/${ownerId}/${kind ? `${kind}/` : ""}`;
+}
+
+function stagedKeyForOwner(key: string, ownerId: string, kind?: AssetKind): boolean {
+  return key.startsWith(stagingPrefix(ownerId, kind));
+}
+
+async function cleanupStagedUploads(ownerId: string): Promise<void> {
+  const now = Date.now();
+  if ((stagingCleanupAt.get(ownerId) ?? 0) > now - 60 * 60 * 1_000) return;
+  stagingCleanupAt.set(ownerId, now);
+  const config = getR2Config(); const client = getR2Client();
+  const listed = await client.send(new ListObjectsV2Command({ Bucket: config.bucket, Prefix: stagingPrefix(ownerId), MaxKeys: 1_000 }));
+  const expired = (listed.Contents ?? []).filter((object) => object.Key && object.LastModified && now - object.LastModified.getTime() >= STAGING_MAX_AGE_MS).map((object) => ({ Key: object.Key! }));
+  if (expired.length) await client.send(new DeleteObjectsCommand({ Bucket: config.bucket, Delete: { Objects: expired, Quiet: true } }));
 }
 
 async function assertProjectAccess(projectId: string | null | undefined, ownerId: string, kind: AssetKind): Promise<void> {
@@ -119,6 +140,7 @@ export async function GET(request: Request) {
   if (authorization.response) return authorization.response;
 
   try {
+    await cleanupStagedUploads(authorization.session.user.id).catch((error) => console.warn("Could not clean staged media", error));
     const url = new URL(request.url);
     const requestedLimit = Number(url.searchParams.get("limit") || DEFAULT_PAGE_SIZE);
     const limit = Number.isFinite(requestedLimit)
@@ -138,7 +160,7 @@ export async function GET(request: Request) {
     }));
 
     const data = (result.Contents ?? [])
-      .filter((object) => object.Key && !object.Key.endsWith("/") && !object.Key.endsWith("/.project.json") && isKind(object.Key, kind))
+      .filter((object) => object.Key && !object.Key.endsWith("/") && !object.Key.endsWith("/.project.json") && kindForKey(object.Key) === kind && isKind(object.Key, kind))
       .map((object) => ({
         key: object.Key!,
         name: object.Key!.split("/").pop() || object.Key!,
@@ -167,11 +189,13 @@ export async function POST(request: Request) {
   if (authorization.response) return authorization.response;
 
   try {
+    await cleanupStagedUploads(authorization.session.user.id).catch((error) => console.warn("Could not clean staged media", error));
     if (request.headers.get("content-type")?.includes("multipart/form-data")) {
       const form = await request.formData();
       const entry = form.get("file");
       const projectId = typeof form.get("projectId") === "string" ? String(form.get("projectId")) : undefined;
       const kind: AssetKind = form.get("kind") === "music" ? "music" : "media";
+      const staged = form.get("staged") === "true";
       if (!(entry instanceof File)) return Response.json({ error: "A media file is required" }, { status: 400 });
       if (entry.size > MAX_SERVER_UPLOAD_SIZE) {
         return Response.json({ error: "Server fallback uploads are limited to 100 MB. Configure R2 CORS for larger direct uploads." }, { status: 413 });
@@ -183,8 +207,8 @@ export async function POST(request: Request) {
         return Response.json({ error: kind === "music" ? "Only audio uploads are supported in music folders" : "Only image and video uploads are supported in media folders" }, { status: 400 });
       }
       const config = getR2Config();
-      await assertProjectAccess(projectId, authorization.session.user.id, kind);
-      const key = `${mediaPrefix(projectId, kind) ?? (kind === "music" ? "music/" : "media/")}${crypto.randomUUID()}-${fileName}`;
+      if (!staged) await assertProjectAccess(projectId, authorization.session.user.id, kind);
+      const key = `${staged ? stagingPrefix(authorization.session.user.id, kind) : mediaPrefix(projectId, kind) ?? (kind === "music" ? "music/" : "media/")}${crypto.randomUUID()}-${fileName}`;
       await getR2Client().send(new PutObjectCommand({
         Bucket: config.bucket,
         Key: key,
@@ -192,10 +216,10 @@ export async function POST(request: Request) {
         ContentLength: entry.size,
         Body: new Uint8Array(await entry.arrayBuffer()),
       }));
-      return Response.json({ key, name: fileName, url: publicObjectUrl(key), mode: "server" }, { status: 201 });
+      return Response.json({ key, name: fileName, url: publicObjectUrl(key), mode: "server", staged }, { status: 201 });
     }
 
-    const body = await request.json() as { fileName?: unknown; contentType?: unknown; projectId?: unknown; kind?: unknown };
+    const body = await request.json() as { fileName?: unknown; contentType?: unknown; projectId?: unknown; kind?: unknown; staged?: unknown };
     const fileName = typeof body.fileName === "string" ? sanitizeFileName(body.fileName) : "";
     const contentType = typeof body.contentType === "string" ? body.contentType.trim().toLowerCase() : "";
     if (!fileName) return Response.json({ error: "A valid file name is required" }, { status: 400 });
@@ -204,11 +228,12 @@ export async function POST(request: Request) {
 
     const config = getR2Config();
     const projectId = typeof body.projectId === "string" ? body.projectId : undefined;
-    await assertProjectAccess(projectId, authorization.session.user.id, kind);
-    const key = `${mediaPrefix(projectId, kind) ?? (kind === "music" ? "music/" : "media/")}${crypto.randomUUID()}-${fileName}`;
+    const staged = body.staged === true;
+    if (!staged) await assertProjectAccess(projectId, authorization.session.user.id, kind);
+    const key = `${staged ? stagingPrefix(authorization.session.user.id, kind) : mediaPrefix(projectId, kind) ?? (kind === "music" ? "music/" : "media/")}${crypto.randomUUID()}-${fileName}`;
     const command = new PutObjectCommand({ Bucket: config.bucket, Key: key, ContentType: contentType });
     const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 15 * 60 });
-    return Response.json({ key, uploadUrl, url: publicObjectUrl(key), expiresIn: 15 * 60 });
+    return Response.json({ key, uploadUrl, url: publicObjectUrl(key), expiresIn: 15 * 60, staged });
   } catch (error) {
     return errorResponse(error);
   }
@@ -219,15 +244,28 @@ export async function PATCH(request: Request) {
   if (authorization.response) return authorization.response;
 
   try {
-    const body = await request.json() as { key?: unknown; name?: unknown; projectId?: unknown; kind?: unknown };
+    const body = await request.json() as { key?: unknown; name?: unknown; projectId?: unknown; kind?: unknown; commit?: unknown };
     const key = typeof body.key === "string" ? body.key : "";
+    const committing = body.commit === true;
     const requestedName = typeof body.name === "string" ? sanitizeFileName(body.name) : "";
     const moving = Object.prototype.hasOwnProperty.call(body, "projectId");
     const projectId = body.projectId === null || body.projectId === "unfiled" ? "unfiled" : typeof body.projectId === "string" ? body.projectId : undefined;
-    if (!key || !requestedName && !moving) return Response.json({ error: "Object key and a new name or destination folder are required" }, { status: 400 });
+    if (!key || !committing && !requestedName && !moving) return Response.json({ error: "Object key and a new name or destination folder are required" }, { status: 400 });
     if (moving && (!projectId || projectId === "all" || projectId !== "unfiled" && !PROJECT_ID_PATTERN.test(projectId))) return Response.json({ error: "A valid destination folder is required" }, { status: 400 });
 
     const expectedKind: AssetKind | undefined = body.kind === "music" ? "music" : body.kind === "media" ? "media" : undefined;
+    if (committing) {
+      const kind: AssetKind = expectedKind ?? "media";
+      if (!stagedKeyForOwner(key, authorization.session.user.id, kind)) return Response.json({ error: "Staged media object not found" }, { status: 404 });
+      const destination = projectId ?? "unfiled";
+      if (destination !== "unfiled") await assertProjectAccess(destination, authorization.session.user.id, kind);
+      const name = key.split("/").pop() || `${crypto.randomUUID()}-asset`;
+      const nextKey = `${mediaPrefix(destination, kind)!}${name}`;
+      const config = getR2Config(); const client = getR2Client();
+      await client.send(new CopyObjectCommand({ Bucket: config.bucket, Key: nextKey, CopySource: copySource(config.bucket, key) }));
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+      return Response.json({ key: nextKey, name, url: publicObjectUrl(nextKey), projectId: destination === "unfiled" ? null : destination, staged: false });
+    }
     const kind = await assertObjectAccess(key, authorization.session.user.id, expectedKind);
     if (projectId && projectId !== "unfiled") await assertProjectAccess(projectId, authorization.session.user.id, kind);
 
@@ -276,7 +314,7 @@ export async function DELETE(request: Request) {
     const body = await request.json() as { key?: unknown };
     const key = typeof body.key === "string" ? body.key : "";
     if (!key) return Response.json({ error: "Object key is required" }, { status: 400 });
-    await assertObjectAccess(key, authorization.session.user.id);
+    if (!stagedKeyForOwner(key, authorization.session.user.id)) await assertObjectAccess(key, authorization.session.user.id);
     const config = getR2Config();
     await getR2Client().send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
     return new Response(null, { status: 204 });

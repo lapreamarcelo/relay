@@ -58,6 +58,8 @@ export interface YouTubePostSettings {
   tags: string[];
   privacyStatus: "private" | "unlisted" | "public";
   madeForKids: boolean;
+  /** Public JPEG or PNG URL uploaded as the video's custom thumbnail after the video is created. */
+  thumbnailUrl?: string;
 }
 
 export type ProviderPostSettings =
