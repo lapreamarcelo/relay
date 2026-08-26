@@ -30,6 +30,10 @@ export interface SocialAccount {
 export interface InstagramPostSettings {
   kind: "instagram";
   publishType: "feed" | "reel" | "story";
+  /** Public JPEG URL used as the Reel cover. Takes precedence over thumbOffsetMs. */
+  coverUrl?: string;
+  /** Video frame, in milliseconds, used as the Reel cover when coverUrl is absent. */
+  thumbOffsetMs?: number;
 }
 
 export interface FacebookPostSettings {
@@ -44,6 +48,8 @@ export interface TikTokPostSettings {
   allowComments: boolean;
   allowDuet: boolean;
   allowStitch: boolean;
+  /** Video frame, in milliseconds, used as the cover for Direct Posts. */
+  thumbOffsetMs?: number;
 }
 
 export interface YouTubePostSettings {

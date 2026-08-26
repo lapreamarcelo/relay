@@ -39,8 +39,11 @@ function parseSettings(provider: ProviderId, value: unknown): ProviderPostSettin
   if (!value || typeof value !== "object" || Array.isArray(value) || JSON.stringify(value).length > 10_000) return null;
   const settings = value as Record<string, unknown>;
   if (provider === "instagram") {
+    const coverUrl = optionalString(settings.coverUrl, 2_000);
+    const thumbOffsetMs = typeof settings.thumbOffsetMs === "number" && Number.isInteger(settings.thumbOffsetMs) && settings.thumbOffsetMs >= 0 && settings.thumbOffsetMs <= 900_000 ? settings.thumbOffsetMs : undefined;
     return settings.kind === "instagram" && ["feed", "reel", "story"].includes(String(settings.publishType))
-      ? { kind: "instagram", publishType: settings.publishType as "feed" | "reel" | "story" } : null;
+      && (!coverUrl || isHttpsUrl(coverUrl))
+      ? { kind: "instagram", publishType: settings.publishType as "feed" | "reel" | "story", coverUrl: coverUrl ?? undefined, thumbOffsetMs } : null;
   }
   if (provider === "facebook") {
     const linkUrl = optionalString(settings.linkUrl, 2_000);
@@ -49,10 +52,11 @@ function parseSettings(provider: ProviderId, value: unknown): ProviderPostSettin
   }
   if (provider === "tiktok") {
     const privacy = String(settings.privacyLevel);
+    const thumbOffsetMs = typeof settings.thumbOffsetMs === "number" && Number.isInteger(settings.thumbOffsetMs) && settings.thumbOffsetMs >= 0 && settings.thumbOffsetMs <= 900_000 ? settings.thumbOffsetMs : undefined;
     return settings.kind === "tiktok"
       && ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"].includes(privacy)
       && typeof settings.allowComments === "boolean" && typeof settings.allowDuet === "boolean" && typeof settings.allowStitch === "boolean"
-      ? { kind: "tiktok", privacyLevel: privacy as "PUBLIC_TO_EVERYONE" | "MUTUAL_FOLLOW_FRIENDS" | "FOLLOWER_OF_CREATOR" | "SELF_ONLY", allowComments: settings.allowComments, allowDuet: settings.allowDuet, allowStitch: settings.allowStitch } : null;
+      ? { kind: "tiktok", privacyLevel: privacy as "PUBLIC_TO_EVERYONE" | "MUTUAL_FOLLOW_FRIENDS" | "FOLLOWER_OF_CREATOR" | "SELF_ONLY", allowComments: settings.allowComments, allowDuet: settings.allowDuet, allowStitch: settings.allowStitch, thumbOffsetMs } : null;
   }
   const title = optionalString(settings.title, 100);
   const tags = Array.isArray(settings.tags) ? settings.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 50).map((tag) => tag.trim().slice(0, 100)).filter(Boolean) : null;

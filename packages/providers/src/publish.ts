@@ -88,7 +88,15 @@ async function publishInstagram(input: ProviderPublishInput, fetchImpl: Fetch): 
     created = await requestJson<{ id?: unknown }>(fetchImpl, `${base}/${encodeURIComponent(input.providerAccountId)}/media`, { method: "POST", body: graphForm({ access_token: input.accessToken, media_type: "CAROUSEL", children: children.join(","), caption: input.text }) }, "Instagram carousel preparation");
   } else {
     created = await requestJson<{ id?: unknown }>(fetchImpl, `${base}/${encodeURIComponent(input.providerAccountId)}/media`, {
-      method: "POST", body: graphForm({ access_token: input.accessToken, image_url: input.mediaType === "image" ? input.mediaUrl : undefined, video_url: input.mediaType === "video" ? input.mediaUrl : undefined, media_type: mediaType, caption: input.settings.publishType === "story" ? undefined : input.text }),
+      method: "POST", body: graphForm({
+        access_token: input.accessToken,
+        image_url: input.mediaType === "image" ? input.mediaUrl : undefined,
+        video_url: input.mediaType === "video" ? input.mediaUrl : undefined,
+        media_type: mediaType,
+        caption: input.settings.publishType === "story" ? undefined : input.text,
+        cover_url: input.mediaType === "video" && input.settings.publishType === "reel" ? input.settings.coverUrl : undefined,
+        thumb_offset: input.mediaType === "video" && input.settings.publishType === "reel" && !input.settings.coverUrl ? input.settings.thumbOffsetMs?.toString() : undefined,
+      }),
     }, "Instagram media preparation");
   }
   const containerId = stringValue(created.id);
@@ -207,7 +215,7 @@ async function publishTikTok(input: ProviderPublishInput, fetchImpl: Fetch): Pro
   const videoSize = input.mediaType === "video" ? await tiktokVideoSize(input.mediaUrl, fetchImpl) : undefined;
   const videoChunks = videoSize ? tiktokChunkPlan(videoSize) : undefined;
   const body = input.mediaType === "video" ? {
-    ...(!inboxUpload ? { post_info: { title: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, disable_duet: !input.settings.allowDuet, disable_stitch: !input.settings.allowStitch, brand_content_toggle: false, brand_organic_toggle: false, is_aigc: false } } : {}),
+    ...(!inboxUpload ? { post_info: { title: input.text, privacy_level: input.settings.privacyLevel, disable_comment: !input.settings.allowComments, disable_duet: !input.settings.allowDuet, disable_stitch: !input.settings.allowStitch, video_cover_timestamp_ms: input.settings.thumbOffsetMs, brand_content_toggle: false, brand_organic_toggle: false, is_aigc: false } } : {}),
     source_info: { source: "FILE_UPLOAD", video_size: videoSize, chunk_size: videoChunks!.chunkSize, total_chunk_count: videoChunks!.totalChunkCount },
   } : {
     media_type: "PHOTO", post_mode: inboxUpload ? "MEDIA_UPLOAD" : "DIRECT_POST",

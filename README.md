@@ -183,6 +183,15 @@ pnpm dev
 - Keep `ENCRYPTION_KEY` unchanged or existing connected-account tokens cannot be decrypted.
 - Close public signup with `ALLOW_REGISTRATION=false` after creating the owner.
 
+### Sponsorships
+
+Relay loads public sponsor inventory through GrowthCat using its bundled publishable SDK key. A deployment can override it with `NEXT_PUBLIC_GROWTHCAT_API_KEY`. Create these slots in the GrowthCat dashboard:
+
+- `relay_gold` — premium placement shown throughout the desktop app and in the mobile menu.
+- `relay_silver` — lower-cost placement shown after the Home publishing queue.
+
+Live slots render the current sponsor and track qualified impressions and clicks. The “Sponsor Relay” navigation action presents both tiers and links to each GrowthCat booking calendar, including future availability while the current period is occupied. Missing or unavailable slots render nothing.
+
 ## Contributing
 
 Issues and pull requests are welcome. If you add a provider, keep its OAuth, publishing, analytics normalization, and tests together in `packages/providers`.

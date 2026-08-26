@@ -33,6 +33,30 @@ test("preserves image order in an Instagram carousel", async () => {
   assert.match(String(requests[2].init?.body), /children=child-1%2Cchild-2/);
 });
 
+test("publishes an Instagram Reel with a selected cover frame", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const responses = [{ id: "container-1" }, { status_code: "FINISHED" }, { id: "media-1" }, { permalink: "https://www.instagram.com/reel/example/" }];
+  const fetchImpl: typeof fetch = async (url, init) => { requests.push({ url: String(url), init }); return Response.json(responses.shift()); };
+  await new ProviderPublishRegistry(fetchImpl).publish({
+    provider: "instagram", authMethod: "instagram-standalone", providerAccountId: "ig-1", providerMetadata: { metaGraphVersion: "v23.0" }, accessToken: "token",
+    text: "Reel", mediaType: "video", mediaUrl: "https://media.example.com/reel.mp4", settings: { kind: "instagram", publishType: "reel", thumbOffsetMs: 4_250 },
+  });
+  assert.match(String(requests[0].init?.body), /thumb_offset=4250/);
+  assert.doesNotMatch(String(requests[0].init?.body), /cover_url=/);
+});
+
+test("prefers an Instagram Reel cover URL over the frame offset", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const responses = [{ id: "container-1" }, { status_code: "FINISHED" }, { id: "media-1" }, {}];
+  const fetchImpl: typeof fetch = async (url, init) => { requests.push({ url: String(url), init }); return Response.json(responses.shift()); };
+  await new ProviderPublishRegistry(fetchImpl).publish({
+    provider: "instagram", authMethod: "instagram-facebook", providerAccountId: "ig-1", providerMetadata: {}, accessToken: "token",
+    text: "Reel", mediaType: "video", mediaUrl: "https://media.example.com/reel.mp4", settings: { kind: "instagram", publishType: "reel", coverUrl: "https://media.example.com/cover.jpg", thumbOffsetMs: 4_250 },
+  });
+  assert.match(String(requests[0].init?.body), /cover_url=https%3A%2F%2Fmedia\.example\.com%2Fcover\.jpg/);
+  assert.doesNotMatch(String(requests[0].init?.body), /thumb_offset=/);
+});
+
 test("starts and then confirms a TikTok Direct Post", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
   const fetchImpl: typeof fetch = async (url, init) => {
@@ -55,6 +79,21 @@ test("starts and then confirms a TikTok Direct Post", async () => {
   assert.deepEqual(initBody.source_info, { source: "FILE_UPLOAD", video_size: 12, chunk_size: 12, total_chunk_count: 1 });
   const upload = requests.find((request) => request.url.startsWith("https://upload.tiktok.example"));
   assert.equal((upload?.init?.headers as Record<string, string>)["Content-Range"], "bytes 0-11/12");
+});
+
+test("sends a selected TikTok cover frame with a Direct Post", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchImpl: typeof fetch = async (url, init) => {
+    requests.push({ url: String(url), init });
+    if (String(url).includes("creator_info")) return Response.json({ data: { privacy_level_options: ["PUBLIC_TO_EVERYONE"], comment_disabled: false, duet_disabled: false, stitch_disabled: false }, error: { code: "ok" } });
+    if (init?.method === "HEAD") return new Response(null, { headers: { "content-length": "12" } });
+    if (String(url).endsWith("video/init/")) return Response.json({ data: { publish_id: "publish-1", upload_url: "https://upload.tiktok.example/video" }, error: { code: "ok" } });
+    if (String(url) === "https://media.example.com/video.mp4") return new Response("video bytes!", { status: 206, headers: { "content-type": "video/mp4" } });
+    return new Response(null, { status: 201 });
+  };
+  await new ProviderPublishRegistry(fetchImpl).publish({ provider: "tiktok", authMethod: "tiktok", providerAccountId: "creator-1", providerMetadata: {}, accessToken: "token", text: "Video", mediaType: "video", mediaUrl: "https://media.example.com/video.mp4", settings: { kind: "tiktok", privacyLevel: "PUBLIC_TO_EVERYONE", allowComments: true, allowDuet: true, allowStitch: true, thumbOffsetMs: 3_500 } });
+  const init = requests.find((request) => request.url.endsWith("video/init/"));
+  assert.equal((JSON.parse(String(init?.init?.body)) as { post_info: { video_cover_timestamp_ms: number } }).post_info.video_cover_timestamp_ms, 3_500);
 });
 
 test("sends Only me photo posts to the TikTok inbox for manual publishing", async () => {
