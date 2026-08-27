@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ProviderPublishRegistry } from "./publish.ts";
+import { ProviderPublishError, ProviderPublishRegistry } from "./publish.ts";
 
 test("publishes an Instagram image container and returns its permalink", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
@@ -79,6 +79,21 @@ test("starts and then confirms a TikTok Direct Post", async () => {
   assert.deepEqual(initBody.source_info, { source: "FILE_UPLOAD", video_size: 12, chunk_size: 12, total_chunk_count: 1 });
   const upload = requests.find((request) => request.url.startsWith("https://upload.tiktok.example"));
   assert.equal((upload?.init?.headers as Record<string, string>)["Content-Range"], "bytes 0-11/12");
+});
+
+test("polls TikTok status after an unsuccessful upload response", async () => {
+  const fetchImpl: typeof fetch = async (url, init) => {
+    if (String(url).includes("creator_info")) return Response.json({ data: { privacy_level_options: ["PUBLIC_TO_EVERYONE"], comment_disabled: false, duet_disabled: false, stitch_disabled: false }, error: { code: "ok" } });
+    if (init?.method === "HEAD") return new Response(null, { headers: { "content-length": "12" } });
+    if (String(url).endsWith("video/init/")) return Response.json({ data: { publish_id: "publish-uncertain", upload_url: "https://upload.tiktok.example/video" }, error: { code: "ok" } });
+    if (String(url) === "https://media.example.com/video.mp4") return new Response("video bytes!", { status: 206, headers: { "content-type": "video/mp4" } });
+    if (String(url).startsWith("https://upload.tiktok.example")) return new Response("upstream response lost", { status: 500 });
+    return Response.json({ data: { status: "PUBLISH_COMPLETE", publicaly_available_post_id: ["video-complete"] }, error: { code: "ok" } });
+  };
+  const registry = new ProviderPublishRegistry(fetchImpl);
+  const input = { provider: "tiktok" as const, authMethod: "tiktok" as const, providerAccountId: "open-id", providerMetadata: {}, accessToken: "token", text: "A video", mediaType: "video" as const, mediaUrl: "https://media.example.com/video.mp4", settings: { kind: "tiktok" as const, privacyLevel: "PUBLIC_TO_EVERYONE" as const, allowComments: true, allowDuet: false, allowStitch: false } };
+  assert.deepEqual(await registry.publish(input), { state: "processing", providerPostId: "publish-uncertain" });
+  assert.deepEqual(await registry.check({ ...input, providerPostId: "publish-uncertain" }), { state: "published", providerPostId: "video-complete" });
 });
 
 test("sends a selected TikTok cover frame with a Direct Post", async () => {
@@ -212,4 +227,21 @@ test("reports a thumbnail warning without retrying an already-uploaded YouTube v
   assert.equal(result.state, "published");
   assert.match(result.warning ?? "", /video was published.*larger than YouTube's 2 MB limit.*YouTube Studio/i);
   assert.equal(videoUploads, 1);
+});
+
+test("retries a conflicting YouTube upload-session preparation and preserves its reason", async () => {
+  const fetchImpl: typeof fetch = async (url) => {
+    if (String(url) === "https://media.example.com/video.mp4") return new Response("video", { headers: { "content-type": "video/mp4", "content-length": "5" } });
+    return Response.json({ error: { message: "Requested entity already exists", status: "ALREADY_EXISTS" } }, { status: 409 });
+  };
+  await assert.rejects(() => new ProviderPublishRegistry(fetchImpl).publish({
+    provider: "youtube", authMethod: "youtube", providerAccountId: "channel-1", providerMetadata: {}, accessToken: "token", text: "Description", mediaType: "video", mediaUrl: "https://media.example.com/video.mp4",
+    settings: { kind: "youtube", title: "Title", tags: [], privacyStatus: "private", madeForKids: false },
+  }), (error: unknown) => {
+    assert.ok(error instanceof ProviderPublishError);
+    assert.equal(error.retryable, true);
+    assert.match(error.message, /Requested entity already exists/);
+    assert.match(error.message, /YouTube reason: ALREADY_EXISTS/);
+    return true;
+  });
 });

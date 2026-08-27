@@ -196,8 +196,10 @@ async function uploadTikTokVideo(uploadUrl: string, mediaUrl: string, videoSize:
       return;
     }
     if (![200, 201, 206].includes(uploaded.status)) {
-      const detail = await uploaded.text().catch(() => "");
-      throw new ProviderPublishError(`TikTok rejected the video upload${detail ? `: ${detail.slice(0, 300)}` : ` (HTTP ${uploaded.status})`}.`, uploaded.status >= 500);
+      // Once TikTok has issued a publish id, its status endpoint is authoritative.
+      // A failed PUT response does not prove that TikTok rejected the bytes, so
+      // keep the target processing and let the following status check decide.
+      return;
     }
   }
 }
@@ -261,8 +263,11 @@ async function publishYouTube(input: ProviderPublishInput, fetchImpl: Fetch): Pr
   if (contentLength) initHeaders["X-Upload-Content-Length"] = contentLength;
   const session = await fetchImpl("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", { method: "POST", headers: initHeaders, body: JSON.stringify({ snippet: { title: input.settings.title, description: input.text, tags: input.settings.tags, categoryId: "22" }, status: { privacyStatus: input.settings.privacyStatus, selfDeclaredMadeForKids: input.settings.madeForKids } }) });
   if (!session.ok) {
-    const detail = await session.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new ProviderPublishError(`YouTube upload preparation failed${detail.error?.message ? `: ${detail.error.message}` : ` (HTTP ${session.status})`}.`, session.status === 429 || session.status >= 500);
+    const detail = await session.json().catch(() => ({})) as { error?: { message?: string; status?: string; errors?: Array<{ reason?: string }> } };
+    const reason = stringValue(detail.error?.errors?.[0]?.reason) ?? stringValue(detail.error?.status);
+    const suffix = detail.error?.message ? `: ${detail.error.message}` : ` (HTTP ${session.status})`;
+    const reasonSuffix = reason ? ` YouTube reason: ${reason}.` : "";
+    throw new ProviderPublishError(`YouTube upload preparation failed${suffix}.${reasonSuffix}`, session.status === 409 || session.status === 429 || session.status >= 500);
   }
   const uploadUrl = session.headers.get("location");
   if (!uploadUrl) throw new ProviderPublishError("YouTube did not return an upload session.");

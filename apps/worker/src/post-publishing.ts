@@ -93,6 +93,10 @@ export class PostPublishingService {
         publish_lease_owner = NULL, publish_lease_expires_at = NULL, analytics_after = ${inboxUpload ? null : isoAfter(5 * 60_000)}, updated_at = NOW()
       WHERE id = ${target.id} AND publish_lease_owner = ${this.workerId}
     `;
+    await sql`
+      DELETE FROM "notification"
+      WHERE owner_id = ${target.owner_id} AND target_id = ${target.id} AND kind = 'error'
+    `;
     await this.updatePostStatus(target.post_id);
     await this.notify(target, "success", inboxUpload
       ? "TikTok received the media. Open TikTok to review and publish it manually."
