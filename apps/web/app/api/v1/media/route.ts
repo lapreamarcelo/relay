@@ -11,6 +11,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { sql } from "@relay/database";
 
 import { requireApiSession } from "../../../../lib/api-session";
+import { collectFilteredPage } from "../../../../lib/filtered-pagination";
 import { getR2Client, getR2Config, publicObjectUrl } from "../../../../lib/r2";
 
 export const runtime = "nodejs";
@@ -146,21 +147,48 @@ export async function GET(request: Request) {
     const limit = Number.isFinite(requestedLimit)
       ? Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(requestedLimit)))
       : DEFAULT_PAGE_SIZE;
-    const cursor = url.searchParams.get("cursor") || undefined;
+    const cursor = url.searchParams.get("cursor");
     const kind: AssetKind = url.searchParams.get("kind") === "music" ? "music" : "media";
     const projectId = url.searchParams.get("project");
     await assertProjectAccess(projectId, authorization.session.user.id, kind);
     const prefix = mediaPrefix(projectId, kind);
     const config = getR2Config();
-    const result = await getR2Client().send(new ListObjectsV2Command({
-      Bucket: config.bucket,
-      MaxKeys: limit,
-      ContinuationToken: cursor,
-      Prefix: prefix,
-    }));
+    const client = getR2Client();
+    const projectOwnership = new Map<string, Promise<boolean>>();
+    const ownsProject = (id: string) => {
+      const cached = projectOwnership.get(id);
+      if (cached) return cached;
+      const pending = client.send(new GetObjectCommand({ Bucket: config.bucket, Key: `media-projects/${id}/.project.json` })).then(async (object) => {
+        const manifest = JSON.parse(await object.Body!.transformToString()) as { ownerId?: string; kind?: string };
+        return manifest.ownerId === authorization.session.user.id && (manifest.kind === "music" ? "music" : "media") === kind;
+      }).catch((error: unknown) => {
+        if ((error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return false;
+        throw error;
+      });
+      projectOwnership.set(id, pending);
+      return pending;
+    };
+    const page = await collectFilteredPage({
+      cursor,
+      limit,
+      list: async (continuationToken) => {
+        const result = await client.send(new ListObjectsV2Command({
+          Bucket: config.bucket,
+          MaxKeys: 250,
+          ContinuationToken: continuationToken ?? undefined,
+          Prefix: prefix,
+        }));
+        return { items: result.Contents ?? [], nextToken: result.IsTruncated ? result.NextContinuationToken ?? null : null };
+      },
+      include: async (object) => {
+        if (!object.Key || object.Key.endsWith("/") || object.Key.endsWith("/.project.json") || kindForKey(object.Key) !== kind || !isKind(object.Key, kind)) return false;
+        const objectProjectId = projectIdForKey(object.Key);
+        if (!objectProjectId || projectId && projectId !== "all") return true;
+        return ownsProject(objectProjectId);
+      },
+    });
 
-    const data = (result.Contents ?? [])
-      .filter((object) => object.Key && !object.Key.endsWith("/") && !object.Key.endsWith("/.project.json") && kindForKey(object.Key) === kind && isKind(object.Key, kind))
+    const data = page.items
       .map((object) => ({
         key: object.Key!,
         name: object.Key!.split("/").pop() || object.Key!,
@@ -174,8 +202,8 @@ export async function GET(request: Request) {
     return Response.json({
       data,
       pagination: {
-        nextCursor: result.IsTruncated ? result.NextContinuationToken ?? null : null,
-        hasMore: Boolean(result.IsTruncated && result.NextContinuationToken),
+        nextCursor: page.nextCursor,
+        hasMore: Boolean(page.nextCursor),
         limit,
       },
     });

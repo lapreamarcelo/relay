@@ -63,16 +63,22 @@ For local development with the default configuration, the YouTube callback is `h
 
 ## External slideshow image sources
 
-The slideshow image picker supports a user-supplied credential; no shared Pexels credential is configured in Relay. The key is entered in the Relay interface, not in `.env`:
+Set a default Pexels key in `.env`, then restart Relay:
 
-1. Create a personal [Pexels API key](https://www.pexels.com/api/).
-2. In Relay, open **Slideshows**, open or create a slideshow, and select **Add images**.
-3. Select the **Pexels** tab and paste the key into **Pexels API key**.
+```dotenv
+PEXELS_API_KEY=your_pexels_api_key
+```
+
+Create the key from the [Pexels API dashboard](https://www.pexels.com/api/). Relay uses this server-side key for slideshow searches and never sends it to the browser. A user can optionally provide a personal key in the Relay interface to override the server default:
+
+1. Open **Slideshows**, open or create a slideshow, and select **Add images**.
+2. Select the **Pexels** tab.
+3. Optionally paste a personal key into **Personal API key**.
 4. Enter a search and select **Search**, then add the photos you want.
 
 Relay preserves the photographer, attribution, and Pexels source-page metadata for imported photos.
 
-Credentials are submitted only to the self-hosted Relay instance when a search is performed. They are never written to slideshow projects, R2 objects, application logs, or exported media. The optional **Remember credentials in this browser only** setting uses that browser's local storage; it is off by default. Selected images are downloaded by the self-hosted server into the user's temporary R2 staging area, validated as images, limited to 20 MB, and committed to Media only when the slideshow is saved or rendered.
+Personal override keys are submitted only to the self-hosted Relay instance when a search is performed. They are never written to slideshow projects, R2 objects, application logs, or exported media. The optional **Remember this override in this browser only** setting uses that browser's local storage; it is off by default. Selected images are downloaded by the self-hosted server into the user's temporary R2 staging area, validated as images, limited to 20 MB, and committed to Media only when the slideshow is saved or rendered.
 
 Relay uses only the official Pexels API.
 

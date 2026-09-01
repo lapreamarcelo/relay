@@ -22,8 +22,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as { provider?: unknown; credential?: unknown; query?: unknown; page?: unknown };
     const provider = body.provider === "pexels" ? "pexels" as const : null;
-    const credential = string(body.credential, CREDENTIAL_MAX_LENGTH);
-    if (!provider || !credential) return Response.json({ error: "Choose a source and provide its API credential." }, { status: 400 });
+    const credential = string(body.credential, CREDENTIAL_MAX_LENGTH) || string(process.env.PEXELS_API_KEY, CREDENTIAL_MAX_LENGTH);
+    if (!provider) return Response.json({ error: "Choose a supported image source." }, { status: 400 });
+    if (!credential) return Response.json({ error: "Add PEXELS_API_KEY to the server environment or provide a personal Pexels API key." }, { status: 400 });
 
     const query = string(body.query, 100);
     if (!query) return Response.json({ error: "Enter something to search for on Pexels." }, { status: 400 });

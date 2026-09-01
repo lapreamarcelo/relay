@@ -415,7 +415,7 @@ test("slideshow imports BYOK Pexels photos", async ({ page }) => {
   await page.getByRole("button", { name: "Add images" }).click();
   const picker = page.getByRole("dialog", { name: "Add images to the slideshow" });
   await picker.getByRole("button", { name: "Pexels" }).click();
-  await picker.getByLabel("Remember credentials in this browser only").check();
+  await picker.getByLabel("Remember this override in this browser only").check();
   await picker.getByLabel("Pexels API key").fill("pexels-user-key");
   await picker.getByLabel("Search Pexels").fill("quiet workspace");
   await picker.getByRole("button", { name: "Search" }).click();
