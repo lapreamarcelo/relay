@@ -396,13 +396,19 @@ test("slideshow and video use the same label controls", async ({ page }) => {
   await expect(composer.getByText("YouTube requires video")).toBeVisible();
 });
 
-test("slideshow imports BYOK Pexels photos", async ({ page }) => {
+test("slideshow imports photos with the server-configured Pexels key", async ({ page }) => {
   const imports: Array<Record<string, unknown>> = [];
+  const searchBodies: Array<Record<string, unknown>> = [];
   await page.route("**/api/v1/media?**", (route) => route.fulfill({ json: { data: [], pagination: { nextCursor: null } } }));
   await page.route("**/api/v1/media/projects?**", (route) => route.fulfill({ json: { data: [] } }));
   await page.route("**/api/v1/media/sources", async (route) => {
-    const body = route.request().postDataJSON() as { provider: "pexels" };
-    return route.fulfill({ json: { provider: body.provider, items: [{ id: "pexels-42", provider: "pexels", title: "A quiet workspace", previewUrl: "https://images.pexels.com/photos/42/preview.jpeg", importUrl: "https://images.pexels.com/photos/42/original.jpeg", sourceUrl: "https://www.pexels.com/photo/42", creator: "Ari", creatorUrl: "https://www.pexels.com/@ari", attribution: "Photo by Ari on Pexels" }] } });
+    if (route.request().method() === "GET") return route.fulfill({ json: { configured: true } });
+    const body = route.request().postDataJSON() as { provider: "pexels"; page: number };
+    searchBodies.push(body);
+    const item = body.page === 1
+      ? { id: "pexels-42", provider: "pexels", title: "A quiet workspace", previewUrl: "https://images.pexels.com/photos/42/preview.jpeg", importUrl: "https://images.pexels.com/photos/42/original.jpeg", sourceUrl: "https://www.pexels.com/photo/42", creator: "Ari", creatorUrl: "https://www.pexels.com/@ari", attribution: "Photo by Ari on Pexels" }
+      : { id: "pexels-43", provider: "pexels", title: "A second workspace", previewUrl: "https://images.pexels.com/photos/43/preview.jpeg", importUrl: "https://images.pexels.com/photos/43/original.jpeg", sourceUrl: "https://www.pexels.com/photo/43", creator: "Sam", creatorUrl: "https://www.pexels.com/@sam", attribution: "Photo by Sam on Pexels" };
+    return route.fulfill({ json: { provider: body.provider, page: body.page, hasMore: body.page === 1, items: [item] } });
   });
   await page.route("**/api/v1/media/import", async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>; imports.push(body);
@@ -415,15 +421,33 @@ test("slideshow imports BYOK Pexels photos", async ({ page }) => {
   await page.getByRole("button", { name: "Add images" }).click();
   const picker = page.getByRole("dialog", { name: "Add images to the slideshow" });
   await picker.getByRole("button", { name: "Pexels" }).click();
-  await picker.getByLabel("Remember this override in this browser only").check();
-  await picker.getByLabel("Pexels API key").fill("pexels-user-key");
   await picker.getByLabel("Search Pexels").fill("quiet workspace");
   await picker.getByRole("button", { name: "Search" }).click();
   await picker.locator(".external-media-grid article").filter({ hasText: "A quiet workspace" }).getByRole("button", { name: /Add/ }).click();
+  await picker.getByRole("button", { name: "Load more photos" }).click();
+  await expect(picker.getByText("A second workspace")).toBeVisible();
+  await expect(picker.getByRole("button", { name: "Load more photos" })).toHaveCount(0);
   await expect.poll(() => imports.length).toBe(1);
+  expect(searchBodies).toEqual([
+    { provider: "pexels", query: "quiet workspace", page: 1 },
+    { provider: "pexels", query: "quiet workspace", page: 2 },
+  ]);
   expect(imports[0]).toMatchObject({ provider: "pexels" });
   await expect(page.locator(".slide-rail > button:not(.add-slide)")).toHaveCount(4);
-  expect(await page.evaluate(() => localStorage.getItem("relay.external-images.pexels-api-key"))).toBe("pexels-user-key");
+});
+
+test("slideshow explains how to configure a missing Pexels key", async ({ page }) => {
+  await page.route("**/api/v1/media?**", (route) => route.fulfill({ json: { data: [], pagination: { nextCursor: null } } }));
+  await page.route("**/api/v1/media/projects?**", (route) => route.fulfill({ json: { data: [] } }));
+  await page.route("**/api/v1/media/sources", (route) => route.fulfill({ json: { configured: false } }));
+  await page.goto("/demo?view=slideshows");
+  await page.getByRole("button", { name: /Launch story/ }).first().click();
+  await page.getByRole("button", { name: "Add images" }).click();
+  const picker = page.getByRole("dialog", { name: "Add images to the slideshow" });
+  await picker.getByRole("button", { name: "Pexels" }).click();
+  await expect(picker.getByText("Pexels API key required")).toBeVisible();
+  await expect(picker.getByText(/PEXELS_API_KEY=your_key/)).toBeVisible();
+  await expect(picker.getByLabel("Search Pexels")).toHaveCount(0);
 });
 
 test("mobile planner does not overflow the viewport shell", async ({ page }, testInfo) => {

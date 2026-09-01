@@ -3,8 +3,6 @@ import { normalizePexelsResults } from "../../../../../lib/external-image-source
 
 export const runtime = "nodejs";
 
-const CREDENTIAL_MAX_LENGTH = 4_096;
-
 function string(value: unknown, maximum: number): string {
   return typeof value === "string" ? value.trim().slice(0, maximum) : "";
 }
@@ -15,16 +13,22 @@ function providerError(status: number): string {
   return `Pexels could not load images (HTTP ${status}).`;
 }
 
+export async function GET(request: Request) {
+  const authorization = await requireApiSession(request, { apiKeyScope: "media:read" });
+  if (authorization.response) return authorization.response;
+  return Response.json({ configured: Boolean(process.env.PEXELS_API_KEY?.trim()) }, { headers: { "Cache-Control": "no-store" } });
+}
+
 export async function POST(request: Request) {
   const authorization = await requireApiSession(request, { apiKeyScope: "media:read" });
   if (authorization.response) return authorization.response;
 
   try {
-    const body = await request.json() as { provider?: unknown; credential?: unknown; query?: unknown; page?: unknown };
+    const body = await request.json() as { provider?: unknown; query?: unknown; page?: unknown };
     const provider = body.provider === "pexels" ? "pexels" as const : null;
-    const credential = string(body.credential, CREDENTIAL_MAX_LENGTH) || string(process.env.PEXELS_API_KEY, CREDENTIAL_MAX_LENGTH);
+    const credential = string(process.env.PEXELS_API_KEY, 4_096);
     if (!provider) return Response.json({ error: "Choose a supported image source." }, { status: 400 });
-    if (!credential) return Response.json({ error: "Add PEXELS_API_KEY to the server environment or provide a personal Pexels API key." }, { status: 400 });
+    if (!credential) return Response.json({ error: "Pexels is not configured. Add PEXELS_API_KEY to .env and restart Relay." }, { status: 503 });
 
     const query = string(body.query, 100);
     if (!query) return Response.json({ error: "Enter something to search for on Pexels." }, { status: 400 });
@@ -33,7 +37,8 @@ export async function POST(request: Request) {
     url.searchParams.set("query", query); url.searchParams.set("orientation", "portrait"); url.searchParams.set("per_page", "30"); url.searchParams.set("page", String(page));
     const upstream = await fetch(url, { headers: { Authorization: credential }, cache: "no-store", signal: AbortSignal.timeout(15_000) });
     if (!upstream.ok) return Response.json({ error: providerError(upstream.status) }, { status: upstream.status === 429 ? 429 : 502 });
-    return Response.json({ provider, items: normalizePexelsResults(await upstream.json()), page }, { headers: { "Cache-Control": "no-store" } });
+    const payload = await upstream.json() as { next_page?: unknown };
+    return Response.json({ provider, items: normalizePexelsResults(payload), page, hasMore: typeof payload.next_page === "string" && Boolean(payload.next_page) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     return Response.json({ error: timedOut ? "The image source took too long to respond." : "Could not load the external image source." }, { status: 502 });

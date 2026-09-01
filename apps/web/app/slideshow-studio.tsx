@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LabelStylePreset, SlideshowProject, SlideshowSlide } from "@relay/core";
 import {
-  ArrowLeft, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, Images, KeyRound, LoaderCircle,
+  ArrowLeft, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, ExternalLink, Images, LoaderCircle,
   Folder, Plus, Save, Search, Sparkles, Trash2, Upload, WandSparkles, X,
 } from "lucide-react";
 import { ConfirmModal } from "./confirm-modal";
@@ -33,15 +33,13 @@ function SlideCanvas({ slide, compact = false, onMove }: { slide: SlideshowSlide
 
 type MediaSourceTab = "library" | "pexels";
 
-const pexelsCredentialKey = "relay.external-images.pexels-api-key";
-
 function MediaPicker({ onAdd, onClose }: { onAdd: (asset: { url: string; staged?: StagedMedia }) => void; onClose: () => void }) {
   const [items, setItems] = useState<MediaObject[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
   const [projects, setProjects] = useState<MediaProject[]>([]); const [projectId, setProjectId] = useState("all");
   const [uploading, setUploading] = useState(false); const [uploadProgress, setUploadProgress] = useState(""); const fileInput = useRef<HTMLInputElement>(null);
   const [source, setSource] = useState<MediaSourceTab>("library");
-  const [credential, setCredential] = useState("");
-  const [rememberCredentials, setRememberCredentials] = useState(false); const [pexelsQuery, setPexelsQuery] = useState("");
+  const [pexelsConfigured, setPexelsConfigured] = useState<boolean | null>(null); const [pexelsQuery, setPexelsQuery] = useState("");
+  const [pexelsPage, setPexelsPage] = useState(1); const [pexelsHasMore, setPexelsHasMore] = useState(false);
   const [externalItems, setExternalItems] = useState<ExternalImageResult[]>([]); const [externalLoading, setExternalLoading] = useState(false);
   const [importingId, setImportingId] = useState("");
   useEffect(() => {
@@ -56,17 +54,11 @@ function MediaPicker({ onAdd, onClose }: { onAdd: (asset: { url: string; staged?
   }, [projectId]);
   useEffect(() => { void fetch("/api/v1/media/projects?kind=media", { cache: "no-store" }).then(async (response) => { const payload = await response.json() as { data?: MediaProject[] }; if (response.ok) setProjects(payload.data ?? []); }); }, []);
   useEffect(() => {
-    const saved = localStorage.getItem(pexelsCredentialKey) ?? "";
-    setCredential(saved); setRememberCredentials(Boolean(saved));
+    void fetch("/api/v1/media/sources", { cache: "no-store" }).then(async (response) => {
+      const payload = await response.json() as { configured?: boolean };
+      setPexelsConfigured(response.ok && payload.configured === true);
+    }).catch(() => setPexelsConfigured(false));
   }, []);
-  const updateCredential = (nextCredential: string) => {
-    setCredential(nextCredential);
-    if (rememberCredentials) localStorage.setItem(pexelsCredentialKey, nextCredential); else localStorage.removeItem(pexelsCredentialKey);
-  };
-  const updateRememberCredentials = (remember: boolean) => {
-    setRememberCredentials(remember);
-    if (remember && credential) localStorage.setItem(pexelsCredentialKey, credential); else localStorage.removeItem(pexelsCredentialKey);
-  };
   const uploadOne = async (file: File) => {
     const uploadProjectId = projectId !== "all" && projectId !== "unfiled" ? projectId : undefined;
     const signedResponse = await fetch("/api/v1/media", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: file.name, contentType: file.type, staged: true }) });
@@ -94,15 +86,17 @@ function MediaPicker({ onAdd, onClose }: { onAdd: (asset: { url: string; staged?
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not upload the selected images."); }
     finally { setUploading(false); setUploadProgress(""); if (fileInput.current) fileInput.current.value = ""; }
   };
-  const loadExternal = async () => {
-    const apiKey = credential.trim();
+  const loadExternal = async (append = false) => {
+    if (!pexelsConfigured) { setError("Pexels is not configured. Add PEXELS_API_KEY to .env and restart Relay."); return; }
     if (!pexelsQuery.trim()) { setError("Enter something to search for on Pexels."); return; }
+    const requestedPage = append ? pexelsPage + 1 : 1;
     setExternalLoading(true); setError("");
     try {
-      const response = await fetch("/api/v1/media/sources", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "pexels", credential: apiKey, query: pexelsQuery }) });
-      const payload = await response.json() as { items?: ExternalImageResult[]; error?: string };
+      const response = await fetch("/api/v1/media/sources", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "pexels", query: pexelsQuery, page: requestedPage }) });
+      const payload = await response.json() as { items?: ExternalImageResult[]; page?: number; hasMore?: boolean; error?: string };
       if (!response.ok) throw new Error(payload.error || "Could not load images.");
-      setExternalItems(payload.items ?? []);
+      setExternalItems((current) => append ? [...current, ...(payload.items ?? [])] : payload.items ?? []);
+      setPexelsPage(payload.page ?? requestedPage); setPexelsHasMore(payload.hasMore === true);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not load images."); }
     finally { setExternalLoading(false); }
   };
@@ -117,9 +111,9 @@ function MediaPicker({ onAdd, onClose }: { onAdd: (asset: { url: string; staged?
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not import the selected image."); }
     finally { setImportingId(""); }
   };
-  const showSource = (next: MediaSourceTab) => { setSource(next); setError(""); setExternalItems([]); };
+  const showSource = (next: MediaSourceTab) => { setSource(next); setError(""); setExternalItems([]); setPexelsPage(1); setPexelsHasMore(false); };
   const providerGrid = <div className="slideshow-media-grid external-media-grid">{externalItems.map((item) => <article key={item.id}><button disabled={Boolean(importingId)} onClick={() => void importExternal(item)}><img src={item.previewUrl} alt={item.title} /><span>{importingId === item.id ? <LoaderCircle className="spin" /> : <Plus />} {importingId === item.id ? "Importing" : "Add"}</span></button><b title={item.title}>{item.title}</b><small>{item.attribution}</small><a href={item.sourceUrl} target="_blank" rel="noreferrer">View source <ExternalLink /></a></article>)}{!externalLoading && !externalItems.length && <p>Search Pexels for portrait photos to use in your slides.</p>}</div>;
-  return <div className="modal-layer slideshow-media-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close media library" /><section className="slideshow-media-picker" role="dialog" aria-modal="true" aria-labelledby="slide-media-title"><header><div><p className="eyebrow">Add media</p><h2 id="slide-media-title">Add images to the slideshow</h2><p>Imported images stay temporary until you save or render.</p></div><button className="icon-button" onClick={onClose}><X /></button></header><nav className="slideshow-source-tabs" aria-label="Image source"><button className={source === "library" ? "active" : ""} onClick={() => showSource("library")}><Images />Library & upload</button><button className={source === "pexels" ? "active" : ""} onClick={() => showSource("pexels")}><Search />Pexels</button></nav><div className="slideshow-media-body"><label className="media-project-select"><Folder />Save selected images to<select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="all">Unsorted Media</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}</select></label>{source === "library" && <><div className="slideshow-upload-source"><div><Upload /><span><b>Upload from computer</b><small>Select several images and they’ll be added in order.</small></span></div><input ref={fileInput} hidden type="file" accept="image/*" multiple onChange={(event) => void uploadFiles(event.target.files)} /><button className="primary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle className="spin" /> : <Upload />}{uploading ? uploadProgress : "Choose files"}</button></div><div className="slideshow-media-label"><div><Images /><span><b>Media library</b><small>Your existing images stored in Cloudflare.</small></span></div><span>{items.length} available</span></div>{error && <p className="composer-error">{error}</p>}{loading ? <div className="media-loading"><LoaderCircle className="spin" />Loading images…</div> : <div className="slideshow-media-grid">{items.map((item) => <button key={item.key} onClick={() => onAdd({ url: item.url })}><img src={item.url} alt={item.name} /><span><Plus /> Add</span><b>{item.name}</b></button>)}{!items.length && <p>No images in this project yet. Upload some above.</p>}</div>}</>}{source === "pexels" && <><section className="external-source-setup"><div className="external-source-heading"><KeyRound /><span><b>Pexels API key override</b><small>Relay uses the server’s PEXELS_API_KEY by default. Paste a personal key here only to override it for your searches.</small></span><a href="https://www.pexels.com/api/" target="_blank" rel="noreferrer">Get credentials <ExternalLink /></a></div><label className="external-credential"><span>Personal API key (optional)</span><input aria-label="Pexels API key" type="password" autoComplete="off" value={credential} onChange={(event) => updateCredential(event.target.value)} placeholder="Optional personal Pexels API key" /></label><label className="external-remember"><input type="checkbox" checked={rememberCredentials} onChange={(event) => updateRememberCredentials(event.target.checked)} /> Remember this override in this browser only</label><form className="external-search" onSubmit={(event) => { event.preventDefault(); void loadExternal(); }}><label><span>Search photos</span><input aria-label="Search Pexels" value={pexelsQuery} onChange={(event) => setPexelsQuery(event.target.value)} placeholder="Editorial workspace, coastal morning…" /></label><button className="primary-button" disabled={externalLoading}>{externalLoading ? <LoaderCircle className="spin" /> : <Search />} Search</button></form></section>{error && <p className="composer-error">{error}</p>}{externalLoading && !externalItems.length ? <div className="media-loading"><LoaderCircle className="spin" />Loading images…</div> : providerGrid}{externalItems.length > 0 && <p className="external-provider-credit">Photos provided by <a href="https://www.pexels.com" target="_blank" rel="noreferrer">Pexels</a>. Photographer credit and source links are preserved with each import.</p>}</>}</div><footer><span>Select as many images as you need</span><button className="primary-button" onClick={onClose}>Done</button></footer></section></div>;
+  return <div className="modal-layer slideshow-media-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close media library" /><section className="slideshow-media-picker" role="dialog" aria-modal="true" aria-labelledby="slide-media-title"><header><div><p className="eyebrow">Add media</p><h2 id="slide-media-title">Add images to the slideshow</h2><p>Imported images stay temporary until you save or render.</p></div><button className="icon-button" onClick={onClose}><X /></button></header><nav className="slideshow-source-tabs" aria-label="Image source"><button className={source === "library" ? "active" : ""} onClick={() => showSource("library")}><Images />Library & upload</button><button className={source === "pexels" ? "active" : ""} onClick={() => showSource("pexels")}><Search />Pexels</button></nav><div className="slideshow-media-body"><label className="media-project-select"><Folder />Save selected images to<select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="all">Unsorted Media</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.name}</option>)}</select></label>{source === "library" && <><div className="slideshow-upload-source"><div><Upload /><span><b>Upload from computer</b><small>Select several images and they’ll be added in order.</small></span></div><input ref={fileInput} hidden type="file" accept="image/*" multiple onChange={(event) => void uploadFiles(event.target.files)} /><button className="primary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle className="spin" /> : <Upload />}{uploading ? uploadProgress : "Choose files"}</button></div><div className="slideshow-media-label"><div><Images /><span><b>Media library</b><small>Your existing images stored in Cloudflare.</small></span></div><span>{items.length} available</span></div>{error && <p className="composer-error">{error}</p>}{loading ? <div className="media-loading"><LoaderCircle className="spin" />Loading images…</div> : <div className="slideshow-media-grid">{items.map((item) => <button key={item.key} onClick={() => onAdd({ url: item.url })}><img src={item.url} alt={item.name} /><span><Plus /> Add</span><b>{item.name}</b></button>)}{!items.length && <p>No images in this project yet. Upload some above.</p>}</div>}</>}{source === "pexels" && <>{pexelsConfigured === null ? <div className="media-loading"><LoaderCircle className="spin" />Checking Pexels configuration…</div> : pexelsConfigured ? <section className="external-source-setup"><form className="external-search pexels-search" onSubmit={(event) => { event.preventDefault(); void loadExternal(); }}><label><span>Search Pexels photos</span><input aria-label="Search Pexels" value={pexelsQuery} onChange={(event) => setPexelsQuery(event.target.value)} placeholder="Editorial workspace, coastal morning…" /></label><button className="primary-button" disabled={externalLoading}>{externalLoading ? <LoaderCircle className="spin" /> : <Search />} Search</button></form></section> : <section className="external-source-setup external-source-missing"><div className="external-source-heading"><CircleAlert /><span><b>Pexels API key required</b><small>Add <code>PEXELS_API_KEY=your_key</code> to the server’s <code>.env</code> file, then restart Relay.</small></span></div></section>}{pexelsConfigured && <>{error && <p className="composer-error">{error}</p>}{externalLoading && !externalItems.length ? <div className="media-loading"><LoaderCircle className="spin" />Loading images…</div> : providerGrid}{pexelsHasMore && <button className="secondary-button external-load-more" disabled={externalLoading} onClick={() => void loadExternal(true)}>{externalLoading ? <LoaderCircle className="spin" /> : <Plus />} Load more photos</button>}{externalItems.length > 0 && <p className="external-provider-credit">Photos provided by <a href="https://www.pexels.com" target="_blank" rel="noreferrer">Pexels</a>. Photographer credit and source links are preserved with each import.</p>}</>}</>}</div><footer><span>Select as many images as you need</span><button className="primary-button" onClick={onClose}>Done</button></footer></section></div>;
 }
 
 interface SlideshowComposerSeed { media: { name: string; url: string; previewUrl: string; type: "image"; urls: string[] }; text: string; brandId: string }

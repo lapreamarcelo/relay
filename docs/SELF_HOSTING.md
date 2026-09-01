@@ -33,7 +33,7 @@ Relay uses [Cloudflare R2](https://developers.cloudflare.com/r2/get-started/) fo
 | `R2_SECRET_ACCESS_KEY` | R2 API token secret access key |
 | `R2_BUCKET_NAME` | Bucket name, such as `relay-media` |
 | `R2_PUBLIC_URL` | HTTPS custom domain or public development URL for the bucket |
-| `PEXELS_API_KEY` | Optional server-side default for slideshow image searches |
+| `PEXELS_API_KEY` | Server-side key that enables Pexels slideshow image searches |
 
 `R2_PUBLIC_URL` must be reachable by the social networks. A private URL or one protected by Cloudflare Access will prevent providers from fetching image media. A custom domain is recommended for production. Relay derives the S3 endpoint from the account ID; set `R2_ENDPOINT` only when an override is necessary.
 
