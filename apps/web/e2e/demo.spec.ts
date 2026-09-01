@@ -47,6 +47,18 @@ test("demo scheduling stays local and appears on the calendar", async ({ page })
   expect(postWrites).toBe(0);
 });
 
+test("clicking a calendar day opens a post scheduled for that day", async ({ page }) => {
+  await page.goto("/demo?view=calendar");
+  const day = page.locator(".planning-days > section").filter({ has: page.locator("header b", { hasText: /^10$/ }) }).first();
+  const expectedDate = await day.evaluate((element) => {
+    const date = new Date(element.getAttribute("title")!.replace("Create a post on ", ""));
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T09:30`;
+  });
+  await day.locator("header").click();
+  const composer = page.getByRole("dialog", { name: "Create post" });
+  await expect(composer.getByLabel(/Publish date and time/)).toHaveValue(expectedDate);
+});
+
 test("opening a completed calendar post does not create a draft and each card can be deleted", async ({ page }) => {
   let postMutations = 0;
   await page.route("**/api/v1/posts", async (route) => {
@@ -61,6 +73,20 @@ test("opening a completed calendar post does not create a draft and each card ca
   await page.keyboard.press("Escape");
   await published.getByRole("button", { name: "Delete published post" }).click();
   await expect(page.getByRole("alertdialog")).toContainText("Delete this post from Relay?");
+});
+
+test("scheduled and published posts can be duplicated into an editable composer", async ({ page }) => {
+  await page.goto("/demo?view=posts");
+  for (const status of ["scheduled", "published"] as const) {
+    const row = page.locator(".post-row").filter({ has: page.locator(`.status.${status}`) }).first();
+    const originalText = (await row.locator(".post-main p").textContent()) ?? "";
+    await row.getByRole("button", { name: "Post actions" }).click();
+    await row.getByRole("menuitem", { name: "Duplicate post" }).click();
+    const composer = page.getByRole("dialog", { name: "Create post" });
+    await expect(composer.getByText("Post again")).toBeVisible();
+    await expect(composer.getByLabel("Content")).toHaveValue(originalText);
+    await page.keyboard.press("Escape");
+  }
 });
 
 test("command menu searches real posts and supports the keyboard", async ({ page }) => {
@@ -205,6 +231,32 @@ test("media library exposes upload and project organization controls", async ({ 
   ]);
   await expect.poll(() => preparedUploads).toBe(4);
   await expect(page.getByRole("button", { name: /Unsorted/ })).toBeHidden();
+});
+
+test("R2 composer picker filters media types and jumps to the last page", async ({ page }) => {
+  const requests: string[] = [];
+  await page.route("**/api/v1/media/projects", (route) => route.fulfill({ json: { data: [] } }));
+  await page.route("**/api/v1/media?**", (route) => {
+    const url = new URL(route.request().url());
+    requests.push(url.search);
+    const cursor = url.searchParams.get("cursor");
+    const mediaType = url.searchParams.get("mediaType");
+    if (mediaType !== "video") return route.fulfill({ json: { data: [], pagination: { nextCursor: null } } });
+    const pageNumber = cursor === "page-3" ? 3 : cursor === "page-2" ? 2 : 1;
+    return route.fulfill({ json: { data: [{ key: `media/clip-${pageNumber}.mp4`, name: `clip-${pageNumber}.mp4`, size: 1024, lastModified: null, etag: `${pageNumber}`, url: `https://media.example.com/clip-${pageNumber}.mp4` }], pagination: { nextCursor: pageNumber === 1 ? "page-2" : pageNumber === 2 ? "page-3" : null } } });
+  });
+  await page.goto("/demo?view=calendar");
+  await page.getByRole("button", { name: /Create post/ }).first().click();
+  const composer = page.getByRole("dialog", { name: "Create post" });
+  await composer.getByRole("button", { name: "Add media" }).click();
+  await page.getByRole("button", { name: "Choose from library" }).click();
+  const picker = page.getByRole("dialog", { name: "Choose from your library" });
+  await picker.getByLabel("Media type").selectOption("video");
+  await expect(picker.getByText("clip-1.mp4", { exact: true })).toBeVisible();
+  await picker.getByRole("button", { name: "Last" }).click();
+  await expect(picker.getByText("clip-3.mp4", { exact: true })).toBeVisible();
+  await expect(picker.getByText("Page 3")).toBeVisible();
+  expect(requests.some((query) => query.includes("mediaType=video") && query.includes("cursor=page-3"))).toBe(true);
 });
 
 test("media folders can be renamed and assets moved between them", async ({ page }) => {

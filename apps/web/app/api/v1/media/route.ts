@@ -116,6 +116,8 @@ async function updateMediaReferences(ownerId: string, currentUrl: string, nextUr
 }
 
 const musicExtension = /\.(mp3|m4a|aac|wav|ogg|flac)$/i;
+const imageExtension = /\.(jpe?g|png|gif|webp|avif|svg|bmp)$/i;
+const videoExtension = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
 const isKind = (key: string, kind: AssetKind) => kind === "music" ? musicExtension.test(key) : !musicExtension.test(key) && !key.includes("/music/");
 
 function sanitizeFileName(value: string): string {
@@ -149,6 +151,8 @@ export async function GET(request: Request) {
       : DEFAULT_PAGE_SIZE;
     const cursor = url.searchParams.get("cursor");
     const kind: AssetKind = url.searchParams.get("kind") === "music" ? "music" : "media";
+    const requestedMediaType = url.searchParams.get("mediaType");
+    const mediaType = requestedMediaType === "image" || requestedMediaType === "video" ? requestedMediaType : "all";
     const projectId = url.searchParams.get("project");
     await assertProjectAccess(projectId, authorization.session.user.id, kind);
     const prefix = mediaPrefix(projectId, kind);
@@ -182,6 +186,8 @@ export async function GET(request: Request) {
       },
       include: async (object) => {
         if (!object.Key || object.Key.endsWith("/") || object.Key.endsWith("/.project.json") || kindForKey(object.Key) !== kind || !isKind(object.Key, kind)) return false;
+        if (kind === "media" && mediaType === "image" && !imageExtension.test(object.Key)) return false;
+        if (kind === "media" && mediaType === "video" && !videoExtension.test(object.Key)) return false;
         const objectProjectId = projectIdForKey(object.Key);
         if (!objectProjectId || projectId && projectId !== "all") return true;
         return ownsProject(objectProjectId);
