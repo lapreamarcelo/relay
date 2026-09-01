@@ -2,12 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, BarChart3, Bell, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  ArrowDown, ArrowLeft, ArrowUp, BarChart3, Bell, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Camera, CircleAlert, Clock3, Cloud, Command, Database, ExternalLink, File as FileIcon, FileText, Folder, FolderInput, FolderOpen, Grid2X2, Home, Image as ImageIcon,
   Eye, Heart, Images, Instagram, KeyRound, LayoutGrid, List, LoaderCircle, LogOut, Menu, MessageCircle, Moon, MoreHorizontal, Music2, Pencil, Plus, RefreshCw, Search,
   Send, Settings, Share2, ShieldCheck, Sparkles, Sun, Trash2, TrendingUp, Upload, Users, Video, X, Youtube, Zap,
 } from "lucide-react";
-import { type Brand, type Campaign, type PostTemplate, type ProviderId, type ProviderPostSettings, type PublishingDefaults, type RelayPost, type SocialAccount, type PostStatus } from "@relay/core";
+import { defaultPublishingDefaults, type Brand, type Campaign, type PostTemplate, type ProviderId, type ProviderPostSettings, type PublishingDefaults, type RelayPost, type SocialAccount, type PostStatus } from "@relay/core";
 import { validatePostPlan } from "@relay/core/post-validation";
 import { providerRegistry } from "@relay/providers";
 import SlideshowStudio from "./slideshow-studio";
@@ -18,6 +18,9 @@ import VideoStudio from "./video-studio";
 import { type RelayView as View, parseRelayView, relayViewUrl, viewLabel } from "../lib/app-navigation";
 import { useModalAccessibility } from "../lib/use-modal-accessibility";
 import { COMPOSER_DRAFT_KEY, parseComposerDraft } from "../lib/composer-draft";
+import { alternateByType, defaultScheduleStart, scheduleSeries, type SequenceOrder } from "../lib/schedule-series";
+import { automaticInstagramSettings } from "../lib/automatic-post-settings";
+import { demoCampaigns, demoMedia, demoMediaProjects, demoMusic, demoNotifications, demoReports, demoSlideshowProjects, demoTemplates, demoVideoProjects } from "../lib/demo-data";
 import { CommunitySponsors, FeaturedGoldSponsor, GoldSponsor, SponsorMarketplace } from "./growthcat-sponsors";
 import CliDocs from "./cli-docs";
 
@@ -378,28 +381,96 @@ function MediaPreviewModal({ item, onClose }: { item: MediaObject; onClose: () =
   return <div className="modal-layer media-preview-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close media preview" /><section className="media-preview-modal" role="dialog" aria-modal="true" aria-labelledby="media-preview-title"><header><div><p className="eyebrow">R2 media preview</p><h2 id="media-preview-title">{item.name}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X /></button></header><div className="media-preview-stage">{unavailable ? <div className="media-preview-unavailable"><CircleAlert /><b>Preview unavailable</b><span>The original file may be unavailable or unsupported by this browser.</span></div> : kind === "image" ? <img src={item.url} alt={item.name} onError={() => setUnavailable(true)} /> : kind === "video" ? <video src={item.url} controls playsInline preload="metadata" onError={() => setUnavailable(true)} /> : <div className="media-preview-unavailable"><FileIcon /><b>No visual preview</b><span>This file type cannot be displayed here.</span></div>}</div><footer><div><b>{kind}</b><span>{formatBytes(item.size)}{item.lastModified ? ` · Updated ${new Date(item.lastModified).toLocaleDateString()}` : ""}</span></div><a className="secondary-button" href={item.url} target="_blank" rel="noreferrer">Open original <ExternalLink /></a></footer></section></div>;
 }
 
-function MediaView({ onCompose }: { onCompose: (media: ComposerMedia) => void }) {
+function sequenceSettings(provider: ProviderId, item: MediaObject, defaults: PublishingDefaults, durationMs?: number): ProviderPostSettings {
+  const kind = mediaKind(item.name) as "image" | "video";
+  if (provider === "instagram") return automaticInstagramSettings(kind === "video" ? defaults.instagram.videoPublishType : defaults.instagram.imagePublishType, kind, durationMs);
+  if (provider === "facebook") return { kind: "facebook", publishType: kind === "video" ? defaults.facebook.videoPublishType : "feed" };
+  if (provider === "tiktok") return { kind: "tiktok", ...defaults.tiktok, allowComments: defaults.tiktok.privacyLevel === "SELF_ONLY" ? false : defaults.tiktok.allowComments, allowDuet: defaults.tiktok.privacyLevel === "SELF_ONLY" ? false : defaults.tiktok.allowDuet, allowStitch: defaults.tiktok.privacyLevel === "SELF_ONLY" ? false : defaults.tiktok.allowStitch };
+  return { kind: "youtube", title: item.name.replace(/\.[^.]+$/, "").slice(0, 100) || "Relay video", tags: [], privacyStatus: defaults.youtube.privacyStatus, madeForKids: defaults.youtube.madeForKids };
+}
+
+function readVideoDurationMs(url: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    let timeout = 0;
+    const finish = (complete: () => void) => { window.clearTimeout(timeout); video.onloadedmetadata = null; video.onerror = null; video.removeAttribute("src"); video.load(); complete(); };
+    timeout = window.setTimeout(() => finish(() => reject(new Error("Relay timed out while choosing an Instagram Reel cover frame."))), 15_000);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const durationMs = Math.round(video.duration * 1_000);
+      finish(() => Number.isFinite(durationMs) && durationMs > 0 ? resolve(durationMs) : reject(new Error("Relay could not read a video duration for its Instagram Reel cover.")));
+    };
+    video.onerror = () => finish(() => reject(new Error("Relay could not read a video duration for its Instagram Reel cover.")));
+    video.src = url;
+  });
+}
+
+function MediaSequenceModal({ items, publishingDefaults, demoMode, onClose, onComplete }: { items: MediaObject[]; publishingDefaults: PublishingDefaults; demoMode: boolean; onClose: () => void; onComplete: (message: string) => void }) {
+  const accounts = useAccounts().filter((account) => account.status === "connected");
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const [ordered, setOrdered] = useState(items); const [orderMode, setOrderMode] = useState<SequenceOrder>("selected");
+  const [accountIds, setAccountIds] = useState<string[]>([]); const [startAt, setStartAt] = useState(defaultScheduleStart); const [intervalDays, setIntervalDays] = useState(1);
+  const [caption, setCaption] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const requestId = useRef(`media-sequence-${crypto.randomUUID()}`).current;
+  const schedule = scheduleSeries(startAt, ordered.length, intervalDays);
+  const hasImages = ordered.some((item) => mediaKind(item.name) === "image");
+  const hasVideos = ordered.some((item) => mediaKind(item.name) === "video");
+  const selectableAccounts = accounts.filter((account) => account.provider !== "youtube" || !hasImages);
+  const selectedAccounts = selectableAccounts.filter((account) => accountIds.includes(account.id));
+  const needsInstagramFrames = selectedAccounts.some((account) => account.provider === "instagram") && publishingDefaults.instagram.videoPublishType === "reel";
+  const changeOrder = (mode: SequenceOrder) => { setOrderMode(mode); setOrdered(mode === "alternate" ? alternateByType(items, (item) => mediaKind(item.name) as "image" | "video") : items); };
+  const move = (index: number, direction: -1 | 1) => { const target = index + direction; if (target < 0 || target >= ordered.length) return; setOrderMode("selected"); setOrdered((current) => { const next = [...current]; [next[index], next[target]] = [next[target], next[index]]; return next; }); };
+  const submit = async () => {
+    if (!selectedAccounts.length) { setError("Choose at least one connected destination."); return; }
+    if (!schedule.length || new Date(schedule[0]).getTime() <= Date.now()) { setError("Choose a future first publishing time."); return; }
+    setBusy(true); setError("");
+    try {
+      if (demoMode) { onComplete(`${ordered.length} demo posts added to the sequence preview.`); return; }
+      const brandIds = [...new Set(selectedAccounts.map((account) => account.brandId ?? ""))];
+      const videoDurations = needsInstagramFrames ? Object.fromEntries(await Promise.all(ordered.filter((item) => mediaKind(item.name) === "video").map(async (item) => [item.key, await readVideoDurationMs(item.url)] as const))) : {};
+      const posts = ordered.map((item, index) => ({
+        clientRequestId: `${requestId}-${index}`,
+        brandId: brandIds.length === 1 ? brandIds[0] : undefined,
+        text: caption.replaceAll("{filename}", item.name.replace(/\.[^.]+$/, "")),
+        mediaType: mediaKind(item.name), mediaUrl: item.url, status: "scheduled", scheduledAt: schedule[index],
+        targets: selectedAccounts.map((account) => ({ accountId: account.id, settings: sequenceSettings(account.provider, item, publishingDefaults, videoDurations[item.key]) })),
+      }));
+      const response = await fetch("/api/v1/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ posts }) });
+      const payload = await response.json() as { summary?: { created: number; failed: number }; data?: Array<{ error?: string }>; error?: string };
+      if (!response.ok && response.status !== 207) throw new Error(payload.error || "Could not schedule this sequence.");
+      const created = payload.summary?.created ?? 0; const failed = payload.summary?.failed ?? 0;
+      if (!created) throw new Error(payload.data?.find((item) => item.error)?.error || "No posts were scheduled.");
+      onComplete(`${created} post${created === 1 ? "" : "s"} scheduled${failed ? `; ${failed} failed` : ""}.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not schedule this sequence."); setBusy(false); }
+  };
+  return <div className="modal-layer media-sequence-layer"><button className="modal-scrim" disabled={busy} onClick={onClose} aria-label="Close sequence scheduler"/><section className="media-sequence-modal" role="dialog" aria-modal="true" aria-labelledby="media-sequence-title"><header><div><p className="eyebrow">Bulk publishing</p><h2 id="media-sequence-title">Schedule a media sequence</h2><p>One asset becomes one post. Review the exact order and dates before scheduling.</p></div><button className="icon-button" disabled={busy} onClick={onClose} aria-label="Close"><X/></button></header>{error && <p className="video-batch-error" role="alert"><CircleAlert/>{error}</p>}<div className="media-sequence-body"><section className="media-sequence-queue"><div className="sequence-heading"><div><p className="eyebrow">Order</p><b>{ordered.length} posts</b></div><div className="segmented"><button className={orderMode === "selected" ? "active" : ""} onClick={() => changeOrder("selected")}>Selected</button><button className={orderMode === "alternate" ? "active" : ""} disabled={!hasImages || !hasVideos} onClick={() => changeOrder("alternate")}>Alternate types</button></div></div><div className="sequence-list">{ordered.map((item,index) => { const kind = mediaKind(item.name) as "image" | "video"; return <article key={item.key}><span>{kind === "image" ? <img src={item.url} alt=""/> : <video src={item.url} muted preload="metadata"/>}</span><div><b>{item.name}</b><small>{kind} · {schedule[index] ? new Date(schedule[index]).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Choose a start time"}</small></div><div><button className="icon-button" disabled={index === 0} onClick={() => move(index,-1)} aria-label={`Move ${item.name} earlier`}><ArrowUp/></button><button className="icon-button" disabled={index === ordered.length - 1} onClick={() => move(index,1)} aria-label={`Move ${item.name} later`}><ArrowDown/></button></div></article>; })}</div></section><aside className="media-sequence-settings"><section><p className="eyebrow">Timing</p><label>First publish<input type="datetime-local" value={startAt} onChange={(event) => { setStartAt(event.target.value); setError(""); }}/></label><label>Cadence<select value={intervalDays <= 2 ? intervalDays : "custom"} onChange={(event) => { const value = event.target.value; setIntervalDays(value === "custom" ? Math.max(3, intervalDays) : Number(value)); }}><option value="1">Every day</option><option value="2">Every other day</option><option value="custom">Every X days</option></select></label>{intervalDays > 2 && <label>Days between posts<input type="number" min="3" max="365" value={intervalDays} onChange={(event) => setIntervalDays(Math.min(365, Math.max(3, Number(event.target.value) || 3)))}/></label>}<small>Times use {timezone} and stay at the same local clock time.</small></section><section><p className="eyebrow">Destinations</p>{selectableAccounts.map((account) => <label className="batch-account" key={account.id}><input type="checkbox" checked={accountIds.includes(account.id)} onChange={(event) => setAccountIds((current) => event.target.checked ? [...current, account.id] : current.filter((id) => id !== account.id))}/><span>{account.displayName}<small>{account.provider} · {account.handle}</small></span></label>)}{hasImages && accounts.some((account) => account.provider === "youtube") && <small>YouTube is hidden because this sequence contains images.</small>}{!selectableAccounts.length && <small>Connect a compatible social account before scheduling.</small>}</section><section><p className="eyebrow">Caption <span>optional</span></p><label>Shared template<textarea value={caption} maxLength={2200} onChange={(event) => setCaption(event.target.value)} placeholder="Use {filename} to insert each file name."/></label><small>Relay uses your saved publishing defaults for each platform.</small></section></aside></div><footer><span>{ordered.length && schedule.length ? `${new Date(schedule[0]).toLocaleDateString()} – ${new Date(schedule.at(-1)!).toLocaleDateString()}` : "Choose a valid schedule"}</span><button className="secondary-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !selectedAccounts.length || !schedule.length} onClick={() => void submit()}>{busy ? <LoaderCircle className="spin"/> : <CalendarDays/>}{busy ? "Scheduling…" : `Schedule ${ordered.length} posts`}</button></footer></section></div>;
+}
+
+function MediaView({ onCompose, publishingDefaults = defaultPublishingDefaults, demoMode = false, initialItems = [], initialMusicItems = [], initialProjects = [] }: { onCompose: (media: ComposerMedia) => void; publishingDefaults?: PublishingDefaults; demoMode?: boolean; initialItems?: MediaObject[]; initialMusicItems?: MediaObject[]; initialProjects?: MediaProject[] }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [items, setItems] = useState<MediaObject[]>([]);
+  const [items, setItems] = useState<MediaObject[]>(initialItems);
   const [assetKind, setAssetKind] = useState<"media" | "music">("media");
-  const [projects, setProjects] = useState<MediaProject[]>([]); const [projectId, setProjectId] = useState("all");
+  const [projects, setProjects] = useState<MediaProject[]>(initialProjects); const [projectId, setProjectId] = useState("all");
   const [cursor, setCursor] = useState<string | null>(null);
   const [history, setHistory] = useState<(string | null)[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!demoMode);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false); const [projectName, setProjectName] = useState(""); const [projectBusy, setProjectBusy] = useState(false); const [projectError, setProjectError] = useState("");
   const [renameProject, setRenameProject] = useState<MediaProject | null>(null); const [renameProjectName, setRenameProjectName] = useState("");
+  const [deleteProject, setDeleteProject] = useState<MediaProject | null>(null);
   const [renameItem, setRenameItem] = useState<MediaObject | null>(null); const [renameName, setRenameName] = useState("");
   const [moveItem, setMoveItem] = useState<MediaObject | null>(null); const [moveProjectId, setMoveProjectId] = useState(""); const [moveError, setMoveError] = useState("");
   const [previewItem, setPreviewItem] = useState<MediaObject | null>(null);
   const [deleteItem, setDeleteItem] = useState<MediaObject | null>(null);
+  const [selectedItems, setSelectedItems] = useState<MediaObject[]>([]); const [sequenceOpen, setSequenceOpen] = useState(false); const [sequenceNotice, setSequenceNotice] = useState("");
+  const [sequencePublishingDefaults, setSequencePublishingDefaults] = useState(publishingDefaults);
 
   const loadProjects = async () => {
     try { const response = await fetch("/api/v1/media/projects", { cache: "no-store" }); const payload = await response.json() as { data?: MediaProject[]; error?: string }; if (!response.ok) throw new Error(payload.error || "Could not load media projects"); setProjects(payload.data ?? []); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load media projects"); }
+    catch (cause) { if (!demoMode) setError(cause instanceof Error ? cause.message : "Could not load media projects"); }
   };
 
   const load = async (pageCursor: string | null) => {
@@ -412,11 +483,12 @@ function MediaView({ onCompose }: { onCompose: (media: ComposerMedia) => void })
       const payload = await response.json() as { data?: MediaObject[]; pagination?: { nextCursor?: string | null }; error?: string };
       if (!response.ok) throw new Error(payload.error || "Could not load media");
       setItems(payload.data ?? []); setNextCursor(payload.pagination?.nextCursor ?? null);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load media"); }
+    } catch (cause) { if (!demoMode) setError(cause instanceof Error ? cause.message : "Could not load media"); }
     finally { setLoading(false); }
   };
 
   useEffect(() => { void loadProjects(); }, []);
+  useEffect(() => { if (demoMode) return; void fetch("/api/v1/settings/publishing", { cache: "no-store" }).then(async (response) => { const payload = await response.json() as { data?: PublishingDefaults }; if (response.ok && payload.data) setSequencePublishingDefaults(payload.data); }).catch(() => undefined); }, [demoMode]);
   useEffect(() => { void load(cursor); }, [cursor, projectId, assetKind]);
 
   const uploadOne = async (file: File, uploadProjectId: string | undefined, uploadKind: "media" | "music") => {
@@ -499,10 +571,26 @@ function MediaView({ onCompose }: { onCompose: (media: ComposerMedia) => void })
     finally { setProjectBusy(false); }
   };
 
+  const removeFolder = async () => {
+    if (!deleteProject) return;
+    setProjectBusy(true); setProjectError("");
+    try {
+      const response = await fetch("/api/v1/media/projects", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: deleteProject.id }) });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Could not delete the folder");
+      const deletedId = deleteProject.id;
+      setProjects((current) => current.filter((project) => project.id !== deletedId));
+      setSelectedItems((current) => current.filter((item) => mediaProjectId(item.key) !== deletedId));
+      setDeleteProject(null); setProjectId("all"); setCursor(null); setHistory([]);
+    } catch (cause) { setProjectError(cause instanceof Error ? cause.message : "Could not delete the folder"); }
+    finally { setProjectBusy(false); }
+  };
+
   const chooseProject = (next: string) => { setProjectId(next); setCursor(null); setHistory([]); };
-  const switchAssetKind = (next: "media" | "music") => { setAssetKind(next); setProjectId("all"); setCursor(null); setHistory([]); };
+  const switchAssetKind = (next: "media" | "music") => { setAssetKind(next); setSelectedItems([]); if (demoMode) setItems(next === "music" ? initialMusicItems : initialItems); setProjectId("all"); setCursor(null); setHistory([]); };
   const visibleProjects = projects.filter((project) => (project.kind ?? "media") === assetKind);
-  const selectedName = projectId === "all" ? assetKind === "music" ? "All music" : "All media" : projectId === "unfiled" ? "Unsorted" : projects.find((project) => project.id === projectId)?.name ?? "Asset folder";
+  const selectedProject = projects.find((project) => project.id === projectId);
+  const selectedName = projectId === "all" ? assetKind === "music" ? "All music" : "All media" : projectId === "unfiled" ? "Unsorted" : selectedProject?.name ?? "Asset folder";
 
   const openMove = (item: MediaObject) => {
     const source = mediaProjectId(item.key);
@@ -522,19 +610,24 @@ function MediaView({ onCompose }: { onCompose: (media: ComposerMedia) => void })
     finally { setBusyKey(null); }
   };
 
+  const toggleSelected = (item: MediaObject) => setSelectedItems((current) => current.some((selected) => selected.key === item.key) ? current.filter((selected) => selected.key !== item.key) : current.length >= 100 ? current : [...current, item]);
+
   return <div className="page page-enter"><div className="inline-heading"><div><h2>Asset library</h2><p>Keep videos, images, and licensed music in named R2 folders that you and your agents can reuse.</p></div><button className="primary-button" disabled={busyKey === "upload"} onClick={() => inputRef.current?.click()}>{busyKey === "upload" ? <LoaderCircle className="spin" /> : <Upload />} {busyKey === "upload" ? uploadProgress : `Upload to ${selectedName}`}</button><input ref={inputRef} className="visually-hidden" type="file" multiple accept={assetKind === "music" ? "audio/*" : "image/*,video/*"} onChange={(event) => void uploadFiles(event.target.files)} /></div>
     <div className="asset-kind-tabs"><button className={assetKind === "media" ? "active" : ""} onClick={() => switchAssetKind("media")}><Images/> Images & videos</button><button className={assetKind === "music" ? "active" : ""} onClick={() => switchAssetKind("music")}><Music2/> Music</button></div>
-    <section className="media-projects"><header><div><p className="eyebrow">R2 folders</p><h3>Choose a reusable asset folder</h3></div><div className="media-project-header-actions">{projectId !== "all" && projectId !== "unfiled" && <button className="secondary-button" onClick={() => { const project = projects.find((item) => item.id === projectId); if (project) { setRenameProject(project); setRenameProjectName(project.name); setProjectError(""); } }}><Pencil /> Rename folder</button>}<button className="secondary-button" onClick={() => { setProjectName(""); setProjectError(""); setCreateOpen(true); }}><Plus /> New folder</button></div></header><div><button className={projectId === "all" ? "active" : ""} onClick={() => chooseProject("all")}><span><Images /></span><b>{assetKind === "music" ? "All music" : "All media"}</b><small>{assetKind === "music" ? "Every audio track" : "Every visual asset"}</small></button><button className={projectId === "unfiled" ? "active" : ""} onClick={() => chooseProject("unfiled")}><span><FolderOpen /></span><b>Unsorted</b><small>Existing and loose files</small></button>{visibleProjects.map((project) => <button className={projectId === project.id ? "active" : ""} onClick={() => chooseProject(project.id)} key={project.id}><span><Folder /></span><b>{project.name}</b><small>{project.count} item{project.count === 1 ? "" : "s"}</small></button>)}</div></section>
+    <section className="media-projects"><header><div><p className="eyebrow">R2 folders</p><h3>Choose a reusable asset folder</h3></div><div className="media-project-header-actions">{selectedProject && <><button className="secondary-button" onClick={() => { setRenameProject(selectedProject); setRenameProjectName(selectedProject.name); setProjectError(""); }}><Pencil /> Rename folder</button><button className="danger-outline-button" onClick={() => { setDeleteProject(selectedProject); setProjectError(""); }}><Trash2 /> Delete folder</button></>}<button className="secondary-button" onClick={() => { setProjectName(""); setProjectError(""); setCreateOpen(true); }}><Plus /> New folder</button></div></header><div><button className={projectId === "all" ? "active" : ""} onClick={() => chooseProject("all")}><span><Images /></span><b>{assetKind === "music" ? "All music" : "All media"}</b><small>{assetKind === "music" ? "Every audio track" : "Every visual asset"}</small></button><button className={projectId === "unfiled" ? "active" : ""} onClick={() => chooseProject("unfiled")}><span><FolderOpen /></span><b>Unsorted</b><small>Existing and loose files</small></button>{visibleProjects.map((project) => <button className={projectId === project.id ? "active" : ""} onClick={() => chooseProject(project.id)} key={project.id}><span><Folder /></span><b>{project.name}</b><small>{project.count} item{project.count === 1 ? "" : "s"}</small></button>)}</div></section>
+    {sequenceNotice && <div className="slideshow-notice success">{sequenceNotice}<button onClick={() => setSequenceNotice("")}><X/></button></div>}
+    {selectedItems.length > 0 && <section className="media-selection-bar"><b>{selectedItems.length} selected</b><span>Selection stays active while you browse folders and pages.</span><button className="secondary-button" onClick={() => setSelectedItems([])}>Clear</button><button className="primary-button" onClick={() => setSequenceOpen(true)}><CalendarDays/> Schedule sequence</button></section>}
     {error && <div className="media-error"><CircleAlert />{error}<button onClick={() => void load(cursor)}>Retry</button></div>}
-    {loading ? <div className="media-loading"><LoaderCircle className="spin" />Loading media from R2…</div> : items.length === 0 ? <Empty title={`${selectedName} is empty`} body={assetKind === "music" ? "Upload an audio track here, or choose another music folder." : "Upload an image or video here, or choose another media folder."} /> : <div className="media-grid">{items.map((item) => { const kind = mediaKind(item.name); const busy = busyKey === item.key; return <article key={item.key}><div className="media-image">{kind === "image" ? <img src={item.url} alt={item.name} loading="lazy" /> : kind === "video" ? <video src={item.url} preload="metadata" muted /> : kind === "audio" ? <div className="media-audio"><Music2/><audio src={item.url} controls preload="metadata"/></div> : <span className="media-file"><FileIcon /></span>}<span>{kind === "video" ? <Video /> : kind === "image" ? <ImageIcon /> : kind === "audio" ? <Music2/> : <FileIcon />}{kind}</span><div className="media-actions">{(kind === "image" || kind === "video") && <button className="icon-button" disabled={busy} onClick={() => setPreviewItem(item)} aria-label={`Preview ${item.name}`} title="Preview"><Eye /></button>}<button className="icon-button" disabled={busy || visibleProjects.length === 0} onClick={() => openMove(item)} aria-label={`Move ${item.name}`} title="Move to folder"><FolderInput /></button><button className="icon-button" disabled={busy} onClick={() => { setRenameItem(item); setRenameName(item.name); }} aria-label={`Rename ${item.name}`}><Pencil /></button><button className="icon-button danger" disabled={busy} onClick={() => setDeleteItem(item)} aria-label={`Delete ${item.name}`}>{busy ? <LoaderCircle className="spin" /> : <Trash2 />}</button></div></div><div><b title={item.key}>{item.name}</b><span>{formatBytes(item.size)}{item.lastModified ? ` · ${new Date(item.lastModified).toLocaleDateString()}` : ""}</span></div>{kind === "audio" ? <button className="secondary-button" disabled>Ready for Video Studio</button> : kind === "file" ? <button className="secondary-button" disabled>Unsupported file</button> : <button className="secondary-button" onClick={() => onCompose({ name: item.name, url: item.url, previewUrl: item.url, type: kind })}>Use in post</button>}</article>; })}</div>}
+    {loading ? <div className="media-loading"><LoaderCircle className="spin" />Loading media from R2…</div> : items.length === 0 ? <Empty title={`${selectedName} is empty`} body={assetKind === "music" ? "Upload an audio track here, or choose another music folder." : "Upload an image or video here, or choose another media folder."} /> : <div className="media-grid">{items.map((item) => { const kind = mediaKind(item.name); const busy = busyKey === item.key; const selected = selectedItems.some((selectedItem) => selectedItem.key === item.key); return <article className={selected ? "selected" : ""} key={item.key}><div className="media-image">{kind === "image" ? <img src={item.url} alt={item.name} loading="lazy" /> : kind === "video" ? <video src={item.url} preload="metadata" muted /> : kind === "audio" ? <div className="media-audio"><Music2/><audio src={item.url} controls preload="metadata"/></div> : <span className="media-file"><FileIcon /></span>}{(kind === "image" || kind === "video") && <button className="media-select" aria-label={selected ? `Deselect ${item.name}` : `Select ${item.name}`} aria-pressed={selected} onClick={() => toggleSelected(item)}>{selected && <Check/>}</button>}<span>{kind === "video" ? <Video /> : kind === "image" ? <ImageIcon /> : kind === "audio" ? <Music2/> : <FileIcon />}{kind}</span><div className="media-actions">{(kind === "image" || kind === "video") && <button className="icon-button" disabled={busy} onClick={() => setPreviewItem(item)} aria-label={`Preview ${item.name}`} title="Preview"><Eye /></button>}<button className="icon-button" disabled={busy || visibleProjects.length === 0} onClick={() => openMove(item)} aria-label={`Move ${item.name}`} title="Move to folder"><FolderInput /></button><button className="icon-button" disabled={busy} onClick={() => { setRenameItem(item); setRenameName(item.name); }} aria-label={`Rename ${item.name}`}><Pencil /></button><button className="icon-button danger" disabled={busy} onClick={() => setDeleteItem(item)} aria-label={`Delete ${item.name}`}>{busy ? <LoaderCircle className="spin" /> : <Trash2 />}</button></div></div><div><b title={item.key}>{item.name}</b><span>{formatBytes(item.size)}{item.lastModified ? ` · ${new Date(item.lastModified).toLocaleDateString()}` : ""}</span></div>{kind === "audio" ? <button className="secondary-button" disabled>Ready for Video Studio</button> : kind === "file" ? <button className="secondary-button" disabled>Unsupported file</button> : <button className="secondary-button" onClick={() => onCompose({ name: item.name, url: item.url, previewUrl: item.url, type: kind })}>Use in post</button>}</article>; })}</div>}
     <div className="media-pagination"><button className="secondary-button" disabled={loading || history.length === 0} onClick={() => { const previous = history.at(-1) ?? null; setHistory((current) => current.slice(0, -1)); setCursor(previous); }}><ChevronLeft /> Previous</button><span><Cloud />Page {history.length + 1}</span><button className="secondary-button" disabled={loading || !nextCursor} onClick={() => { setHistory((current) => [...current, cursor]); setCursor(nextCursor); }}>Next <ChevronRight /></button></div>
     {createOpen && <PromptModal title="Create an asset folder" body="Name it after an app, brand, campaign, music mood, or anything else. Agents will see the same folder name." value={projectName} placeholder="e.g. Product launch" confirmLabel="Create folder" busy={projectBusy} error={projectError} onChange={setProjectName} onClose={() => setCreateOpen(false)} onConfirm={() => void createProject()} />}
     {renameProject && <PromptModal title="Rename asset folder" body="Only the folder label changes. Its R2 objects and links stay in place." value={renameProjectName} confirmLabel="Rename folder" busy={projectBusy} error={projectError} onChange={setRenameProjectName} onClose={() => setRenameProject(null)} onConfirm={() => void renameFolder()} />}
+    {deleteProject && <ConfirmModal eyebrow="Delete R2 folder" title={`Delete ${deleteProject.name}?`} body={`This permanently removes the folder and its ${deleteProject.count} item${deleteProject.count === 1 ? "" : "s"} from Cloudflare. Posts and creative projects using those URLs may lose their media.`} confirmLabel="Delete folder" busy={projectBusy} error={projectError} onClose={() => setDeleteProject(null)} onConfirm={() => void removeFolder()} />}
     {renameItem && <PromptModal title="Rename media" body="Update the file name without changing where it is used." value={renameName} confirmLabel="Save name" busy={busyKey === renameItem.key} onChange={setRenameName} onClose={() => setRenameItem(null)} onConfirm={() => void rename()} />}
     {moveItem && <MoveMediaModal item={moveItem} projects={visibleProjects} value={moveProjectId} busy={busyKey === moveItem.key} error={moveError} onChange={setMoveProjectId} onClose={() => setMoveItem(null)} onConfirm={() => void move()} />}
     {previewItem && <MediaPreviewModal key={previewItem.key} item={previewItem} onClose={() => setPreviewItem(null)} />}
     {deleteItem && <ConfirmModal eyebrow="Delete media" title={`Delete ${deleteItem.name}?`} body="This permanently removes the file from Cloudflare. Posts already using this URL may lose their media." confirmLabel="Delete media" busy={busyKey === deleteItem.key} onClose={() => setDeleteItem(null)} onConfirm={() => void remove()} />}
-  </div>;
+    {sequenceOpen && <MediaSequenceModal items={selectedItems} publishingDefaults={sequencePublishingDefaults} demoMode={demoMode} onClose={() => setSequenceOpen(false)} onComplete={(message) => { setSequenceNotice(message); setSelectedItems([]); setSequenceOpen(false); }}/>}</div>;
 }
 
 function BrandModal({ brand, onClose, onSaved }: { brand?: Brand; onClose: () => void; onSaved: (brand: Brand, assignments: { id: string; brandId: string }[]) => void }) {
@@ -830,7 +923,7 @@ function VideoFramePicker({ videoUrl, initialOffsetMs, platform = "Video", captu
 
 type ComposerMode = "create" | "duplicate" | "edit";
 
-function Composer({ onClose, onSave, publishingDefaults, initialMedia = null, initialPost = null, initialText = "", initialBrandId, mode = "create" }: { onClose: () => void; onSave: (post: RelayPost, mode: ComposerMode) => Promise<boolean>; publishingDefaults: PublishingDefaults; initialMedia?: ComposerMedia | null; initialPost?: RelayPost | null; initialText?: string; initialBrandId?: string; mode?: ComposerMode }) {
+function Composer({ onClose, onSave, publishingDefaults, initialMedia = null, initialPost = null, initialText = "", initialBrandId, mode = "create", demoMode = false, initialCampaigns = [], initialTemplates = [] }: { onClose: () => void; onSave: (post: RelayPost, mode: ComposerMode) => Promise<boolean>; publishingDefaults: PublishingDefaults; initialMedia?: ComposerMedia | null; initialPost?: RelayPost | null; initialText?: string; initialBrandId?: string; mode?: ComposerMode; demoMode?: boolean; initialCampaigns?: Campaign[]; initialTemplates?: PostTemplate[] }) {
   const brands = useBrands();
   const accounts = useAccounts();
   const mediaInputRef = useRef<HTMLInputElement>(null);
@@ -851,7 +944,7 @@ function Composer({ onClose, onSave, publishingDefaults, initialMedia = null, in
   const reusableMedia = initialMedia ?? (initialPost?.mediaUrl && initialPost.mediaType !== "none" ? { name: initialPost.mediaUrl.split("/").at(-1) || "Saved media", url: initialPost.mediaUrl, previewUrl: initialPost.mediaUrl, type: initialPost.mediaType, urls: initialPost.mediaUrls } : null);
   const [text, setText] = useState(initialPost?.text ?? initialText); const [brandId, setBrandId] = useState(reusableBrandId);
   const [campaignId, setCampaignId] = useState(initialPost?.campaignId ?? "");
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]); const [templates, setTemplates] = useState<PostTemplate[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns); const [templates, setTemplates] = useState<PostTemplate[]>(initialTemplates);
   const [campaignCreateOpen, setCampaignCreateOpen] = useState(false); const [campaignName, setCampaignName] = useState("");
   const [campaignCreateBusy, setCampaignCreateBusy] = useState(false); const [campaignCreateError, setCampaignCreateError] = useState("");
   const available = accounts.filter((account) => account.brandId === (brandId || null));
@@ -890,7 +983,7 @@ function Composer({ onClose, onSave, publishingDefaults, initialMedia = null, in
   const [recovered, setRecovered] = useState(false);
   const [saved, setSaved] = useState(true);
   const [submitBusy, setSubmitBusy] = useState(false); const [submitError, setSubmitError] = useState("");
-  useEffect(() => { void Promise.all([fetch("/api/v1/campaigns", { cache: "no-store" }), fetch("/api/v1/templates", { cache: "no-store" })]).then(async ([campaignResponse, templateResponse]) => { const [campaignPayload, templatePayload] = await Promise.all([campaignResponse.json(), templateResponse.json()]) as [{ data?: Campaign[] }, { data?: PostTemplate[] }]; if (campaignResponse.ok) setCampaigns(campaignPayload.data ?? []); if (templateResponse.ok) setTemplates(templatePayload.data ?? []); }).catch(() => undefined); }, []);
+  useEffect(() => { if (demoMode) return; void Promise.all([fetch("/api/v1/campaigns", { cache: "no-store" }), fetch("/api/v1/templates", { cache: "no-store" })]).then(async ([campaignResponse, templateResponse]) => { const [campaignPayload, templatePayload] = await Promise.all([campaignResponse.json(), templateResponse.json()]) as [{ data?: Campaign[] }, { data?: PostTemplate[] }]; if (campaignResponse.ok) setCampaigns(campaignPayload.data ?? []); if (templateResponse.ok) setTemplates(templatePayload.data ?? []); }).catch(() => undefined); }, [demoMode]);
   useEffect(() => { if (mode !== "create") return; const draft = parseComposerDraft(window.localStorage.getItem(COMPOSER_DRAFT_KEY)); if (!draft) return; setText(draft.text); setBrandId(draft.brandId); setCampaignId(draft.campaignId); setSelected(draft.selected); setVariants(draft.variants); setSchedule(draft.schedule); setScheduledAt(draft.scheduledAt); if (draft.media) setMedia(draft.media); setRecovered(true); }, [mode]);
   useEffect(() => { setSaved(false); const timeout = setTimeout(() => { if (mode === "create") window.localStorage.setItem(COMPOSER_DRAFT_KEY, JSON.stringify({ version: 1, text, brandId, campaignId, selected, variants, media: media?.url ? media : undefined, schedule, scheduledAt, updatedAt: new Date().toISOString() })); setSaved(true); }, 700); return () => clearTimeout(timeout); }, [text, brandId, campaignId, selected, variants, media, schedule, scheduledAt, mode]);
   useEffect(() => () => { if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current); if (localCoverPreviewRef.current) URL.revokeObjectURL(localCoverPreviewRef.current); if (localYoutubeThumbnailPreviewRef.current) URL.revokeObjectURL(localYoutubeThumbnailPreviewRef.current); }, []);
@@ -1087,7 +1180,7 @@ function CommandMenu({ posts, brands, accounts, onClose, go, compose, openPost, 
   return <div className="modal-layer command-layer"><button className="modal-scrim" onClick={onClose} aria-label="Close command menu" /><div className="command-menu" role="dialog" aria-modal="true" aria-label="Search Relay"><div><Search /><input autoFocus value={query} placeholder="Search posts, media, brands, accounts…" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(results.length - 1, value + 1)); } else if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); } else if (event.key === "Enter" && results[active]) { event.preventDefault(); closeAfter(results[active].action)(); } }} /><kbd>ESC</kbd></div><p>{needle ? `${results.length} result${results.length === 1 ? "" : "s"}` : "Quick actions"}</p>{results.map(({ id, name, detail, icon: Icon, action }, index) => <button className={active === index ? "active" : ""} key={id} onMouseEnter={() => setActive(index)} onClick={closeAfter(action)}><Icon /><span><b>{name}</b><small>{detail}</small></span><em>↵</em></button>)}{results.length === 0 && <div className="command-empty"><Search /><b>No matching Relay items</b><span>Try a post caption, media name, brand, or account.</span></div>}<footer><span><Command /> Relay command menu</span><span>↑↓ Navigate · ↵ Select</span></footer></div></div>;
 }
 
-export default function RelayApp({ user, initialBrands, initialAccounts, initialPosts, initialPublishingDefaults, initialNow, initialView = "home" }: { user: { name: string; email: string; role: string }; initialBrands: Brand[]; initialAccounts: SocialAccount[]; initialPosts: RelayPost[]; initialPublishingDefaults: PublishingDefaults; initialNow: string; initialView?: View }) {
+export default function RelayApp({ user, initialBrands, initialAccounts, initialPosts, initialPublishingDefaults, initialNow, initialView = "home", demoMode = false }: { user: { name: string; email: string; role: string }; initialBrands: Brand[]; initialAccounts: SocialAccount[]; initialPosts: RelayPost[]; initialPublishingDefaults: PublishingDefaults; initialNow: string; initialView?: View; demoMode?: boolean }) {
   useModalAccessibility();
   const [view, setView] = useState<View>(initialView); const [posts, setPosts] = useState(initialPosts);
   const [settingsLanding, setSettingsLanding] = useState<SettingsSection>("General");
@@ -1095,7 +1188,7 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
   const [accountList, setAccountList] = useState(initialAccounts);
   const [publishingDefaults, setPublishingDefaults] = useState(initialPublishingDefaults);
   const [composer, setComposer] = useState(false); const [composerMedia, setComposerMedia] = useState<ComposerMedia | null>(null); const [composerPost, setComposerPost] = useState<RelayPost | null>(null); const [composerSeed, setComposerSeed] = useState<{ text: string; brandId: string } | null>(null); const [composerMode, setComposerMode] = useState<ComposerMode>("create"); const [command, setCommand] = useState(false); const [menu, setMenu] = useState(false); const [theme, setTheme] = useState("light"); const [toast, setToast] = useState(""); const [toastTone, setToastTone] = useState<"success" | "error">("success");
-  const [notifications, setNotifications] = useState<RelayNotification[]>([]); const [notificationsOpen, setNotificationsOpen] = useState(false); const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [notifications, setNotifications] = useState<RelayNotification[]>(demoMode ? demoNotifications : []); const [notificationsOpen, setNotificationsOpen] = useState(false); const [notificationsLoading, setNotificationsLoading] = useState(!demoMode);
   const [themeReady, setThemeReady] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false); const [logoutBusy, setLogoutBusy] = useState(false); const [logoutError, setLogoutError] = useState("");
   const [pendingPostDelete, setPendingPostDelete] = useState<RelayPost | null>(null); const [postDeleteBusy, setPostDeleteBusy] = useState(false); const [postDeleteError, setPostDeleteError] = useState("");
@@ -1114,6 +1207,7 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
   }, []);
   useEffect(() => { document.documentElement.dataset.theme = theme; if (themeReady) window.localStorage.setItem("relay-theme", theme); }, [theme, themeReady]);
   useEffect(() => {
+    if (demoMode) { setNotificationsLoading(false); return; }
     let active = true;
     const load = async () => {
       try {
@@ -1124,8 +1218,9 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
     };
     void load(); const interval = window.setInterval(() => void load(), 15_000);
     return () => { active = false; window.clearInterval(interval); };
-  }, []);
+  }, [demoMode]);
   useEffect(() => {
+    if (demoMode) return;
     let active = true;
     const load = async () => {
       const response = await fetch("/api/v1/posts", { cache: "no-store" }).catch(() => null);
@@ -1135,7 +1230,7 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
     };
     const interval = window.setInterval(() => void load(), 10_000);
     return () => { active = false; window.clearInterval(interval); };
-  }, []);
+  }, [demoMode]);
   useEffect(() => { const handle = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setCommand(true); } if (event.key === "Escape") { setComposer(false); setCommand(false); } }; window.addEventListener("keydown", handle); return () => window.removeEventListener("keydown", handle); }, []);
   const openComposer = (media: ComposerMedia | null = null, post: RelayPost | null = null, mode: ComposerMode = post ? "duplicate" : "create") => { setComposerMedia(media); setComposerPost(post); setComposerSeed(null); setComposerMode(mode); setComposer(true); };
   const openCreativeComposer = (seed: { media: ComposerMedia; text: string; brandId: string }) => { setComposerMedia(seed.media); setComposerPost(null); setComposerSeed({ text: seed.text, brandId: seed.brandId }); setComposerMode("create"); setComposer(true); };
@@ -1146,6 +1241,7 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
     if (response.ok) setNotifications(payload.data ?? []);
   };
   const recordPostNotifications = async (post: RelayPost) => {
+    if (demoMode) return;
     const items = post.targets.map((target) => {
       const platform = providerRegistry.get(target.provider).name;
       const isTikTokInbox = target.provider === "tiktok" && target.settings.kind === "tiktok" && target.settings.privacyLevel === "SELF_ONLY";
@@ -1170,7 +1266,23 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
       setTimeout(() => setToast(""), 4500);
     }
   };
+  const saveDemoPost = (post: RelayPost, mode: ComposerMode): boolean => {
+    const savedPost: RelayPost = {
+      ...post,
+      id: mode === "edit" && post.id ? post.id : `demo-post-${Date.now()}`,
+      createdAt: post.createdAt ?? new Date().toISOString(),
+      targets: post.targets.map((target) => ({ ...target, externalUrl: undefined, error: undefined, analytics: undefined })),
+    };
+    setPosts((current) => mode === "edit" && current.some((item) => item.id === savedPost.id)
+      ? current.map((item) => item.id === savedPost.id ? savedPost : item)
+      : [savedPost, ...current]);
+    setToastTone("success");
+    setToast(savedPost.status === "scheduled" ? "Demo post scheduled" : savedPost.status === "draft" ? "Demo draft saved" : "Demo post published (demo only)");
+    setTimeout(() => setToast(""), 4000);
+    return true;
+  };
   const addPost = async (post: RelayPost): Promise<boolean> => {
+    if (demoMode) return saveDemoPost(post, "create");
     try {
       const response = await fetch("/api/v1/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(post) });
       const payload = await response.json() as { data?: RelayPost; error?: string };
@@ -1188,6 +1300,7 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
   };
   const savePost = async (post: RelayPost, mode: ComposerMode): Promise<boolean> => {
     if (mode !== "edit") return addPost(post);
+    if (demoMode) return saveDemoPost(post, "edit");
     try {
       const response = await fetch("/api/v1/posts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(post) });
       const payload = await response.json() as { data?: RelayPost; error?: string };
@@ -1244,10 +1357,10 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
   const markAllNotificationsRead = async () => {
     const readAt = new Date().toISOString();
     setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? readAt })));
-    await fetch("/api/v1/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: "{}" });
+    if (!demoMode) await fetch("/api/v1/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: "{}" });
   };
   const requestPostDelete = (post: RelayPost) => { setPostDeleteError(""); setPendingPostDelete(post); };
-  const content = useMemo(() => { if (view === "home") return <HomeView posts={posts} onCompose={() => openComposer()} go={navigate} userName={user.name} initialNow={initialNow} />; if (view === "calendar") return <PlanningCalendar posts={posts} brands={brandList} accounts={accountList} onCompose={() => openComposer()} onOpen={(post) => openComposer(null, post, post.status === "draft" || post.status === "scheduled" ? "edit" : "duplicate")} onDelete={requestPostDelete} onDuplicate={bulkDuplicate} onRetry={bulkRetry} onDeleteMany={bulkDelete} onAssignCampaign={assignCampaign} onReschedule={reschedulePost} onBulkReschedule={bulkReschedule} />; if (view === "posts") return <PostsView posts={posts} onPostAgain={(post) => openComposer(null, post)} onEdit={(post) => openComposer(null, post, "edit")} onRetry={(post) => void retryPost(post)} onDelete={requestPostDelete} />; if (view === "analytics") return <AnalyticsDashboard posts={posts} brands={brandList} accounts={accountList} onCompose={() => openComposer()} />; if (view === "slideshows") return <SlideshowStudio onCompose={openCreativeComposer} />; if (view === "videos") return <VideoStudio accounts={accountList} onCompose={openCreativeComposer} />; if (view === "accounts") return <AccountsView onAccountDeleted={(id) => setAccountList((current) => current.filter((item) => item.id !== id))} />; if (view === "media") return <MediaView onCompose={(media) => openComposer(media)} />; if (view === "brands") return <BrandsView onBrandCreated={(brand) => setBrandList((current) => [...current, brand])} onBrandUpdated={(brand) => setBrandList((current) => current.map((item) => item.id === brand.id ? brand : item))} onBrandDeleted={(id) => setBrandList((current) => current.filter((item) => item.id !== id))} onAccountsAssigned={(assignments) => setAccountList((current) => current.map((account) => { const assignment = assignments.find((item) => item.id === account.id); return assignment ? { ...account, brandId: assignment.brandId } : account; }))} />; if (view === "docs") return <CliDocs onOpenApiKeys={openApiKeySettings} />; return <SettingsView theme={theme} setTheme={setTheme} go={navigate} user={user} publishingDefaults={publishingDefaults} onPublishingDefaultsChanged={setPublishingDefaults} initialSection={settingsLanding} />; }, [view, posts, theme, user, initialNow, accountList, brandList, publishingDefaults, settingsLanding, navigate, openApiKeySettings]);
+  const content = useMemo(() => { if (view === "home") return <HomeView posts={posts} onCompose={() => openComposer()} go={navigate} userName={user.name} initialNow={initialNow} />; if (view === "calendar") return <PlanningCalendar posts={posts} brands={brandList} accounts={accountList} onCompose={() => openComposer()} onOpen={(post) => openComposer(null, post, post.status === "draft" || post.status === "scheduled" ? "edit" : "duplicate")} onDelete={requestPostDelete} onDuplicate={bulkDuplicate} onRetry={bulkRetry} onDeleteMany={bulkDelete} onAssignCampaign={assignCampaign} onReschedule={reschedulePost} onBulkReschedule={bulkReschedule} demoMode={demoMode} initialCampaigns={demoMode ? demoCampaigns : []} />; if (view === "posts") return <PostsView posts={posts} onPostAgain={(post) => openComposer(null, post)} onEdit={(post) => openComposer(null, post, "edit")} onRetry={(post) => void retryPost(post)} onDelete={requestPostDelete} />; if (view === "analytics") return <AnalyticsDashboard posts={posts} brands={brandList} accounts={accountList} onCompose={() => openComposer()} demoMode={demoMode} initialCampaigns={demoMode ? demoCampaigns : []} initialReports={demoMode ? demoReports : []} />; if (view === "slideshows") return <SlideshowStudio onCompose={openCreativeComposer} demoMode={demoMode} initialProjects={demoMode ? demoSlideshowProjects : []} />; if (view === "videos") return <VideoStudio accounts={accountList} onCompose={openCreativeComposer} demoMode={demoMode} initialProjects={demoMode ? demoVideoProjects : []} />; if (view === "accounts") return <AccountsView onAccountDeleted={(id) => setAccountList((current) => current.filter((item) => item.id !== id))} />; if (view === "media") return <MediaView onCompose={(media) => openComposer(media)} demoMode={demoMode} initialItems={demoMode ? demoMedia : []} initialMusicItems={demoMode ? demoMusic : []} initialProjects={demoMode ? demoMediaProjects : []} />; if (view === "brands") return <BrandsView onBrandCreated={(brand) => setBrandList((current) => [...current, brand])} onBrandUpdated={(brand) => setBrandList((current) => current.map((item) => item.id === brand.id ? brand : item))} onBrandDeleted={(id) => setBrandList((current) => current.filter((item) => item.id !== id))} onAccountsAssigned={(assignments) => setAccountList((current) => current.map((account) => { const assignment = assignments.find((item) => item.id === account.id); return assignment ? { ...account, brandId: assignment.brandId } : account; }))} />; if (view === "docs") return <CliDocs onOpenApiKeys={openApiKeySettings} />; return <SettingsView theme={theme} setTheme={setTheme} go={navigate} user={user} publishingDefaults={publishingDefaults} onPublishingDefaultsChanged={setPublishingDefaults} initialSection={settingsLanding} />; }, [view, posts, theme, user, initialNow, accountList, brandList, publishingDefaults, settingsLanding, navigate, openApiKeySettings, demoMode]);
   const logout = async () => {
     setLogoutBusy(true); setLogoutError("");
     try {
@@ -1257,5 +1370,5 @@ export default function RelayApp({ user, initialBrands, initialAccounts, initial
     } catch (reason) { setLogoutError(reason instanceof Error ? reason.message : "Relay could not end your session."); setLogoutBusy(false); }
   };
   const unreadNotifications = notifications.filter((item) => !item.readAt).length;
-  return <BrandsContext.Provider value={brandList}><AccountsContext.Provider value={accountList}><div className="app-shell"><Sidebar active={view} onChange={navigate} mobileOpen={menu} onClose={() => setMenu(false)} user={user} onLogout={() => { setLogoutError(""); setLogoutConfirm(true); }} /><main className="main"><Topbar view={view} unread={unreadNotifications} onNotifications={() => setNotificationsOpen(true)} onCompose={() => openComposer()} onCommand={() => setCommand(true)} onMenu={() => setMenu(true)} />{content}</main><nav className="mobile-nav">{navItems.slice(0, 3).map(({ id, icon: Icon }) => <button className={view === id ? "active" : ""} onClick={() => navigate(id)} key={id}><Icon /><span>{viewLabel[id]}</span></button>)}<button className="mobile-create" onClick={() => openComposer()}><Plus /></button><button className={view === "accounts" ? "active" : ""} onClick={() => navigate("accounts")}><Users /><span>Accounts</span></button><button onClick={() => setMenu(true)}><Menu /><span>More</span></button></nav>{composer && <Composer publishingDefaults={publishingDefaults} initialMedia={composerMedia} initialPost={composerPost} initialText={composerSeed?.text} initialBrandId={composerSeed?.brandId} mode={composerMode} onClose={closeComposer} onSave={savePost} />}{command && <CommandMenu posts={posts} brands={brandList} accounts={accountList} onClose={() => setCommand(false)} go={navigate} compose={() => openComposer()} openPost={(post) => openComposer(null, post, post.status === "draft" || post.status === "scheduled" ? "edit" : "duplicate")} composeMedia={(media) => openComposer(media)} />}{notificationsOpen && <NotificationCenter notifications={notifications} loading={notificationsLoading} onClose={() => setNotificationsOpen(false)} onMarkAllRead={() => void markAllNotificationsRead()} />}{logoutConfirm && <LogoutModal busy={logoutBusy} error={logoutError} onClose={() => setLogoutConfirm(false)} onConfirm={() => void logout()} />}{pendingPostDelete && <ConfirmModal eyebrow={pendingPostDelete.status === "scheduled" ? "Cancel schedule" : "Delete post"} title={pendingPostDelete.status === "scheduled" ? "Cancel this scheduled post?" : "Delete this post from Relay?"} body={pendingPostDelete.status === "scheduled" ? "It will be removed from the calendar and will not be published." : "Its media stays in your library, but the saved post and destination details will be removed."} confirmLabel={pendingPostDelete.status === "scheduled" ? "Cancel schedule" : "Delete post"} busy={postDeleteBusy} error={postDeleteError} onClose={() => setPendingPostDelete(null)} onConfirm={() => void deletePost()} />}{toast && <div className={`toast ${toastTone}`}><span>{toastTone === "error" ? <CircleAlert /> : <Check />}</span>{toast}</div>}</div></AccountsContext.Provider></BrandsContext.Provider>;
+  return <BrandsContext.Provider value={brandList}><AccountsContext.Provider value={accountList}><div className="app-shell"><Sidebar active={view} onChange={navigate} mobileOpen={menu} onClose={() => setMenu(false)} user={user} onLogout={() => { setLogoutError(""); setLogoutConfirm(true); }} /><main className="main"><Topbar view={view} unread={unreadNotifications} onNotifications={() => setNotificationsOpen(true)} onCompose={() => openComposer()} onCommand={() => setCommand(true)} onMenu={() => setMenu(true)} />{content}</main><nav className="mobile-nav">{navItems.slice(0, 3).map(({ id, icon: Icon }) => <button className={view === id ? "active" : ""} onClick={() => navigate(id)} key={id}><Icon /><span>{viewLabel[id]}</span></button>)}<button className="mobile-create" onClick={() => openComposer()}><Plus /></button><button className={view === "accounts" ? "active" : ""} onClick={() => navigate("accounts")}><Users /><span>Accounts</span></button><button onClick={() => setMenu(true)}><Menu /><span>More</span></button></nav>{composer && <Composer demoMode={demoMode} initialCampaigns={demoMode ? demoCampaigns : []} initialTemplates={demoMode ? demoTemplates : []} publishingDefaults={publishingDefaults} initialMedia={composerMedia} initialPost={composerPost} initialText={composerSeed?.text} initialBrandId={composerSeed?.brandId} mode={composerMode} onClose={closeComposer} onSave={savePost} />}{command && <CommandMenu posts={posts} brands={brandList} accounts={accountList} onClose={() => setCommand(false)} go={navigate} compose={() => openComposer()} openPost={(post) => openComposer(null, post, post.status === "draft" || post.status === "scheduled" ? "edit" : "duplicate")} composeMedia={(media) => openComposer(media)} />}{notificationsOpen && <NotificationCenter notifications={notifications} loading={notificationsLoading} onClose={() => setNotificationsOpen(false)} onMarkAllRead={() => void markAllNotificationsRead()} />}{logoutConfirm && <LogoutModal busy={logoutBusy} error={logoutError} onClose={() => setLogoutConfirm(false)} onConfirm={() => void logout()} />}{pendingPostDelete && <ConfirmModal eyebrow={pendingPostDelete.status === "scheduled" ? "Cancel schedule" : "Delete post"} title={pendingPostDelete.status === "scheduled" ? "Cancel this scheduled post?" : "Delete this post from Relay?"} body={pendingPostDelete.status === "scheduled" ? "It will be removed from the calendar and will not be published." : "Its media stays in your library, but the saved post and destination details will be removed."} confirmLabel={pendingPostDelete.status === "scheduled" ? "Cancel schedule" : "Delete post"} busy={postDeleteBusy} error={postDeleteError} onClose={() => setPendingPostDelete(null)} onConfirm={() => void deletePost()} />}{toast && <div className={`toast ${toastTone}`}><span>{toastTone === "error" ? <CircleAlert /> : <Check />}</span>{toast}</div>}</div></AccountsContext.Provider></BrandsContext.Provider>;
 }

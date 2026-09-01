@@ -45,6 +45,8 @@ openssl rand -base64 32   # ENCRYPTION_KEY — keep this stable
 
 The minimum configuration is documented in [`.env.example`](.env.example). Add provider app credentials only for the networks you want to connect.
 
+For the complete walkthrough, see [Self-host Relay](docs/SELF_HOSTING.md), which covers local Docker installation, Cloudflare R2, production deployment with Coolify, health checks, upgrades, and backups. Then use [Social app setup](docs/SOCIAL_APP_SETUP.md) to create the Facebook, Instagram, TikTok, and YouTube applications and obtain their API credentials.
+
 ## OAuth callback URLs
 
 Register the callback for every connection method you enable. Replace `<APP_URL>` with the browser-visible origin configured in `.env` (for example, `https://relay.example.com`) and do not add a trailing slash.
@@ -58,6 +60,21 @@ Register the callback for every connection method you enable. Replace `<APP_URL>
 | YouTube | `<APP_URL>/api/oauth/youtube/callback` |
 
 For local development with the default configuration, the YouTube callback is `http://localhost:3000/api/oauth/youtube/callback`. If you change `RELAY_PORT` or `APP_URL`, update every callback registered with the providers to match.
+
+## External slideshow image sources
+
+The slideshow image picker supports a user-supplied credential; no shared Pexels credential is configured in Relay. The key is entered in the Relay interface, not in `.env`:
+
+1. Create a personal [Pexels API key](https://www.pexels.com/api/).
+2. In Relay, open **Slideshows**, open or create a slideshow, and select **Add images**.
+3. Select the **Pexels** tab and paste the key into **Pexels API key**.
+4. Enter a search and select **Search**, then add the photos you want.
+
+Relay preserves the photographer, attribution, and Pexels source-page metadata for imported photos.
+
+Credentials are submitted only to the self-hosted Relay instance when a search is performed. They are never written to slideshow projects, R2 objects, application logs, or exported media. The optional **Remember credentials in this browser only** setting uses that browser's local storage; it is off by default. Selected images are downloaded by the self-hosted server into the user's temporary R2 staging area, validated as images, limited to 20 MB, and committed to Media only when the slideshow is saved or rendered.
+
+Relay uses only the official Pexels API.
 
 ## Publishing and analytics
 
@@ -177,20 +194,12 @@ pnpm dev
 ## Deployment notes
 
 - Production deployments can use `compose.coolify.yaml`; migrations run automatically.
+- Follow the complete [Coolify deployment guide](docs/SELF_HOSTING.md#production-deployment-with-coolify) for service domains, required variables, owner setup, and verification.
 - `APP_URL` must exactly match each provider's registered OAuth callback origin.
 - `R2_PUBLIC_URL` must be HTTPS and reachable by the social platforms.
 - `R2_RESOLVED_IP` is an optional emergency override for a failing DNS-selected R2 edge; leave it empty normally and only use a trusted Cloudflare IP.
 - Keep `ENCRYPTION_KEY` unchanged or existing connected-account tokens cannot be decrypted.
 - Close public signup with `ALLOW_REGISTRATION=false` after creating the owner.
-
-### Sponsorships
-
-Relay loads public sponsor inventory through `@growthcat/web` 0.0.6 using its bundled publishable SDK key. A deployment can override it with `NEXT_PUBLIC_GROWTHCAT_API_KEY`. Create these slots in the GrowthCat dashboard:
-
-- `gold_sponsor` — one exclusive premium sponsor shown in the desktop sidebar, repeated as the dominant Home partner, and included in the mobile experience.
-- `silver_sponsor` — two simultaneous, lower-cost sponsors shown after the Home publishing queue; configure the GrowthCat slot with capacity `2` and simultaneous delivery.
-
-Live slots render the current sponsor and track qualified impressions and clicks. Empty or available slots with a GrowthCat booking URL become “reserve this placement” cards. The “Sponsor Relay” navigation action presents both tiers and links to each GrowthCat booking calendar, including future availability while the current period is occupied. Missing or inactive slots render nothing.
 
 ## Contributing
 

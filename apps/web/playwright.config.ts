@@ -18,7 +18,6 @@ export default defineConfig({
     env: {
       PORT: "3022",
       HOSTNAME: "127.0.0.1",
-      RELAY_DEMO_MODE: "true",
       BETTER_AUTH_SECRET: "relay-e2e-verification-secret-1234567890",
       DATABASE_URL: "postgresql://relay:relay@127.0.0.1:65432/relay",
     },

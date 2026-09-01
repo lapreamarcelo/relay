@@ -32,7 +32,12 @@ async function command(binary: string, args: string[]): Promise<string> {
   });
 }
 
-export async function renderVideoArtifact(input: { projectId: string; sourceUrl: string; musicUrl?: string | null; labels: CreativeLabel[]; targetKey?: string }): Promise<string> {
+export interface RenderedVideoArtifact {
+  url: string;
+  durationMs: number;
+}
+
+export async function renderVideoArtifactDetails(input: { projectId: string; sourceUrl: string; musicUrl?: string | null; labels: CreativeLabel[]; targetKey?: string }): Promise<RenderedVideoArtifact> {
   if (!input.sourceUrl) throw new Error("Choose a source video before rendering.");
   const directory = await mkdtemp(join(tmpdir(), "relay-video-"));
   const source = join(directory, "source.mp4"); const overlay = join(directory, "overlay.png"); const music = join(directory, "music"); const output = join(directory, "output.mp4");
@@ -52,6 +57,10 @@ export async function renderVideoArtifact(input: { projectId: string; sourceUrl:
     await command("ffmpeg", args);
     const body = await readFile(output); const key = input.targetKey ?? `videos/${input.projectId}/${crypto.randomUUID()}.mp4`; const config = getR2Config();
     await getR2Client().send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body, ContentType: "video/mp4", CacheControl: "public, max-age=31536000, immutable" }));
-    return publicObjectUrl(key);
+    return { url: publicObjectUrl(key), durationMs: Math.round(duration * 1_000) };
   } finally { await rm(directory, { recursive: true, force: true }); }
+}
+
+export async function renderVideoArtifact(input: { projectId: string; sourceUrl: string; musicUrl?: string | null; labels: CreativeLabel[]; targetKey?: string }): Promise<string> {
+  return (await renderVideoArtifactDetails(input)).url;
 }

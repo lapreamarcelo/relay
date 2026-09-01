@@ -1,4 +1,4 @@
-import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
 
 import { requireApiSession } from "../../../../../lib/api-session";
 import { getR2Client, getR2Config } from "../../../../../lib/r2";
@@ -70,5 +70,40 @@ export async function PATCH(request: Request) {
     const listed = await client.send(new ListObjectsV2Command({ Bucket: config.bucket, Prefix: `media-projects/${id}/${manifest.kind === "music" ? "music" : "media"}/` }));
     const count = (listed.Contents ?? []).filter((item) => item.Key && !item.Key.endsWith("/")).length;
     return Response.json({ data: { ...updated, kind: manifest.kind === "music" ? "music" : "media", count } });
+  } catch (error) { return errorResponse(error); }
+}
+
+export async function DELETE(request: Request) {
+  const authorization = await requireApiSession(request, { apiKeyScope: "media:write" });
+  if (authorization.response) return authorization.response;
+  try {
+    const body = await request.json() as { id?: unknown };
+    const id = typeof body.id === "string" && /^[0-9a-f-]{36}$/i.test(body.id) ? body.id : "";
+    if (!id) return Response.json({ error: "A valid folder id is required" }, { status: 400 });
+
+    const config = getR2Config(); const client = getR2Client();
+    const manifestKey = projectKey(id);
+    let object;
+    try { object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: manifestKey })); }
+    catch (error) {
+      if ((error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return Response.json({ error: "Folder not found" }, { status: 404 });
+      throw error;
+    }
+    const manifest = JSON.parse(await object.Body!.transformToString()) as MediaProjectManifest;
+    if (!manifest.ownerId || manifest.ownerId !== authorization.session.user.id) return Response.json({ error: "Folder not found" }, { status: 404 });
+
+    const prefix = `media-projects/${id}/`;
+    let deleted = 0;
+    while (true) {
+      const listed = await client.send(new ListObjectsV2Command({ Bucket: config.bucket, Prefix: prefix, MaxKeys: 1_000 }));
+      const keys = (listed.Contents ?? []).map((item) => item.Key).filter((key): key is string => Boolean(key && key !== manifestKey));
+      if (!keys.length) break;
+      const result = await client.send(new DeleteObjectsCommand({ Bucket: config.bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }));
+      if (result.Errors?.length) throw new Error(`Could not delete ${result.Errors.length} object${result.Errors.length === 1 ? "" : "s"} from the folder`);
+      deleted += keys.length;
+    }
+    const result = await client.send(new DeleteObjectsCommand({ Bucket: config.bucket, Delete: { Objects: [{ Key: manifestKey }], Quiet: true } }));
+    if (result.Errors?.length) throw new Error("Could not delete the folder manifest");
+    return Response.json({ data: { id, deleted } });
   } catch (error) { return errorResponse(error); }
 }

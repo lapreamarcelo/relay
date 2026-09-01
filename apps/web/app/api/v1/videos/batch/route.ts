@@ -3,8 +3,9 @@ import { normalizePublishingDefaults, type ProviderId, type ProviderPostSettings
 import { sql } from "@relay/database";
 
 import { requireApiSession } from "../../../../../lib/api-session";
+import { automaticInstagramSettings } from "../../../../../lib/automatic-post-settings";
 import { getR2Client, getR2Config, publicObjectUrl } from "../../../../../lib/r2";
-import { renderVideoArtifact } from "../../../../../lib/video-renderer";
+import { renderVideoArtifactDetails } from "../../../../../lib/video-renderer";
 import { safeWebUrl, selectMusicTrack, serializeVideoProject, type VideoProjectRow } from "../../../../../lib/videos";
 
 export const runtime = "nodejs";
@@ -16,7 +17,7 @@ interface BatchInput {
 }
 
 const musicFile = /\.(mp3|m4a|aac|wav|ogg|flac)$/i;
-const settings = (provider: ProviderId, hook: string, defaults: PublishingDefaults): ProviderPostSettings => provider === "instagram" ? { kind: "instagram", publishType: defaults.instagram.videoPublishType }
+const settings = (provider: ProviderId, hook: string, defaults: PublishingDefaults, durationMs: number): ProviderPostSettings => provider === "instagram" ? automaticInstagramSettings(defaults.instagram.videoPublishType, "video", durationMs)
   : provider === "facebook" ? { kind: "facebook", publishType: defaults.facebook.videoPublishType }
     : provider === "youtube" ? { kind: "youtube", title: hook.slice(0, 100), tags: [], privacyStatus: defaults.youtube.privacyStatus, madeForKids: defaults.youtube.madeForKids }
       : { kind: "tiktok", ...defaults.tiktok };
@@ -83,12 +84,13 @@ export async function POST(request: Request) {
     try {
       const labels = project.labels.length ? project.labels.map((label, labelIndex) => labelIndex === 0 ? { ...label, text: hook } : label) : [{ id: crypto.randomUUID(), text: hook, x: .5, y: .18, width: .84, height: .12, fontSize: 72, font: "modern" as const, textColor: "#FFFFFF", background: "dark" as const, style: "dark" as const }];
       const safeHook = hook.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 64) || `video-${index + 1}`;
-      const renderedUrl = await renderVideoArtifact({ projectId, sourceUrl: project.sourceUrl, musicUrl, labels, targetKey: `media-projects/${outputFolderId}/media/${String(index + 1).padStart(2, "0")}-${safeHook}.mp4` });
+      const rendered = await renderVideoArtifactDetails({ projectId, sourceUrl: project.sourceUrl, musicUrl, labels, targetKey: `media-projects/${outputFolderId}/media/${String(index + 1).padStart(2, "0")}-${safeHook}.mp4` });
+      const renderedUrl = rendered.url;
       let post: unknown = null;
       if (accounts.length) {
         const scheduledAt = start ? new Date(start.getTime() + index * interval * 60_000).toISOString() : undefined; const status = scheduledAt ? "scheduled" : "publishing";
         const internalOrigin = `http://127.0.0.1:${process.env.PORT ?? "3000"}`;
-        const response = await fetch(new URL("/api/v1/posts", internalOrigin), { method: "POST", headers: { Authorization: request.headers.get("authorization") ?? "", Cookie: request.headers.get("cookie") ?? "", "Content-Type": "application/json" }, body: JSON.stringify({ clientRequestId: `${requestPrefix}-${index}`, brandId: project.brandId || undefined, text: template.replaceAll("{hook}", hook), mediaType: "video", mediaUrl: renderedUrl, status, scheduledAt, targets: accounts.map((account) => ({ accountId: account.id, settings: settings(account.provider, hook, publishingDefaults) })) }) });
+        const response = await fetch(new URL("/api/v1/posts", internalOrigin), { method: "POST", headers: { Authorization: request.headers.get("authorization") ?? "", Cookie: request.headers.get("cookie") ?? "", "Content-Type": "application/json" }, body: JSON.stringify({ clientRequestId: `${requestPrefix}-${index}`, brandId: project.brandId || undefined, text: template.replaceAll("{hook}", hook), mediaType: "video", mediaUrl: renderedUrl, status, scheduledAt, targets: accounts.map((account) => ({ accountId: account.id, settings: settings(account.provider, hook, publishingDefaults, rendered.durationMs) })) }) });
         const payload = await response.json() as { data?: unknown; error?: string }; if (!response.ok) throw new Error(payload.error || "The video rendered but could not be scheduled."); post = payload.data;
       }
       results.push({ index, hook, renderedUrl, musicUrl: musicUrl ?? null, post, status: accounts.length ? "scheduled" : "rendered" });

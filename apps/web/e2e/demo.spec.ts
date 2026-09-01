@@ -30,6 +30,23 @@ test("planner is URL-backed and exposes campaign operations", async ({ page }) =
   await expect(page.getByLabel("Account")).toHaveValue("account-instagram");
 });
 
+test("demo scheduling stays local and appears on the calendar", async ({ page }) => {
+  let postWrites = 0;
+  await page.route("**/api/v1/posts", async (route) => {
+    if (route.request().method() !== "GET") postWrites += 1;
+    await route.continue();
+  });
+  await page.goto("/demo?view=calendar");
+  await page.getByRole("button", { name: /Create post/ }).first().click();
+  const composer = page.getByRole("dialog", { name: "Create post" });
+  await composer.getByLabel("Content").fill("A demo-only scheduled post");
+  await composer.locator(".destination-list button").filter({ hasText: "Instagram" }).click();
+  await composer.getByRole("button", { name: /Schedule post/ }).click();
+  await expect(composer).toBeHidden();
+  await expect(page.locator(".planning-event.scheduled").filter({ hasText: "A demo-only scheduled post" })).toBeVisible();
+  expect(postWrites).toBe(0);
+});
+
 test("opening a completed calendar post does not create a draft and each card can be deleted", async ({ page }) => {
   let postMutations = 0;
   await page.route("**/api/v1/posts", async (route) => {
@@ -233,6 +250,20 @@ test("media folders can be renamed and assets moved between them", async ({ page
   await expect.poll(() => movedMedia).toEqual({ key: `media-projects/${sourceId}/media/clip.png`, projectId: destinationId, kind: "media" });
 });
 
+test("selected media can be scheduled as a daily sequence", async ({ page }) => {
+  await page.goto("/demo?view=media");
+  await page.getByRole("button", { name: "Select aster-ritual.svg" }).click();
+  await page.getByRole("button", { name: "Select launch-decisions.svg" }).click();
+  await expect(page.getByText("2 selected")).toBeVisible();
+  await page.getByRole("button", { name: /Schedule sequence/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Schedule a media sequence" });
+  await expect(dialog.locator(".sequence-list article")).toHaveCount(2);
+  await dialog.getByLabel("Cadence").selectOption("2");
+  await dialog.locator(".batch-account").filter({ hasText: "Instagram" }).getByRole("checkbox").check();
+  await dialog.getByRole("button", { name: "Schedule 2 posts" }).click();
+  await expect(page.getByText("2 demo posts added to the sequence preview.")).toBeVisible();
+});
+
 test("historical analytics filters persist in the URL and reports can be scheduled", async ({ page }) => {
   await page.route("**/api/v1/analytics/reports", async (route) => {
     if (route.request().method() === "POST") return route.fulfill({ json: { data: { id: "report-1", name: "Monthly performance report", cadence: "monthly", nextRunAt: "2026-09-23T08:00:00.000Z", lastSentAt: null } } });
@@ -363,6 +394,36 @@ test("slideshow and video use the same label controls", async ({ page }) => {
   await expect(composer.locator(".destination-list button").filter({ hasText: "Instagram" })).toBeEnabled();
   await expect(composer.locator(".destination-list button").filter({ hasText: "YouTube" })).toBeDisabled();
   await expect(composer.getByText("YouTube requires video")).toBeVisible();
+});
+
+test("slideshow imports BYOK Pexels photos", async ({ page }) => {
+  const imports: Array<Record<string, unknown>> = [];
+  await page.route("**/api/v1/media?**", (route) => route.fulfill({ json: { data: [], pagination: { nextCursor: null } } }));
+  await page.route("**/api/v1/media/projects?**", (route) => route.fulfill({ json: { data: [] } }));
+  await page.route("**/api/v1/media/sources", async (route) => {
+    const body = route.request().postDataJSON() as { provider: "pexels" };
+    return route.fulfill({ json: { provider: body.provider, items: [{ id: "pexels-42", provider: "pexels", title: "A quiet workspace", previewUrl: "https://images.pexels.com/photos/42/preview.jpeg", importUrl: "https://images.pexels.com/photos/42/original.jpeg", sourceUrl: "https://www.pexels.com/photo/42", creator: "Ari", creatorUrl: "https://www.pexels.com/@ari", attribution: "Photo by Ari on Pexels" }] } });
+  });
+  await page.route("**/api/v1/media/import", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>; imports.push(body);
+    return route.fulfill({ status: 201, json: { key: `staging/demo/media/${body.id}.jpg`, url: `https://media.example.com/${body.id}.jpg`, staged: true } });
+  });
+  await page.route("https://images.pexels.com/**", (route) => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") }));
+
+  await page.goto("/demo?view=slideshows");
+  await page.getByRole("button", { name: /Launch story/ }).first().click();
+  await page.getByRole("button", { name: "Add images" }).click();
+  const picker = page.getByRole("dialog", { name: "Add images to the slideshow" });
+  await picker.getByRole("button", { name: "Pexels" }).click();
+  await picker.getByLabel("Remember credentials in this browser only").check();
+  await picker.getByLabel("Pexels API key").fill("pexels-user-key");
+  await picker.getByLabel("Search Pexels").fill("quiet workspace");
+  await picker.getByRole("button", { name: "Search" }).click();
+  await picker.locator(".external-media-grid article").filter({ hasText: "A quiet workspace" }).getByRole("button", { name: /Add/ }).click();
+  await expect.poll(() => imports.length).toBe(1);
+  expect(imports[0]).toMatchObject({ provider: "pexels" });
+  await expect(page.locator(".slide-rail > button:not(.add-slide)")).toHaveCount(4);
+  expect(await page.evaluate(() => localStorage.getItem("relay.external-images.pexels-api-key"))).toBe("pexels-user-key");
 });
 
 test("mobile planner does not overflow the viewport shell", async ({ page }, testInfo) => {
