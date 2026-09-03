@@ -3,7 +3,7 @@ import { requireApiSession } from "../../../../lib/api-session";
 import { getOAuthRegistry } from "../../../../lib/social-oauth";
 
 export async function GET(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "accounts:read" });
   if (authorization.response) return authorization.response;
   const oauth = getOAuthRegistry();
   return Response.json({ data: providerRegistry.list().map((provider) => ({

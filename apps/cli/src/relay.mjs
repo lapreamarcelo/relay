@@ -13,12 +13,15 @@ const commands = new Map(Object.entries({
   "campaigns list": ["GET", "/api/v1/campaigns"], "campaigns create": ["POST", "/api/v1/campaigns"], "campaigns update": ["PATCH", "/api/v1/campaigns"], "campaigns delete": ["DELETE", "/api/v1/campaigns", "body-id"],
   "templates list": ["GET", "/api/v1/templates"], "templates create": ["POST", "/api/v1/templates"], "templates delete": ["DELETE", "/api/v1/templates", "body-id"],
   "media list": ["GET", "/api/v1/media"], "media update": ["PATCH", "/api/v1/media"], "media rename": ["PATCH", "/api/v1/media"], "media move": ["PATCH", "/api/v1/media"], "media delete": ["DELETE", "/api/v1/media"],
-  "folders list": ["GET", "/api/v1/media/projects"], "folders create": ["POST", "/api/v1/media/projects"], "folders rename": ["PATCH", "/api/v1/media/projects"],
+  "media source-status": ["GET", "/api/v1/media/sources"], "media search-stock": ["POST", "/api/v1/media/sources"], "media import-stock": ["POST", "/api/v1/media/import"],
+  "folders list": ["GET", "/api/v1/media/projects"], "folders create": ["POST", "/api/v1/media/projects"], "folders rename": ["PATCH", "/api/v1/media/projects"], "folders delete": ["DELETE", "/api/v1/media/projects", "body-id"],
   "slideshows list": ["GET", "/api/v1/slideshows"], "slideshows get": ["GET", "/api/v1/slideshows", "query-id"], "slideshows create": ["POST", "/api/v1/slideshows"], "slideshows update": ["PATCH", "/api/v1/slideshows"], "slideshows delete": ["DELETE", "/api/v1/slideshows", "body-id"], "slideshows render": ["POST", "/api/v1/slideshows/render", "body-id"],
   "videos list": ["GET", "/api/v1/videos"], "videos get": ["GET", "/api/v1/videos", "query-id"], "videos create": ["POST", "/api/v1/videos"], "videos update": ["PATCH", "/api/v1/videos"], "videos delete": ["DELETE", "/api/v1/videos", "body-id"], "videos render": ["POST", "/api/v1/videos/render", "body-id"], "videos batch": ["POST", "/api/v1/videos/batch"],
   "analytics report": ["GET", "/api/v1/analytics"],
   "reports list": ["GET", "/api/v1/analytics/reports"], "reports create": ["POST", "/api/v1/analytics/reports"], "reports delete": ["DELETE", "/api/v1/analytics/reports", "body-id"],
   "settings get": ["GET", "/api/v1/settings/publishing"], "settings set": ["PUT", "/api/v1/settings/publishing"],
+  "providers list": ["GET", "/api/v1/providers"],
+  "notifications list": ["GET", "/api/v1/notifications"], "notifications read": ["PATCH", "/api/v1/notifications"],
 }));
 
 const help = `Relay CLI — complete agent interface for Relay's REST API
@@ -38,13 +41,15 @@ Resources and actions:
   posts list|create|update|delete
   campaigns list|create|update|delete
   templates list|create|delete
-  media list|upload|rename|move|delete
-  folders list|create|rename
+  media list|upload|rename|move|delete|source-status|search-stock|import-stock
+  folders list|create|rename|delete
   slideshows list|get|create|update|delete|render|schedule
   videos list|get|create|update|delete|render|schedule|batch
   analytics report
   reports list|create|delete
   settings get|set
+  providers list
+  notifications list|read
   health check
 
 All output is JSON. Mutating resource commands accept the same JSON objects as Relay's /api/v1 endpoints.
@@ -123,6 +128,14 @@ async function uploadMedia(client, options) {
   return { data: { key: prepared.key, url: prepared.url, name: basename(path), size: details.size, kind, projectId: options.project ?? null } };
 }
 
+async function importStockMedia(client, input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("media import-stock requires a JSON object.");
+  const { folderId, projectId, ...source } = input;
+  const imported = await client.request("/api/v1/media/import", { method: "POST", body: JSON.stringify({ provider: "pexels", ...source }) });
+  if (!imported?.key) throw new Error("Relay imported no staged media object.");
+  return client.request("/api/v1/media", { method: "PATCH", body: JSON.stringify({ key: imported.key, kind: "media", projectId: folderId ?? projectId ?? "unfiled", commit: true }) });
+}
+
 async function scheduleCreative(client, kind, input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error(`${kind} schedule requires a JSON object.`);
   const projectId = input.projectId; if (typeof projectId !== "string" || !projectId) throw new Error("projectId is required.");
@@ -151,6 +164,7 @@ export async function run(argv, io = {}) {
     if (!method || !path?.startsWith("/")) throw new Error("request requires METHOD and an absolute API path.");
     const data = await jsonInput(options.data, io.stdin); result = await client.request(withQuery(path, options.query), { method, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
   } else if (positionals[0] === "media" && positionals[1] === "upload") result = await uploadMedia(client, options);
+  else if (positionals[0] === "media" && positionals[1] === "import-stock") result = await importStockMedia(client, await jsonInput(options.data, io.stdin));
   else if ((positionals[0] === "slideshows" || positionals[0] === "videos") && positionals[1] === "schedule") result = await scheduleCreative(client, positionals[0], await jsonInput(options.data, io.stdin));
   else {
     const key = `${positionals[0] ?? ""} ${positionals[1] ?? ""}`; const definition = commands.get(key);

@@ -68,7 +68,26 @@ function parseSettings(provider: ProviderId, value: unknown): ProviderPostSettin
 export async function GET(request: Request) {
   const authorization = await requireApiSession(request, { apiKeyScope: "posts:read" });
   if (authorization.response) return authorization.response;
-  return Response.json({ data: await listPostsForOwner(authorization.session.user.id) });
+  const url = new URL(request.url);
+  const requestedStatus = url.searchParams.get("status");
+  const status = requestedStatus && ["draft", "scheduled", "publishing", "processing", "published", "failed"].includes(requestedStatus) ? requestedStatus : null;
+  const requestedMediaType = url.searchParams.get("mediaType");
+  const mediaType = requestedMediaType && mediaTypes.has(requestedMediaType) ? requestedMediaType : null;
+  const accountId = optionalString(url.searchParams.get("accountId"), 240);
+  const from = url.searchParams.get("from"); const fromTime = from && !Number.isNaN(new Date(from).getTime()) ? new Date(from).getTime() : null;
+  const to = url.searchParams.get("to"); const toTime = to && !Number.isNaN(new Date(to).getTime()) ? new Date(to).getTime() : null;
+  const posts = await listPostsForOwner(authorization.session.user.id);
+  const data = posts.filter((post) => {
+    if (status && post.status !== status) return false;
+    if (mediaType && post.mediaType !== mediaType) return false;
+    if (accountId && !post.targets.some((target) => target.accountId === accountId)) return false;
+    const date = post.scheduledAt ?? post.publishedAt ?? post.createdAt;
+    const time = date ? new Date(date).getTime() : Number.NaN;
+    if (fromTime !== null && (Number.isNaN(time) || time < fromTime)) return false;
+    if (toTime !== null && (Number.isNaN(time) || time > toTime)) return false;
+    return true;
+  });
+  return Response.json({ data });
 }
 
 async function createPost(ownerId: string, body: PostInput | null) {

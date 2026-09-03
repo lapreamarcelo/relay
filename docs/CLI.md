@@ -49,13 +49,15 @@ pnpm relay -- analytics report \
 | `posts` | `list`, `create`, `update`, `delete` |
 | `campaigns` | `list`, `create`, `update`, `delete` |
 | `templates` | `list`, `create`, `delete` |
-| `media` | `list`, `upload`, `rename`, `move`, `delete` |
-| `folders` | `list`, `create`, `rename` |
+| `media` | `list`, `upload`, `rename`, `move`, `delete`, `source-status`, `search-stock`, `import-stock` |
+| `folders` | `list`, `create`, `rename`, `delete` |
 | `slideshows` | `list`, `get`, `create`, `update`, `delete`, `render`, `schedule` |
 | `videos` | `list`, `get`, `create`, `update`, `delete`, `render`, `schedule`, `batch` |
 | `analytics` | `report` |
 | `reports` | `list`, `create`, `delete` |
 | `settings` | `get`, `set` |
+| `providers` | `list` |
+| `notifications` | `list`, `read` |
 | `health` | `check` |
 
 Run `pnpm relay -- --help` for the same command summary.
@@ -80,6 +82,16 @@ pnpm relay -- media move --data '{ "key": "media/demo.mp4", "projectId": "folder
 ```
 
 Use `"projectId": "unfiled"` to move an asset out of a named folder. Moving or renaming an object changes its public R2 URL; Relay updates references in posts, slideshows, and video projects before removing the old key.
+
+Search the configured Pexels source and import a selected result directly into a folder or unfiled Media:
+
+```bash
+pnpm relay -- media source-status
+pnpm relay -- media search-stock --data '{ "provider": "pexels", "query": "tennis court" }'
+pnpm relay -- media import-stock --data '{ "id": "photo-id", "url": "https://images.pexels.com/...", "folderId": "folder-id" }'
+```
+
+`folders delete --id <id>` permanently removes a folder and every object it contains.
 
 ### Create and schedule a post
 

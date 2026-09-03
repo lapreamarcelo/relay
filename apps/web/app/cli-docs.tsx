@@ -13,9 +13,9 @@ const sections = [
 
 const commandGroups = [
   { name: "Discover", detail: "Read the workspace before making changes.", commands: ["accounts list", "brands list", "folders list", "media list", "posts list"] },
-  { name: "Organize", detail: "Manage brands, campaigns, templates, and R2 media.", commands: ["brands create|update|delete", "campaigns create|update|delete", "templates create|delete", "media upload|rename|move|delete", "folders create|rename"] },
+  { name: "Organize", detail: "Manage brands, campaigns, templates, and R2 media.", commands: ["brands create|update|delete", "campaigns create|update|delete", "templates create|delete", "media upload|rename|move|delete", "media search-stock|import-stock", "folders create|rename|delete"] },
   { name: "Create", detail: "Build, render, and schedule social content.", commands: ["posts create|update|delete", "slideshows create|update|render|schedule", "videos create|update|render|schedule|batch"] },
-  { name: "Measure", detail: "Retrieve performance and automate reporting.", commands: ["analytics report", "reports list|create|delete", "settings get|set"] },
+  { name: "Measure", detail: "Retrieve performance and automate reporting.", commands: ["analytics report", "reports list|create|delete", "notifications list|read", "providers list", "settings get|set"] },
 ];
 
 function CodeBlock({ code, label = "Terminal" }: { code: string; label?: string }) {
@@ -110,7 +110,7 @@ export default function CliDocs({ onOpenApiKeys }: { onOpenApiKeys: () => void }
 
         <section id="mcp" className="docs-section docs-mcp-section">
           <div className="docs-section-head"><span>06</span><div><p className="eyebrow">CLI or MCP?</p><h2>Start with CLI. Add MCP when the client requires it.</h2></div></div>
-          <div className="docs-compare"><article className="recommended"><header><Terminal /><span><b>Relay CLI</b><em>Recommended</em></span></header><ul><li>Complete API coverage</li><li>Works with any shell-capable agent</li><li>Direct uploads and raw API access</li><li>Equally useful in scripts and CI</li></ul></article><article><header><Workflow /><span><b>MCP adapter</b><em>Optional</em></span></header><ul><li>Native tool discovery in MCP clients</li><li>Smaller curated tool surface</li><li>Requires a local checkout and client configuration</li><li>Uses the same API and worker underneath</li></ul></article></div>
+          <div className="docs-compare"><article className="recommended"><header><Terminal /><span><b>Relay CLI</b><em>Recommended</em></span></header><ul><li>Complete API coverage</li><li>Works with any shell-capable agent</li><li>Direct uploads and raw API access</li><li>Equally useful in scripts and CI</li></ul></article><article><header><Workflow /><span><b>MCP adapter</b><em>Optional</em></span></header><ul><li>Native typed tool discovery</li><li>Complete agent-safe workflow surface</li><li>Requires a local checkout and client configuration</li><li>Uses the same API and worker underneath</li></ul></article></div>
           <details className="docs-mcp-config"><summary><span><Code2 /> Show local stdio MCP configuration</span><ChevronRight /></summary><div><CodeBlock label="mcp.json" code={`{\n  "mcpServers": {\n    "relay": {\n      "command": "pnpm",\n      "args": ["--dir", "/absolute/path/to/relay", "--filter", "@relay/mcp", "start"],\n      "env": {\n        "RELAY_URL": "${origin}",\n        "RELAY_API_KEY": "relay_sk_..."\n      }\n    }\n  }\n}`} /></div></details>
           <footer><ShieldCheck /><div><b>One source of truth</b><p>Dashboard, CLI, direct REST calls, and MCP all converge on Relay’s API. Publishing logic and credentials never need to be duplicated in an agent.</p></div><a href="#quick-start">Install the CLI <ExternalLink /></a></footer>
         </section>

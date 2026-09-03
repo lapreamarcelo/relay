@@ -41,6 +41,8 @@ curl "$RELAY_URL/api/v1/posts" \
   -H "Authorization: Bearer $RELAY_API_KEY"
 ```
 
+Use `status`, `mediaType`, `accountId`, `from`, and `to` query parameters to filter the result. Date filters use the post's scheduled, published, or created timestamp, in that order.
+
 ## Read post analytics
 
 Retrieve the timestamped metric history for one post. Results are grouped by destination, allowing an agent to compare platforms without losing provider-specific raw metrics.
@@ -79,7 +81,7 @@ curl -X POST "$RELAY_URL/api/v1/posts" \
   }'
 ```
 
-`mediaType` is `none`, `image`, or `video`. A public HTTPS `mediaUrl` is required for image and video posts. Uploading new agent-provided files is intentionally outside this first API version; use an existing object from Relay's R2 media library.
+`mediaType` is `none`, `image`, or `video`. A public HTTPS `mediaUrl` is required for image and video posts. The CLI and local MCP adapter can upload agent-provided files through Relay's short-lived signed R2 upload flow.
 
 For an image slideshow, keep `mediaType: "image"`, set `mediaUrl` to the first rendered slide (the cover), and send every ordered slide in `mediaUrls`. Relay preserves that order when publishing Instagram carousels, Facebook multi-photo posts, and TikTok photo posts. Instagram accepts up to 10 slides; Relay accepts up to 35 for Facebook and TikTok. YouTube destinations require video and are rejected for image posts.
 
@@ -253,7 +255,9 @@ Relay includes a runnable stdio adapter in `apps/mcp`. Configure it in an MCP cl
 }
 ```
 
-The adapter exposes `list_destinations`, `list_media`, `list_asset_folders`, `create_asset_folder`, `list_slideshows`, `save_slideshow`, `create_slideshows`, `render_slideshow`, `schedule_slideshow`, `create_slideshow_batch`, `list_videos`, `save_video`, `render_video`, `schedule_video`, `create_video_batch`, `analytics_report`, and `schedule_analytics_report`. It remains a thin client: PostgreSQL ownership checks, R2 rendering, idempotency, scheduling, and publishing stay in Relay's REST API.
+The adapter exposes the complete agent-safe Relay surface: destination and provider discovery; filtered post listing and full post lifecycle actions; media upload, organization, deletion, and Pexels import; asset-folder management; slideshow and video CRUD/render/scheduling workflows; analytics and scheduled reports; brands, campaigns, templates, publishing defaults, notifications, and health checks.
+
+Destructive operations use explicitly named deletion tools, with additional confirmation fields for bulk and high-impact deletions. Immediate external publishing uses a dedicated tool or requires `publishNow: true`. PostgreSQL ownership checks, R2 rendering, idempotency, scheduling, and publishing remain in Relay's REST API. User administration, API-key management, OAuth changes, provider credentials, and connected-account deletion remain browser-only.
 
 ## Asset folders and music
 

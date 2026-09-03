@@ -63,7 +63,7 @@ test("media upload signs through Relay and streams bytes to R2", async () => {
   } finally { await api.close(); await rm(directory, { recursive: true }); }
 });
 
-test("folder rename and media move use the R2 management endpoints", async () => {
+test("folder rename and deletion plus media move use the R2 management endpoints", async () => {
   const requests = [];
   const api = await server(async (incoming, response) => {
     let body = ""; for await (const chunk of incoming) body += chunk;
@@ -74,10 +74,41 @@ test("folder rename and media move use the R2 management endpoints", async () =>
   try {
     const io = { env: { RELAY_URL: api.url, RELAY_API_KEY: "relay_sk_test" }, stdout: printed.stream };
     await run(["folders", "rename", "--data", '{"id":"folder-1","name":"Launch assets"}'], io);
+    await run(["folders", "delete", "--id", "folder-2"], io);
     await run(["media", "move", "--data", '{"key":"media/clip.mp4","projectId":"folder-1","kind":"media"}'], io);
     assert.deepEqual(requests, [
       { method: "PATCH", url: "/api/v1/media/projects", body: { id: "folder-1", name: "Launch assets" } },
+      { method: "DELETE", url: "/api/v1/media/projects", body: { id: "folder-2" } },
       { method: "PATCH", url: "/api/v1/media", body: { key: "media/clip.mp4", projectId: "folder-1", kind: "media" } },
+    ]);
+  } finally { await api.close(); }
+});
+
+test("stock media, provider, and notification commands use their agent-safe endpoints", async () => {
+  const requests = [];
+  const api = await server(async (incoming, response) => {
+    let body = ""; for await (const chunk of incoming) body += chunk;
+    requests.push({ method: incoming.method, url: incoming.url, body: body ? JSON.parse(body) : null });
+    response.setHeader("Content-Type", "application/json");
+    response.end(JSON.stringify(incoming.url === "/api/v1/media/import" ? { key: "staging/user/media/photo.jpg" } : { data: [] }));
+  });
+  const printed = output();
+  try {
+    const io = { env: { RELAY_URL: api.url, RELAY_API_KEY: "relay_sk_test" }, stdout: printed.stream };
+    await run(["media", "source-status"], io);
+    await run(["media", "search-stock", "--data", '{"provider":"pexels","query":"tennis"}'], io);
+    await run(["media", "import-stock", "--data", '{"provider":"pexels","id":"photo-1","url":"https://images.pexels.com/photo.jpg"}'], io);
+    await run(["providers", "list"], io);
+    await run(["notifications", "list"], io);
+    await run(["notifications", "read", "--data", '{"ids":["notice-1"]}'], io);
+    assert.deepEqual(requests.map(({ method, url }) => ({ method, url })), [
+      { method: "GET", url: "/api/v1/media/sources" },
+      { method: "POST", url: "/api/v1/media/sources" },
+      { method: "POST", url: "/api/v1/media/import" },
+      { method: "PATCH", url: "/api/v1/media" },
+      { method: "GET", url: "/api/v1/providers" },
+      { method: "GET", url: "/api/v1/notifications" },
+      { method: "PATCH", url: "/api/v1/notifications" },
     ]);
   } finally { await api.close(); }
 });

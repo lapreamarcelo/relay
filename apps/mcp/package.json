@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "start": "tsx src/index.ts",
+    "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

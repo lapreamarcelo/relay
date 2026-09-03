@@ -23,7 +23,7 @@ function optionalString(value: unknown, maximum: number): string | null {
 }
 
 export async function GET(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "posts:read" });
   if (authorization.response) return authorization.response;
   const rows = await sql<{
     id: string; event_key: string; post_id: string | null; target_id: string | null; provider: string | null;
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const authorization = await requireApiSession(request);
+  const authorization = await requireApiSession(request, { apiKeyScope: "posts:write" });
   if (authorization.response) return authorization.response;
   const body = await request.json().catch(() => ({})) as { ids?: unknown };
   const ids = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === "string").slice(0, 100) : [];
