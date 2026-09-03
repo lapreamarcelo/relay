@@ -56,6 +56,16 @@ const server = new McpServer({ name: "relay", version: "0.1.0" });
 
 server.registerTool("list_destinations", { description: "List Relay's connected social accounts and their ids." }, async () => result(await relay("/api/v1/accounts")));
 
+server.registerTool(
+  "list_posts",
+  {
+    description:
+      "List Relay posts, including drafts, scheduled posts, published posts, media types, dates, and destinations.",
+    inputSchema: {},
+  },
+  async () => result(await relay("/api/v1/posts")),
+);
+
 server.registerTool("list_media", {
   description: "List reusable visual media or music in Relay's Cloudflare R2 asset library, optionally from one named folder.",
   inputSchema: { limit: z.number().int().min(1).max(100).default(100), cursor: z.string().optional(), folderId: z.string().optional(), kind: z.enum(["media", "music"]).default("media") },
