@@ -484,7 +484,7 @@ function MediaView({ onCompose, publishingDefaults = defaultPublishingDefaults, 
   const [deleteProject, setDeleteProject] = useState<MediaProject | null>(null);
   const [moveProject, setMoveProject] = useState<MediaProject | null>(null); const [moveParentId, setMoveParentId] = useState("root");
   const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null); const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
-  const [folderQuery, setFolderQuery] = useState(""); const [folderView, setFolderView] = useState<"strip" | "grid">("grid");
+  const [folderQuery, setFolderQuery] = useState(""); const [folderView, setFolderView] = useState<"strip" | "grid">("strip");
   const [renameItem, setRenameItem] = useState<MediaObject | null>(null); const [renameName, setRenameName] = useState("");
   const [moveItems, setMoveItems] = useState<MediaObject[]>([]); const [moveProjectId, setMoveProjectId] = useState(""); const [moveError, setMoveError] = useState("");
   const [previewItem, setPreviewItem] = useState<MediaObject | null>(null);
