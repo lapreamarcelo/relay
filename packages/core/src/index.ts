@@ -194,6 +194,7 @@ export interface AssetFolder {
   kind: MediaAssetKind;
   count: number;
   createdAt: string;
+  parentId?: string | null;
 }
 
 export interface CreativeLabel {

@@ -302,6 +302,34 @@ test("media folders can be renamed and assets moved between them", async ({ page
   await expect.poll(() => movedMedia).toEqual({ key: `media-projects/${sourceId}/media/clip.png`, projectId: destinationId, kind: "media" });
 });
 
+test("media folders can be nested and moved with drag and drop", async ({ page }) => {
+  const sourceId = "33333333-3333-4333-8333-333333333333";
+  const destinationId = "44444444-4444-4444-8444-444444444444";
+  let movedFolder: Record<string, unknown> | undefined;
+  const folders = [
+    { id: sourceId, name: "Source assets", kind: "media", count: 1, createdAt: "2026-08-20T10:00:00.000Z", parentId: null },
+    { id: destinationId, name: "Destination assets", kind: "media", count: 0, createdAt: "2026-08-20T10:00:00.000Z", parentId: null },
+  ];
+  await page.route("**/api/v1/media/projects", async (route) => {
+    if (route.request().method() === "PATCH") {
+      movedFolder = route.request().postDataJSON() as Record<string, unknown>;
+      const source = folders[0];
+      return route.fulfill({ json: { data: { ...source, parentId: movedFolder.parentId } } });
+    }
+    return route.fulfill({ json: { data: folders } });
+  });
+  await page.route("**/api/v1/media?**", (route) => route.fulfill({ json: { data: [], pagination: { nextCursor: null } } }));
+
+  await page.goto("/demo?view=media");
+  const source = page.getByRole("button", { name: /Source assets/ });
+  const destination = page.getByRole("button", { name: /Destination assets/ });
+  await expect(source).toHaveAttribute("draggable", "true");
+  await source.dragTo(destination);
+  await expect.poll(() => movedFolder).toEqual({ id: sourceId, parentId: destinationId });
+  await expect(page.getByText("Source assets moved inside Destination assets.")).toBeVisible();
+  await expect(source).toHaveCSS("margin-left", "18px");
+});
+
 test("selected media can be scheduled as a daily sequence", async ({ page }) => {
   await page.goto("/demo?view=media");
   await page.getByRole("button", { name: "Select aster-ritual.svg" }).click();
@@ -446,6 +474,39 @@ test("slideshow and video use the same label controls", async ({ page }) => {
   await expect(composer.locator(".destination-list button").filter({ hasText: "Instagram" })).toBeEnabled();
   await expect(composer.locator(".destination-list button").filter({ hasText: "YouTube" })).toBeDisabled();
   await expect(composer.getByText("YouTube requires video")).toBeVisible();
+});
+
+test("slideshow accepts dropped image files", async ({ page }) => {
+  const stagedUploads: Array<Record<string, unknown>> = [];
+  await page.route("**/api/v1/media?**", (route) => route.fulfill({ json: { data: [], pagination: { nextCursor: null } } }));
+  await page.route("**/api/v1/media/projects?**", (route) => route.fulfill({ json: { data: [] } }));
+  await page.route("**/api/v1/media/sources", (route) => route.fulfill({ json: { configured: false } }));
+  await page.route("**/api/v1/media", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    stagedUploads.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({ status: 201, json: { key: "staging/demo/dropped.png", uploadUrl: "https://upload.example.com/dropped.png", url: "https://media.example.com/dropped.png", staged: true } });
+  });
+  await page.route("https://upload.example.com/dropped.png", (route) => route.fulfill({ status: 200 }));
+
+  await page.goto("/demo?view=slideshows");
+  await page.getByRole("button", { name: /Launch story/ }).first().click();
+  await page.getByRole("button", { name: "Add images" }).click();
+  const picker = page.getByRole("dialog", { name: "Add images to the slideshow" });
+  const dropZone = picker.locator(".slideshow-upload-source");
+  const dataTransfer = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["drop test"], "dropped.png", { type: "image/png" }));
+    return transfer;
+  });
+
+  await dropZone.dispatchEvent("dragenter", { dataTransfer });
+  await dropZone.dispatchEvent("dragover", { dataTransfer });
+  await expect(dropZone).toHaveClass(/drag-active/);
+  await dropZone.dispatchEvent("drop", { dataTransfer });
+
+  await expect.poll(() => stagedUploads.length).toBe(1);
+  expect(stagedUploads[0]).toMatchObject({ fileName: "dropped.png", contentType: "image/png", staged: true });
+  await expect(page.locator(".slide-rail > button:not(.add-slide)")).toHaveCount(4);
 });
 
 test("slideshow imports photos with the server-configured Pexels key", async ({ page }) => {
