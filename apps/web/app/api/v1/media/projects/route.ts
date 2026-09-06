@@ -75,6 +75,18 @@ export async function GET(request: Request) {
       return { ...manifest, kind, parentId: manifest.parentId ?? null, count };
     }))).filter((manifest): manifest is MediaProjectRecord => Boolean(manifest))
       .filter((manifest) => requestedKind !== "media" && requestedKind !== "music" || manifest.kind === requestedKind);
+    const children = new Map<string, MediaProjectRecord[]>();
+    for (const manifest of manifests) if (manifest.parentId) children.set(manifest.parentId, [...(children.get(manifest.parentId) ?? []), manifest]);
+    const totals = new Map<string, number>();
+    const totalFor = (id: string, seen = new Set<string>()): number => {
+      if (totals.has(id)) return totals.get(id)!;
+      if (seen.has(id)) return 0;
+      const nextSeen = new Set(seen); nextSeen.add(id);
+      const manifest = manifests.find((candidate) => candidate.id === id);
+      const total = (manifest?.count ?? 0) + (children.get(id) ?? []).reduce((sum, child) => sum + totalFor(child.id, nextSeen), 0);
+      totals.set(id, total); return total;
+    };
+    for (const manifest of manifests) manifest.count = totalFor(manifest.id);
     manifests.sort((first, second) => first.name.localeCompare(second.name));
     return Response.json({ data: manifests });
   } catch (error) { return errorResponse(error); }

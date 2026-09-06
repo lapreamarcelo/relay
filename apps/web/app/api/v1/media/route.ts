@@ -155,9 +155,23 @@ export async function GET(request: Request) {
     const mediaType = requestedMediaType === "image" || requestedMediaType === "video" ? requestedMediaType : "all";
     const projectId = url.searchParams.get("project");
     await assertProjectAccess(projectId, authorization.session.user.id, kind);
-    const prefix = mediaPrefix(projectId, kind);
     const config = getR2Config();
     const client = getR2Client();
+    let projectScope: Set<string> | null = null;
+    const isSpecificProject = Boolean(projectId && projectId !== "all" && projectId !== "unfiled");
+    if (isSpecificProject) {
+      const listedProjects = await client.send(new ListObjectsV2Command({ Bucket: config.bucket, Prefix: "media-projects/", MaxKeys: 1_000 }));
+      const manifests = await Promise.all((listedProjects.Contents ?? []).map((object) => object.Key).filter((key): key is string => Boolean(key?.endsWith("/.project.json"))).map(async (key) => {
+        try { const object = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key })); const manifest = JSON.parse(await object.Body!.transformToString()) as { id?: string; parentId?: string | null; ownerId?: string; kind?: string }; return manifest.id && manifest.ownerId === authorization.session.user.id && (manifest.kind === "music" ? "music" : "media") === kind ? manifest : null; }
+        catch { return null; }
+      }));
+      const children = new Map<string, string[]>();
+      for (const manifest of manifests) if (manifest?.id && manifest.parentId) children.set(manifest.parentId, [...(children.get(manifest.parentId) ?? []), manifest.id]);
+      projectScope = new Set([projectId!]);
+      const pending = [projectId!];
+      while (pending.length) for (const child of children.get(pending.pop()!) ?? []) { if (projectScope.has(child)) continue; projectScope.add(child); pending.push(child); }
+    }
+    const prefix = isSpecificProject ? "media-projects/" : mediaPrefix(projectId, kind);
     const projectOwnership = new Map<string, Promise<boolean>>();
     const ownsProject = (id: string) => {
       const cached = projectOwnership.get(id);
@@ -189,7 +203,8 @@ export async function GET(request: Request) {
         if (kind === "media" && mediaType === "image" && !imageExtension.test(object.Key)) return false;
         if (kind === "media" && mediaType === "video" && !videoExtension.test(object.Key)) return false;
         const objectProjectId = projectIdForKey(object.Key);
-        if (!objectProjectId || projectId && projectId !== "all") return true;
+        if (!objectProjectId) return true;
+        if (projectScope && !projectScope.has(objectProjectId)) return false;
         return ownsProject(objectProjectId);
       },
     });
