@@ -573,3 +573,40 @@ test("mobile planner does not overflow the viewport shell", async ({ page }, tes
   expect(dimensions.body).toBeLessThanOrEqual(dimensions.viewport);
   await expect(page.getByRole("heading", { name: "August 2026" })).toBeVisible();
 });
+
+test("opened nested folders remain selected in the compact folder panel", async ({ page }) => {
+  const folders = [
+    { id: "parent", name: "Parent assets", parentId: null, kind: "media", count: 0 },
+    { id: "child", name: "Nested assets", parentId: "parent", kind: "media", count: 0 },
+    { id: "grandchild", name: "Deep assets", parentId: "child", kind: "media", count: 0 },
+  ];
+  let renamed: unknown;
+  await page.route("**/api/v1/media/projects", async (route) => {
+    if (route.request().method() === "PATCH") {
+      renamed = route.request().postDataJSON();
+      return route.fulfill({ json: { data: { ...folders[2], name: "Renamed deep assets" } } });
+    }
+    return route.fulfill({ json: { data: folders } });
+  });
+  await page.route("**/api/v1/media?**", (route) => route.fulfill({ json: { data: [], pagination: { nextCursor: null } } }));
+  await page.goto("/demo?view=media");
+  const panel = page.locator(".media-projects");
+  await panel.getByRole("button", { name: /Parent assets/ }).click();
+  await page.getByRole("button", { name: "Open folder", exact: true }).click();
+  await expect(panel.getByRole("button", { name: /^Nested assets/ })).toHaveAttribute("aria-current", "location");
+  await page.getByRole("button", { name: "Open folder", exact: true }).click();
+  await expect(panel.getByRole("button", { name: /^Deep assets/ })).toBeInViewport();
+  await expect(panel.getByRole("button", { name: /^Deep assets/ })).toHaveAttribute("aria-current", "location");
+  await expect(panel.getByRole("heading", { name: "Deep assets", exact: true })).toBeVisible();
+  await expect(panel.getByRole("button", { name: /^Parent assets/ })).toHaveCount(1);
+  await expect(panel.getByRole("button", { name: /^Nested assets/ })).toHaveCount(1);
+  await panel.getByRole("button", { name: "Rename folder", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Rename asset folder" });
+  await expect(dialog.getByRole("textbox")).toHaveValue("Deep assets");
+  await dialog.getByRole("textbox").fill("Renamed deep assets");
+  await dialog.getByRole("button", { name: "Rename folder", exact: true }).click();
+  await expect.poll(() => renamed).toEqual({ id: "grandchild", name: "Renamed deep assets" });
+  await expect(panel.getByRole("heading", { name: "Renamed deep assets" })).toBeVisible();
+  await panel.getByRole("button", { name: "Delete folder", exact: true }).click();
+  await expect(page.getByRole("alertdialog", { name: "Delete Renamed deep assets?" })).toBeVisible();
+});
