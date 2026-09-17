@@ -3,6 +3,7 @@ import { validatePostPlan } from "@relay/core/post-validation";
 import { sql } from "@relay/database";
 
 import { requireApiSession } from "../../../../lib/api-session";
+import { creativeOrigin } from "../../../../lib/creative-origin";
 import { listPostsForOwner } from "../../../../lib/post-repository";
 
 export const runtime = "nodejs";
@@ -146,10 +147,11 @@ async function createPost(ownerId: string, body: PostInput | null) {
   if (validationIssues.length > 0) return Response.json({ error: validationIssues[0].message, issues: validationIssues }, { status: 400 });
 
   const proposedPostId = crypto.randomUUID();
+  const origin = await creativeOrigin(ownerId, mediaUrl);
   const postId = await sql.begin(async (transaction) => {
     const [inserted] = await transaction<{ id: string }[]>`
-      INSERT INTO "post" (id, owner_id, brand_id, campaign_id, client_request_id, text, media_type, media_url, media_urls, status, scheduled_at)
-      VALUES (${proposedPostId}, ${ownerId}, ${brandId}, ${campaignId}, ${clientRequestId}, ${text}, ${mediaType}, ${mediaUrl}, ${JSON.stringify(mediaUrls)}::jsonb, ${status}, ${status === "scheduled" ? new Date(scheduledAt!).toISOString() : null})
+      INSERT INTO "post" (id, owner_id, brand_id, campaign_id, client_request_id, text, media_type, media_url, media_urls, status, scheduled_at, creative_origin)
+      VALUES (${proposedPostId}, ${ownerId}, ${brandId}, ${campaignId}, ${clientRequestId}, ${text}, ${mediaType}, ${mediaUrl}, ${JSON.stringify(mediaUrls)}::jsonb, ${status}, ${status === "scheduled" ? new Date(scheduledAt!).toISOString() : null}, ${origin ? JSON.stringify(origin) : null}::jsonb)
       ON CONFLICT (owner_id, client_request_id) WHERE client_request_id IS NOT NULL DO NOTHING
       RETURNING id
     `;
@@ -224,6 +226,8 @@ export async function PATCH(request: Request) {
       const posts = await transaction<{ id: string; status: PostStatus }[]>`SELECT id, status FROM "post" WHERE id = ANY(${ids}) AND owner_id = ${ownerId} FOR UPDATE`;
       if (posts.length !== ids.length) return { error: "One or more posts were not found.", status: 404 as const };
       if (posts.some((post) => post.status !== "draft" && post.status !== "scheduled")) return { error: "Only drafts and scheduled posts can be bulk rescheduled.", status: 409 as const };
+      const targets=await transaction<{status:PostStatus;publish_lease_owner:string|null}[]>`SELECT status,publish_lease_owner FROM post_target WHERE post_id=ANY(${ids}) FOR UPDATE`;
+      if(targets.some(target=>!['draft','scheduled'].includes(target.status)||target.publish_lease_owner))return {error:"A destination has started publishing; reload before rescheduling.",status:409 as const};
       for (const update of updates) {
         const time = new Date(update.scheduledAt!).toISOString();
         await transaction`UPDATE "post" SET status = 'scheduled', scheduled_at = ${time}, updated_at = NOW() WHERE id = ${update.id}`;
@@ -284,12 +288,13 @@ export async function PATCH(request: Request) {
       const [campaign] = await sql<{ brand_id: string | null }[]>`SELECT brand_id FROM "campaign" WHERE id = ${campaignId} AND owner_id = ${ownerId}`;
       if (!campaign || (campaign.brand_id && campaign.brand_id !== brandId)) return Response.json({ error: "The selected campaign does not belong to this brand." }, { status: 400 });
     }
+    const editedOrigin = await creativeOrigin(ownerId, mediaUrl);
     const edited = await sql.begin(async (transaction) => {
       const [post] = await transaction<{ status: PostStatus }[]>`SELECT status FROM "post" WHERE id = ${id} AND owner_id = ${ownerId} FOR UPDATE`;
       if (!post || (post.status !== "draft" && post.status !== "scheduled")) return false;
       await transaction`SELECT id FROM "post_target" WHERE post_id = ${id} FOR UPDATE`;
       const publishAfter = status === "scheduled" ? new Date(scheduledAt!).toISOString() : new Date().toISOString();
-      await transaction`UPDATE "post" SET brand_id = ${brandId}, campaign_id = ${campaignId}, text = ${text}, media_type = ${mediaType}, media_url = ${mediaUrl}, media_urls = ${JSON.stringify(mediaUrls)}::jsonb, status = ${status}, scheduled_at = ${status === "scheduled" ? publishAfter : null}, updated_at = NOW() WHERE id = ${id}`;
+      await transaction`UPDATE "post" SET creative_origin = CASE WHEN media_url=${mediaUrl} THEN creative_origin ELSE ${editedOrigin ? JSON.stringify(editedOrigin) : null}::jsonb END, brand_id = ${brandId}, campaign_id = ${campaignId}, text = ${text}, media_type = ${mediaType}, media_url = ${mediaUrl}, media_urls = ${JSON.stringify(mediaUrls)}::jsonb, status = ${status}, scheduled_at = ${status === "scheduled" ? publishAfter : null}, updated_at = NOW() WHERE id = ${id}`;
       await transaction`DELETE FROM "post_target" WHERE post_id = ${id}`;
       for (const destination of destinations) await transaction`INSERT INTO "post_target" (id, post_id, social_account_id, provider, account_display_name, account_handle, status, settings, text_override, publish_after) VALUES (${crypto.randomUUID()}, ${id}, ${destination.id}, ${destination.provider}, ${destination.displayName}, ${destination.handle}, ${status}, ${JSON.stringify(destination.settings)}::jsonb, ${destination.textOverride ?? null}, ${publishAfter})`;
       return true;

@@ -12,10 +12,10 @@ const sections = [
 ] as const;
 
 const commandGroups = [
-  { name: "Discover", detail: "Read the workspace before making changes.", commands: ["accounts list", "brands list", "folders list", "media list", "posts list"] },
-  { name: "Organize", detail: "Manage brands, campaigns, templates, and R2 media.", commands: ["brands create|update|delete", "campaigns create|update|delete", "templates create|delete", "media upload|rename|move|delete", "media search-stock|import-stock", "folders create|rename|delete"] },
-  { name: "Create", detail: "Build, render, and schedule social content.", commands: ["posts create|update|delete", "slideshows create|update|render|schedule", "videos create|update|render|schedule|batch"] },
-  { name: "Measure", detail: "Retrieve performance and automate reporting.", commands: ["analytics report", "reports list|create|delete", "notifications list|read", "providers list", "settings get|set"] },
+  { name: "Discover", detail: "Read the workspace before making changes.", commands: ["capabilities get", "accounts list", "brands list", "folders list", "media list", "posts list"] },
+  { name: "Organize", detail: "Manage brands, campaigns, templates, and R2 media.", commands: ["brands create|update|delete", "campaigns create|update|delete", "templates create|delete", "media upload|rename|move|delete", "media search-stock|import-stock", "folders create|rename|delete", "queues list|set|fill", "campaigns operate", "ideas list|create|update|delete", "brand-kits list|set"] },
+  { name: "Create", detail: "Build, render, and schedule social content.", commands: ["posts create|update|delete", "slideshows create|update|render|schedule", "videos create|update|render|schedule|batch|captions|variants", "render-jobs list|get|update", "video-templates list|create|delete", "creative assist"] },
+  { name: "Measure", detail: "Retrieve performance and automate reporting.", commands: ["analytics report|creative|timing", "reports list|create|delete", "notifications list|read", "providers list", "settings get|set"] },
 ];
 
 function CodeBlock({ code, label = "Terminal" }: { code: string; label?: string }) {
@@ -110,8 +110,9 @@ export default function CliDocs({ onOpenApiKeys }: { onOpenApiKeys: () => void }
 
         <section id="mcp" className="docs-section docs-mcp-section">
           <div className="docs-section-head"><span>06</span><div><p className="eyebrow">CLI or MCP?</p><h2>Start with CLI. Add MCP when the client requires it.</h2></div></div>
-          <div className="docs-compare"><article className="recommended"><header><Terminal /><span><b>Relay CLI</b><em>Recommended</em></span></header><ul><li>Complete API coverage</li><li>Works with any shell-capable agent</li><li>Direct uploads and raw API access</li><li>Equally useful in scripts and CI</li></ul></article><article><header><Workflow /><span><b>MCP adapter</b><em>Optional</em></span></header><ul><li>Native typed tool discovery</li><li>Complete agent-safe workflow surface</li><li>Requires a local checkout and client configuration</li><li>Uses the same API and worker underneath</li></ul></article></div>
+          <div className="docs-compare"><article className="recommended"><header><Terminal /><span><b>Relay CLI</b><em>Recommended</em></span></header><ul><li>Complete API coverage</li><li>Works with any shell-capable agent</li><li>Direct uploads and raw API access</li><li>Equally useful in scripts and CI</li></ul></article><article><header><Workflow /><span><b>MCP adapter</b><em>Optional</em></span></header><ul><li>Native typed tool discovery</li><li>Complete agent-safe workflow surface</li><li>Local stdio or remote Streamable HTTP</li><li>Uses the same API and worker underneath</li></ul></article></div>
           <details className="docs-mcp-config"><summary><span><Code2 /> Show local stdio MCP configuration</span><ChevronRight /></summary><div><CodeBlock label="mcp.json" code={`{\n  "mcpServers": {\n    "relay": {\n      "command": "pnpm",\n      "args": ["--dir", "/absolute/path/to/relay", "--filter", "@relay/mcp", "start"],\n      "env": {\n        "RELAY_URL": "${origin}",\n        "RELAY_API_KEY": "relay_sk_..."\n      }\n    }\n  }\n}`} /></div></details>
+          <details className="docs-mcp-config"><summary><span><Code2 /> Connect over Streamable HTTP</span><ChevronRight /></summary><div><p>Run the MCP service behind your HTTPS reverse proxy. Each agent sends its own scoped Relay key as a Bearer token to the /mcp endpoint.</p><CodeBlock code={`RELAY_URL=${origin} MCP_TRANSPORT=http MCP_PORT=3100 pnpm --filter @relay/mcp start`} /><p>Remote agents upload their own media using prepare_media_upload; host filesystem uploads are available only to local stdio clients.</p></div></details>
           <footer><ShieldCheck /><div><b>One source of truth</b><p>Dashboard, CLI, direct REST calls, and MCP all converge on Relay’s API. Publishing logic and credentials never need to be duplicated in an agent.</p></div><a href="#quick-start">Install the CLI <ExternalLink /></a></footer>
         </section>
       </main>

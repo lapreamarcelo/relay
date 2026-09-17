@@ -1,0 +1,13 @@
+import { sql } from "@relay/database";
+import { requireApiSession } from "../../../../../lib/api-session";
+import { serializeVideoProject,type VideoProjectRow } from "../../../../../lib/videos";
+import { enqueueRender } from "../../../../../lib/render-jobs";
+export const runtime="nodejs";
+export async function POST(request:Request){const auth=await requireApiSession(request,{apiKeyScope:"videos:write"});if(auth.response)return auth.response;
+ try{const body=await request.json();if(typeof body.id!=="string"||typeof body.clientRequestId!=="string"||!body.clientRequestId||body.clientRequestId.length>190||!Array.isArray(body.hooks)||!body.hooks.length||body.hooks.length>20||body.hooks.some((h:unknown)=>typeof h!=="string"||!h.trim()||h.length>500))throw new Error("Supply id, stable clientRequestId and 1–20 hooks (500 characters each).");
+ const [source]=await sql<VideoProjectRow[]>`SELECT * FROM video_project WHERE id=${body.id} AND owner_id=${auth.session.user.id}`;if(!source)throw new Error("Project not found.");const project=serializeVideoProject(source);if(!project.timeline?.clips.length)throw new Error("Choose a timeline project with clips.");const data=[];
+ for(let i=0;i<body.hooks.length;i++){const hook=body.hooks[i].trim();const timeline=structuredClone(project.timeline);if(timeline.labels.length)timeline.labels[0].text=hook;else timeline.labels.push({id:crypto.randomUUID(),text:hook,startMs:0,endMs:Math.min(3000,timeline.clips[0].outMs-timeline.clips[0].inMs),x:.5,y:.2,width:.84,height:.12,fontSize:64,font:"modern",textColor:"#FFFFFF",background:"dark",backgroundColor:"#000000",style:"dark"});
+ const [row]=await sql<VideoProjectRow[]>`INSERT INTO video_project(id,owner_id,brand_id,name,caption,source_url,labels,timeline,template_id,client_request_id) VALUES(${crypto.randomUUID()},${auth.session.user.id},${source.brand_id},${`${project.name.slice(0,100)} · ${i+1}`},${project.caption.replaceAll("{hook}",hook)},${timeline.clips[0].sourceUrl},'[]'::jsonb,${JSON.stringify(timeline)}::jsonb,${project.templateId??null},${`${body.clientRequestId}-${i}`}) ON CONFLICT(owner_id,client_request_id) WHERE client_request_id IS NOT NULL DO UPDATE SET updated_at=video_project.updated_at RETURNING *`;
+ const entry:{project:ReturnType<typeof serializeVideoProject>;job?:unknown;error?:string}={project:serializeVideoProject(row)};if(body.render===true){try{entry.job=(await enqueueRender(auth.session.user.id,row.id)).job;}catch(e){entry.error=(e as Error).message;}}data.push(entry);}
+ return Response.json({data},{status:data.some(e=>e.error)?207:201});
+ }catch(e){return Response.json({error:(e as Error).message},{status:400});}}

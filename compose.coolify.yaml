@@ -34,6 +34,8 @@ services:
       BETTER_AUTH_URL: ${APP_URL:?Set APP_URL in Coolify}
       DATABASE_URL: postgresql://relay:${POSTGRES_PASSWORD}@postgres:5432/relay
       DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_TEXT_MODEL: ${OPENAI_TEXT_MODEL:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in Coolify}
       ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
       RELAY_SETUP_TOKEN: ${RELAY_SETUP_TOKEN:-}
@@ -94,5 +96,26 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+  renderer:
+    build:
+      context: .
+      target: renderer
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://relay:${POSTGRES_PASSWORD}@postgres:5432/relay
+      DATABASE_POOL_SIZE: 2
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?Set R2_ACCOUNT_ID in Coolify}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?Set R2_ACCESS_KEY_ID in Coolify}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?Set R2_SECRET_ACCESS_KEY in Coolify}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:?Set R2_BUCKET_NAME in Coolify}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:?Set R2_PUBLIC_URL in Coolify}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_TEXT_MODEL: ${OPENAI_TEXT_MODEL:-}
+    cpus: 2
+    mem_limit: 3g
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   relay_postgres_data:

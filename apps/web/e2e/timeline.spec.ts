@@ -1,0 +1,21 @@
+import { expect,test } from "@playwright/test";
+test("timeline edits autosave, render asynchronously and hand off to composer",async({page})=>{
+ let project:any={id:"timeline-test",brandId:"brand-aster",name:"Three clip story",caption:"A useful story",sourceUrl:"",labels:[],revision:1,createdAt:"2026-09-01T00:00:00Z",updatedAt:"2026-09-01T00:00:00Z",timeline:{version:1,aspectRatio:"9:16",clips:[0,1,2].map(i=>({id:`clip-${i}`,sourceUrl:`https://media.example.test/${i}.png`,name:`Scene ${i+1}`,kind:"image",inMs:0,outMs:5000,fit:"cover",x:.5,y:.5,zoom:1,volume:1})),labels:[],music:{url:"",volume:.8,offsetMs:0,fadeInMs:0,fadeOutMs:0},coverMs:0}};
+ let saved:any=null;let renderRequest:any=null;
+ await page.route("https://media.example.test/**",route=>route.fulfill({contentType:"image/svg+xml",body:'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="480"><rect width="320" height="480" fill="#376456"/></svg>'}));
+ await page.route("**/api/v1/videos",async route=>{if(route.request().method()==="PATCH"){saved=route.request().postDataJSON();project={...saved,revision:project.revision+1};return route.fulfill({json:{data:project}});}return route.fulfill({json:{data:[project]}});});
+ await page.route("**/api/v1/videos/jobs*",route=>route.fulfill({json:{data:route.request().url().includes("?id=")?{id:"render-1",projectId:project.id,revision:project.revision,status:"completed",progress:100,renderedUrl:"https://media.example.test/output.mp4",coverUrl:"https://media.example.test/cover.jpg",coverMs:0}:[]}}));
+ await page.route("**/api/v1/videos/render",route=>{renderRequest=route.request().postDataJSON();return route.fulfill({status:202,json:{job:{id:"render-1",projectId:project.id,revision:project.revision,status:"queued",progress:0}}});});
+ for(const path of ["videos/templates","brands/kit"])await page.route(`**/api/v1/${path}`,route=>route.fulfill({json:{data:[]}}));
+ await page.route("**/api/v1/media?**",route=>route.fulfill({json:{data:[]}}));
+ await page.goto("/demo?view=videos");await page.getByRole("button",{name:"Three clip story"}).click();
+ await expect(page.locator(".timeline-clips>button")).toHaveCount(3);await page.getByLabel("Aspect ratio").selectOption("1:1");
+ await page.locator(".timeline-clips>button").first().click();await page.getByLabel("Trim end (ms)").fill("3000");
+ await page.getByRole("button",{name:"Duplicate",exact:true}).click();await expect(page.locator(".timeline-clips>button")).toHaveCount(4);
+ await page.getByRole("button",{name:"Undo",exact:true}).click();await expect(page.locator(".timeline-clips>button")).toHaveCount(3);
+ await page.getByRole("button",{name:"templates",exact:true}).click();await page.getByRole("button",{name:/Three quick tips/}).click();await expect(page.locator(".timeline-text-lane button")).toHaveCount(3);
+ await expect.poll(()=>saved?.timeline.aspectRatio).toBe("1:1");await expect.poll(()=>saved?.timeline.clips[0].outMs).toBe(3000);
+ await page.getByRole("button",{name:"Render video",exact:true}).click();await expect.poll(()=>renderRequest?.async).toBe(true);await expect(page.getByRole("button",{name:/Create post from revision/})).toBeVisible();
+ await page.screenshot({path:`/tmp/relay-timeline-${test.info().project.name}.png`,fullPage:true});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+ await page.getByRole("button",{name:/Create post from revision/}).click();await expect(page.getByRole("dialog",{name:"Create post"})).toBeVisible();
+});

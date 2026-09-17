@@ -9,6 +9,8 @@ WORKDIR /app
 FROM base AS dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web/package.json apps/web/package.json
+COPY apps/mcp/package.json apps/mcp/package.json
+COPY apps/cli/package.json apps/cli/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/database/package.json packages/database/package.json
@@ -53,3 +55,24 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/
 USER nextjs
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
+
+# Dedicated CPU-bounded creative renderer; publishing retains its own process.
+FROM dependencies AS renderer
+ENV NODE_ENV=production
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+COPY packages ./packages
+COPY apps/web/lib ./apps/web/lib
+COPY apps/web/scripts ./apps/web/scripts
+CMD ["node", "--import", "./apps/worker/node_modules/tsx/dist/loader.mjs", "--import", "./apps/web/scripts/render-loader.mjs", "apps/web/scripts/run-render-worker.ts"]
+
+FROM dependencies AS mcp
+ENV NODE_ENV=production
+ENV MCP_TRANSPORT=http
+ENV MCP_HOST=0.0.0.0
+ENV MCP_PORT=3100
+COPY apps/mcp ./apps/mcp
+EXPOSE 3100
+CMD ["node", "--import", "./apps/mcp/node_modules/tsx/dist/loader.mjs", "apps/mcp/src/index.ts"]
+
+# Preserve the web application as the default docker build target.
+FROM runner AS production

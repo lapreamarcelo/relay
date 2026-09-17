@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { OAuthProviderRegistry } from "./oauth.ts";
+import { OAuthProviderRegistry, ProviderOAuthError } from "./oauth.ts";
 
 const environment = {
   FACEBOOK_APP_ID: "facebook-id",
@@ -28,6 +28,36 @@ test("YouTube requests offline access and never places the client secret in the 
   assert.equal(url.searchParams.get("prompt"), "consent");
   assert.equal(url.searchParams.get("state"), "signed-state");
   assert.equal(url.toString().includes("youtube-secret"), false);
+});
+
+test("YouTube only requires reconnecting when Google rejects the refresh token", async () => {
+  const adapter = new OAuthProviderRegistry(environment, "https://relay.example.com").get("youtube");
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const [providerCode, reconnectRequired] of [["invalid_grant", true], ["temporarily_unavailable", false], ["invalid_client", false]] as const) {
+      globalThis.fetch = (async () => Response.json({ error: providerCode }, { status: providerCode === "invalid_client" ? 401 : 400 })) as typeof fetch;
+      await assert.rejects(
+        () => adapter.refresh({ providerAccountId: "channel-1", accessToken: "access-old", refreshToken: "refresh-old", grantedScopes: [], providerMetadata: {} }),
+        (error: unknown) => error instanceof ProviderOAuthError && error.diagnostic?.providerCode === providerCode && error.reconnectRequired === reconnectRequired,
+      );
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("YouTube keeps the connection retryable when a successful refresh response is malformed", async () => {
+  const adapter = new OAuthProviderRegistry(environment, "https://relay.example.com").get("youtube");
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => Response.json({ expires_in: 3_600 })) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => adapter.refresh({ providerAccountId: "channel-1", accessToken: "access-old", refreshToken: "refresh-old", grantedScopes: [], providerMetadata: {} }),
+      (error: unknown) => error instanceof ProviderOAuthError && error.reconnectRequired === false,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("providers are disabled independently when their keys are absent", () => {

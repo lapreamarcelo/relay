@@ -17,6 +17,17 @@ const commands = new Map(Object.entries({
   "folders list": ["GET", "/api/v1/media/projects"], "folders create": ["POST", "/api/v1/media/projects"], "folders rename": ["PATCH", "/api/v1/media/projects"], "folders delete": ["DELETE", "/api/v1/media/projects", "body-id"],
   "slideshows list": ["GET", "/api/v1/slideshows"], "slideshows get": ["GET", "/api/v1/slideshows", "query-id"], "slideshows create": ["POST", "/api/v1/slideshows"], "slideshows update": ["PATCH", "/api/v1/slideshows"], "slideshows delete": ["DELETE", "/api/v1/slideshows", "body-id"], "slideshows render": ["POST", "/api/v1/slideshows/render", "body-id"],
   "videos list": ["GET", "/api/v1/videos"], "videos get": ["GET", "/api/v1/videos", "query-id"], "videos create": ["POST", "/api/v1/videos"], "videos update": ["PATCH", "/api/v1/videos"], "videos delete": ["DELETE", "/api/v1/videos", "body-id"], "videos render": ["POST", "/api/v1/videos/render", "body-id"], "videos batch": ["POST", "/api/v1/videos/batch"],
+  "render-jobs list": ["GET", "/api/v1/videos/jobs"], "render-jobs get": ["GET", "/api/v1/videos/jobs", "query-id"], "render-jobs update": ["PATCH", "/api/v1/videos/jobs"],
+  "video-templates list": ["GET", "/api/v1/videos/templates"], "video-templates create": ["POST", "/api/v1/videos/templates"], "video-templates delete": ["DELETE", "/api/v1/videos/templates", "body-id"],
+  "queues list": ["GET", "/api/v1/queues"], "queues set": ["PUT", "/api/v1/queues"], "queues fill": ["POST", "/api/v1/queues"],
+  "campaigns operate": ["POST", "/api/v1/campaigns/operations"],
+  "ideas list": ["GET", "/api/v1/ideas"], "ideas create": ["POST", "/api/v1/ideas"], "ideas update": ["PATCH", "/api/v1/ideas"], "ideas delete": ["DELETE", "/api/v1/ideas", "body-id"],
+  "brand-kits list": ["GET", "/api/v1/brands/kit"], "brand-kits set": ["PUT", "/api/v1/brands/kit"],
+  "capabilities get": ["GET", "/api/v1/capabilities"],
+  "videos captions": ["POST", "/api/v1/videos/captions", "body-id"], "videos variants": ["POST", "/api/v1/videos/variants"],
+  "analytics creative": ["GET", "/api/v1/analytics/creative"], "analytics timing": ["GET", "/api/v1/analytics/timing"],
+  "creative assist": ["POST", "/api/v1/creative/assist"],
+  "campaign-recipes list": ["GET", "/api/v1/campaigns/recipes"], "campaign-recipes create": ["POST", "/api/v1/campaigns/recipes"], "campaign-recipes apply": ["POST", "/api/v1/campaigns/recipes"], "campaign-recipes delete": ["DELETE", "/api/v1/campaigns/recipes", "body-id"],
   "analytics report": ["GET", "/api/v1/analytics"],
   "reports list": ["GET", "/api/v1/analytics/reports"], "reports create": ["POST", "/api/v1/analytics/reports"], "reports delete": ["DELETE", "/api/v1/analytics/reports", "body-id"],
   "settings get": ["GET", "/api/v1/settings/publishing"], "settings set": ["PUT", "/api/v1/settings/publishing"],
@@ -45,7 +56,17 @@ Resources and actions:
   folders list|create|rename|delete
   slideshows list|get|create|update|delete|render|schedule
   videos list|get|create|update|delete|render|schedule|batch
-  analytics report
+  render-jobs list|get|update
+  video-templates list|create|delete
+  queues list|set|fill
+  campaigns operate
+  ideas list|create|update|delete
+  brand-kits list|set
+  capabilities get
+  videos captions|variants
+  analytics report|creative|timing
+  creative assist
+  campaign-recipes list|create|apply|delete
   reports list|create|delete
   settings get|set
   providers list
@@ -175,6 +196,7 @@ export async function run(argv, io = {}) {
     if (method !== "GET" && data === undefined) {
       if (idMode === "body-id" && options.id) data = { id: options.id }; else throw new Error(`${key} requires --data JSON|@file|-`);
     }
+    if (key === "campaign-recipes apply") data = { ...data, action: "apply" };
     result = await client.request(withQuery(basePath, queries), { method, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
   }
   stdout.write(`${JSON.stringify(result, null, options.compact ? 0 : 2)}\n`); return result;

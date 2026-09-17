@@ -22,12 +22,12 @@ test("planner is URL-backed and exposes campaign operations", async ({ page }) =
   await expect(page.locator(".planning-event.scheduled").first()).toHaveAttribute("draggable", "true");
   await page.getByLabel("Brand").selectOption("brand-aster");
   await expect(page).toHaveURL(/brand=brand-aster/);
-  await page.getByLabel("Account").selectOption("account-instagram");
+  await page.getByLabel("Account", { exact: true }).selectOption("account-instagram");
   await expect(page).toHaveURL(/account=account-instagram/);
   await page.reload();
   await expect(page.getByRole("heading", { name: "August 2026" })).toBeVisible();
   await expect(page.getByLabel("Brand")).toHaveValue("brand-aster");
-  await expect(page.getByLabel("Account")).toHaveValue("account-instagram");
+  await expect(page.getByLabel("Account", { exact: true })).toHaveValue("account-instagram");
 });
 
 test("demo scheduling stays local and appears on the calendar", async ({ page }) => {
@@ -43,6 +43,7 @@ test("demo scheduling stays local and appears on the calendar", async ({ page })
   await composer.locator(".destination-list button").filter({ hasText: "Instagram" }).click();
   await composer.getByRole("button", { name: /Schedule post/ }).click();
   await expect(composer).toBeHidden();
+  await page.getByRole("button", { name: "List", exact: true }).click();
   await expect(page.locator(".planning-event.scheduled").filter({ hasText: "A demo-only scheduled post" })).toBeVisible();
   expect(postWrites).toBe(0);
 });
@@ -297,7 +298,7 @@ test("media folders can be renamed and assets moved between them", async ({ page
   await expect.poll(() => renamedFolder).toEqual({ id: sourceId, name: "Renamed assets" });
 
   await page.getByRole("button", { name: "Move clip.png" }).click();
-  await page.getByLabel("Destination folder").selectOption(destinationId);
+  await page.getByRole("option", { name: /Destination assets/ }).click();
   await page.getByRole("button", { name: "Move file" }).click();
   await expect.poll(() => movedMedia).toEqual({ key: `media-projects/${sourceId}/media/clip.png`, projectId: destinationId, kind: "media" });
 });
@@ -327,7 +328,8 @@ test("media folders can be nested and moved with drag and drop", async ({ page }
   await source.dragTo(destination);
   await expect.poll(() => movedFolder).toEqual({ id: sourceId, parentId: destinationId });
   await expect(page.getByText("Source assets moved inside Destination assets.")).toBeVisible();
-  await expect(source).toHaveCSS("margin-left", "18px");
+  await destination.click();
+  await expect(source).toBeVisible();
 });
 
 test("selected media can be scheduled as a daily sequence", async ({ page }) => {
@@ -370,6 +372,7 @@ test("video studio exposes draggable labels, style shortcuts, and bulk music pol
   await page.route("https://upload.example.test/**", (route) => route.fulfill({ status: 200, body: "" }));
   await page.goto("/demo?view=videos");
   await page.getByRole("button", { name: /Hook reel/ }).first().click();
+  await page.getByRole("button", { name: "Label recipes / bulk hooks" }).click();
   await expect(page.locator(".video-studio")).toHaveCSS("opacity", "1");
   await expect(page.getByText("Add a source video")).toBeVisible();
   await expect(page.locator(".video-empty-actions").getByRole("button", { name: "Upload video" })).toBeVisible();

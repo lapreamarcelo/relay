@@ -92,6 +92,7 @@ export const brand = pgTable(
     name: text("name").notNull(),
     monogram: text("monogram").notNull(),
     color: text("color").notNull(),
+    creativeKit: jsonb("creative_kit").$type<Record<string, unknown>>().notNull().default({}),
     timezone: text("timezone").notNull().default("UTC"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -164,6 +165,7 @@ export const relayPost = pgTable(
     brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
     campaignId: text("campaign_id"),
     clientRequestId: text("client_request_id"),
+    creativeOrigin: jsonb("creative_origin").$type<Record<string, unknown>>(),
     text: text("text").notNull(),
     mediaType: text("media_type").notNull().default("none"),
     mediaUrl: text("media_url"),
@@ -192,6 +194,8 @@ export const campaign = pgTable(
     brandId: text("brand_id").references(() => brand.id, { onDelete: "set null" }),
     name: text("name").notNull(),
     color: text("color").notNull().default("#ff5c35"),
+    clientRequestId: text("client_request_id"),
+    paused: boolean("paused").notNull().default(false),
     status: text("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -243,6 +247,11 @@ export const videoProject = pgTable(
     musicUrl: text("music_url"),
     musicFolderId: text("music_folder_id"),
     labels: jsonb("labels").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    timeline: jsonb("timeline").$type<Record<string, unknown>>(),
+    revision: integer("revision").notNull().default(1),
+    templateId: text("template_id"),
+    clientRequestId: text("client_request_id"),
+    renderedCoverUrl: text("rendered_cover_url"),
     renderedUrl: text("rendered_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -319,6 +328,15 @@ export const postMetricSnapshot = pgTable(
   (table) => [index("post_metric_target_captured_idx").on(table.targetId, table.capturedAt)],
 );
 
-export const schema = { user, session, account, verification, apiKey, brand, socialAccount, notification, campaign, postTemplate, relayPost, slideshowProject, videoProject, analyticsReportSchedule, postTarget, postMetricSnapshot, workerHeartbeat };
+export const videoRenderJob = pgTable("video_render_job", {
+ id:text("id").primaryKey(), ownerId:text("owner_id").notNull().references(()=>user.id,{onDelete:"cascade"}),projectId:text("project_id").notNull().references(()=>videoProject.id,{onDelete:"cascade"}),revision:integer("revision").notNull(),snapshot:jsonb("snapshot").notNull(),kind:text("kind").notNull().default("render"),status:text("status").notNull().default("queued"),progress:integer("progress").notNull().default(0),renderedUrl:text("rendered_url"),coverUrl:text("cover_url"),captions:jsonb("captions"),error:text("error"),attempts:integer("attempts").notNull().default(0),leaseToken:text("lease_token"),leaseUntil:timestamp("lease_until",{withTimezone:true}),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),updatedAt:timestamp("updated_at",{withTimezone:true}).notNull().defaultNow(),
+},table=>[uniqueIndex("video_render_job_revision_kind_idx").on(table.projectId,table.revision,table.kind),index("video_render_queue_idx").on(table.status,table.createdAt)]);
+export const creativeTemplate=pgTable("creative_template",{id:text("id").primaryKey(),ownerId:text("owner_id").notNull().references(()=>user.id,{onDelete:"cascade"}),name:text("name").notNull(),description:text("description").notNull().default(""),timeline:jsonb("timeline").notNull(),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),updatedAt:timestamp("updated_at",{withTimezone:true}).notNull().defaultNow()});
+export const publishingQueue=pgTable("publishing_queue",{accountId:text("account_id").primaryKey().references(()=>socialAccount.id,{onDelete:"cascade"}),ownerId:text("owner_id").notNull().references(()=>user.id,{onDelete:"cascade"}),timezone:text("timezone").notNull().default("UTC"),slots:jsonb("slots").notNull().default([]),paused:boolean("paused").notNull().default(false),updatedAt:timestamp("updated_at",{withTimezone:true}).notNull().defaultNow()});
+export const contentIdea=pgTable("content_idea",{id:text("id").primaryKey(),ownerId:text("owner_id").notNull().references(()=>user.id,{onDelete:"cascade"}),brandId:text("brand_id").references(()=>brand.id,{onDelete:"set null"}),title:text("title").notNull(),notes:text("notes").notNull().default(""),sourceUrl:text("source_url").notNull().default(""),pillar:text("pillar").notNull().default(""),status:text("status").notNull().default("idea"),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),updatedAt:timestamp("updated_at",{withTimezone:true}).notNull().defaultNow()});
+export const campaignRecipe=pgTable("campaign_recipe",{id:text("id").primaryKey(),ownerId:text("owner_id").notNull().references(()=>user.id,{onDelete:"cascade"}),name:text("name").notNull(),entries:jsonb("entries").notNull(),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow()});
+export const creativeAssistanceRequest=pgTable("creative_assistance_request",{id:text("id").primaryKey(),ownerId:text("owner_id").notNull().references(()=>user.id,{onDelete:"cascade"}),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow()});
+
+export const schema = { campaignRecipe, videoRenderJob,creativeTemplate,publishingQueue,contentIdea,creativeAssistanceRequest,user, session, account, verification, apiKey, brand, socialAccount, notification, campaign, postTemplate, relayPost, slideshowProject, videoProject, analyticsReportSchedule, postTarget, postMetricSnapshot, workerHeartbeat };
 
 export type RelayUser = typeof user.$inferSelect;

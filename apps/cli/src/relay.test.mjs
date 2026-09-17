@@ -112,3 +112,15 @@ test("stock media, provider, and notification commands use their agent-safe endp
     ]);
   } finally { await api.close(); }
 });
+
+test("new creative and planning commands preserve structured agent payloads",async()=>{
+ const calls=[];const fetchImpl=async(url,init)=>{calls.push({url,init});return new Response(JSON.stringify({data:{ok:true}}),{headers:{"Content-Type":"application/json"}});};
+ const io={env:{RELAY_URL:"https://relay.example",RELAY_API_KEY:"relay_sk_test"},stdout:{write(){}},fetchImpl};
+ const timeline={version:1,aspectRatio:"4:5",clips:[{id:"clip",sourceUrl:"https://media.example/clip.mp4",kind:"video",inMs:1000,outMs:4000}],labels:[],music:{url:""},coverMs:0};
+ await run(["videos","update","--data",JSON.stringify({id:"video",revision:4,name:"Story",labels:[],timeline})],io);
+ assert.deepEqual(JSON.parse(calls.at(-1).init.body).timeline,timeline);
+ await run(["videos","render","--id","video","--data",'{"async":true}'],io);assert.deepEqual(JSON.parse(calls.at(-1).init.body),{id:"video",async:true});
+ await run(["render-jobs","get","--id","job"],io);assert.equal(calls.at(-1).url,"https://relay.example/api/v1/videos/jobs?id=job");
+ await run(["queues","fill","--data",'{"accountId":"account","postIds":["draft"],"preview":true}'],io);assert.equal(calls.at(-1).url,"https://relay.example/api/v1/queues");assert.equal(JSON.parse(calls.at(-1).init.body).preview,true);
+ await run(["analytics","creative","--query","hours=72"],io);assert.equal(calls.at(-1).url,"https://relay.example/api/v1/analytics/creative?hours=72");
+});

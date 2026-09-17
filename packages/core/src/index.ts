@@ -161,6 +161,7 @@ export interface RelayPost {
 }
 
 export interface Campaign {
+  paused?: boolean;
   id: string;
   brandId: string;
   name: string;
@@ -251,6 +252,10 @@ export interface VideoProject {
   musicFolderId?: string;
   labels: CreativeLabel[];
   renderedUrl?: string;
+  renderedCoverUrl?: string;
+  timeline?: VideoTimeline;
+  revision?: number;
+  templateId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -260,3 +265,41 @@ export type VideoMusicMode = "none" | "fixed" | "rotate" | "random";
 export const brands: Brand[] = [];
 export const accounts: SocialAccount[] = [];
 export const initialPosts: RelayPost[] = [];
+
+
+export interface VideoClip {
+  id: string;
+  sourceUrl: string;
+  name: string;
+  kind: "video" | "image";
+  inMs: number;
+  outMs: number;
+  sourceDurationMs?: number;
+  fit: "cover" | "contain";
+  x: number;
+  y: number;
+  zoom: number;
+  volume: number;
+}
+export interface TimedVideoLabel extends CreativeLabel { startMs: number; endMs: number }
+export interface VideoTimeline {
+  version: 1;
+  aspectRatio: "9:16" | "4:5" | "1:1" | "16:9";
+  clips: VideoClip[];
+  labels: TimedVideoLabel[];
+  music: { url: string; volume: number; offsetMs: number; fadeInMs: number; fadeOutMs: number };
+  coverMs: number;
+}
+export interface VideoRenderJob {
+  coverUrl?: string;
+  coverMs?: number;
+  kind?: "render" | "captions";
+  captions?: TimedVideoLabel[];
+  id: string;
+  projectId: string;
+  revision: number;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  progress: number;
+  renderedUrl?: string;
+  error?: string;
+}

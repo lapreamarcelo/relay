@@ -3,6 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const expectedTools = [
+  "list_campaign_recipes", "save_campaign_recipe", "apply_campaign_recipe", "delete_campaign_recipe",
+  "generate_video_captions", "create_video_variants", "creative_analytics", "posting_time_recommendations", "assist_content",
+  "list_queues", "save_queue", "fill_queue", "operate_campaign", "list_ideas", "save_idea", "delete_idea", "list_brand_kits", "save_brand_kit", "get_capabilities", "prepare_media_upload",
+  "list_video_render_jobs", "get_video_render_job", "update_video_render_job", "list_video_templates", "save_video_template", "delete_video_template",
   "analytics_report", "assign_posts_to_campaign", "bulk_reschedule_posts", "create_asset_folder", "create_brand",
   "create_campaign", "create_post", "create_posts", "create_slideshow_batch", "create_slideshows", "create_template",
   "create_video_batch", "delete_analytics_report", "delete_asset_folder", "delete_brand", "delete_campaign", "delete_media",
@@ -16,7 +20,7 @@ const expectedTools = [
 ].sort();
 
 test("registers the complete agent-safe Relay MCP surface exactly once", async () => {
-  const source = await readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("./server.ts", import.meta.url), "utf8");
   const names = [...source.matchAll(/server\.registerTool\(\s*"([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(names).size, names.length, "MCP tool names must be unique");
   assert.deepEqual(names.sort(), expectedTools);

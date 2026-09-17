@@ -151,3 +151,7 @@ pnpm relay -- request PATCH /api/v1/posts --data @changes.json
 ```
 
 Paths must begin with `/`. The CLI only sends the configured key to the configured `RELAY_URL` origin; direct R2 upload is limited to the short-lived signed URL returned by Relay.
+
+## Creative Studio, queues and agent access
+
+See [Creative Studio and agent workflows](CREATIVE_STUDIO.md) for timeline JSON, asynchronous renders, captions, templates, variants, recurring queues, ideas, creative analytics, and MCP stdio/HTTP setup.

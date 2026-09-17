@@ -2,6 +2,12 @@
 
 Relay is evolving from a capable cross-platform publisher into a dependable operating system for planning, publishing, measuring, and automating social content. Work is ordered to deepen the existing product before expanding its surface area.
 
+## September 2026 delivery
+
+Creative production has moved ahead of provider expansion: the app now includes a multi-clip timeline with cropping, timed text, audio, templates, captions, covers and durable rendering. Queue slots, campaign operations and recipes, ideas, brand guidance and creative analytics connect creation to scheduling and reuse. These workflows are available through REST, CLI and both stdio and HTTP MCP.
+
+See [delivery status and remaining work](docs/PRODUCT_PLAN_2026-09.md#implementation-status) and the [operator and agent guide](docs/CREATIVE_STUDIO.md). This implementation has been verified locally and is not deployed.
+
 ## Phase 0 — Stabilize the current release
 
 Goal: make the existing product safe to change, observable in production, accessible, and consistently verifiable.

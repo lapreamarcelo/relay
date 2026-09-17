@@ -34,7 +34,9 @@ export class PostPublishingService {
         WHERE target.status IN ('scheduled', 'publishing', 'processing')
           AND target.publish_after <= NOW()
           AND (target.publish_lease_expires_at IS NULL OR target.publish_lease_expires_at <= NOW())
-          AND (target.status <> 'scheduled' OR post.scheduled_at <= NOW())
+          AND (target.status <> 'scheduled' OR (post.scheduled_at <= NOW()
+            AND NOT EXISTS (SELECT 1 FROM publishing_queue q WHERE q.account_id=target.social_account_id AND q.paused)
+            AND NOT EXISTS (SELECT 1 FROM campaign c WHERE c.id=post.campaign_id AND c.paused)))
         ORDER BY target.publish_after ASC
         FOR UPDATE OF target SKIP LOCKED LIMIT 1
       `;

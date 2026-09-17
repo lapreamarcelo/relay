@@ -211,3 +211,7 @@ pnpm dev
 Issues and pull requests are welcome. If you add a provider, keep its OAuth, publishing, analytics normalization, and tests together in `packages/providers`.
 
 Relay is under active development. Public posting and analytics availability depend on the permissions approved for your provider applications.
+
+## Creative Studio, queues and agent access
+
+See [Creative Studio and agent workflows](docs/CREATIVE_STUDIO.md) for timeline JSON, asynchronous renders, captions, templates, variants, recurring queues, ideas, creative analytics, and MCP stdio/HTTP setup.

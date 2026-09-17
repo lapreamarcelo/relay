@@ -342,6 +342,8 @@ interface MediaObject {
 interface MediaProject { id: string; name: string; kind: "media" | "music"; count: number; createdAt: string; parentId?: string | null }
 
 interface ComposerMedia {
+  coverUrl?: string;
+  thumbOffsetMs?: number;
   name: string;
   url: string;
   previewUrl: string;
@@ -1076,9 +1078,9 @@ function Composer({ onClose, onSave, publishingDefaults, initialMedia = null, in
   const [previewMode, setPreviewMode] = useState<"feed" | "mobile">("feed");
   const [previewProvider, setPreviewProvider] = useState<ProviderId | null>(reusableTargets[0]?.provider ?? null);
   const [instagramType, setInstagramType] = useState<"feed" | "reel" | "story">(instagramDefaults?.publishType ?? (reusableMedia?.type === "video" ? publishingDefaults.instagram.videoPublishType : publishingDefaults.instagram.imagePublishType));
-  const [instagramCoverUrl, setInstagramCoverUrl] = useState(instagramDefaults?.coverUrl ?? "");
-  const [instagramCoverPreview, setInstagramCoverPreview] = useState(instagramDefaults?.coverUrl ?? "");
-  const [instagramThumbOffsetMs, setInstagramThumbOffsetMs] = useState<number | undefined>(instagramDefaults?.thumbOffsetMs);
+  const [instagramCoverUrl, setInstagramCoverUrl] = useState(instagramDefaults?.coverUrl ?? initialMedia?.coverUrl ?? "");
+  const [instagramCoverPreview, setInstagramCoverPreview] = useState(instagramDefaults?.coverUrl ?? initialMedia?.coverUrl ?? "");
+  const [instagramThumbOffsetMs, setInstagramThumbOffsetMs] = useState<number | undefined>(instagramDefaults?.thumbOffsetMs ?? initialMedia?.thumbOffsetMs);
   const [videoDurationMs, setVideoDurationMs] = useState(0);
   const [facebookType, setFacebookType] = useState<"feed" | "reel">(facebookDefaults?.publishType ?? (reusableMedia?.type === "video" ? publishingDefaults.facebook.videoPublishType : "feed"));
   const [facebookLink, setFacebookLink] = useState(facebookDefaults?.linkUrl ?? "");
@@ -1086,13 +1088,13 @@ function Composer({ onClose, onSave, publishingDefaults, initialMedia = null, in
   const [tiktokComments, setTiktokComments] = useState(tiktokDefaults?.allowComments ?? publishingDefaults.tiktok.allowComments);
   const [tiktokDuet, setTiktokDuet] = useState(tiktokDefaults?.allowDuet ?? publishingDefaults.tiktok.allowDuet);
   const [tiktokStitch, setTiktokStitch] = useState(tiktokDefaults?.allowStitch ?? publishingDefaults.tiktok.allowStitch);
-  const [tiktokThumbOffsetMs, setTiktokThumbOffsetMs] = useState<number | undefined>(tiktokDefaults?.thumbOffsetMs);
+  const [tiktokThumbOffsetMs, setTiktokThumbOffsetMs] = useState<number | undefined>(tiktokDefaults?.thumbOffsetMs ?? initialMedia?.thumbOffsetMs);
   const [youtubeTitle, setYoutubeTitle] = useState(youtubeDefaults?.title ?? "");
   const [youtubeTags, setYoutubeTags] = useState(youtubeDefaults?.tags.join(", ") ?? "");
   const [youtubePrivacy, setYoutubePrivacy] = useState<"private" | "unlisted" | "public">(youtubeDefaults?.privacyStatus ?? publishingDefaults.youtube.privacyStatus);
   const [youtubeMadeForKids, setYoutubeMadeForKids] = useState(youtubeDefaults?.madeForKids ?? publishingDefaults.youtube.madeForKids);
-  const [youtubeThumbnailUrl, setYoutubeThumbnailUrl] = useState(youtubeDefaults?.thumbnailUrl ?? "");
-  const [youtubeThumbnailPreview, setYoutubeThumbnailPreview] = useState(youtubeDefaults?.thumbnailUrl ?? "");
+  const [youtubeThumbnailUrl, setYoutubeThumbnailUrl] = useState(youtubeDefaults?.thumbnailUrl ?? initialMedia?.coverUrl ?? "");
+  const [youtubeThumbnailPreview, setYoutubeThumbnailPreview] = useState(youtubeDefaults?.thumbnailUrl ?? initialMedia?.coverUrl ?? "");
   const [mediaOrientation, setMediaOrientation] = useState<"unknown" | "portrait" | "landscape" | "square">("unknown");
   const instagramTypeTouched = useRef(Boolean(instagramDefaults)); const facebookTypeTouched = useRef(Boolean(facebookDefaults));
   const [media, setMedia] = useState<ComposerMedia | null>(reusableMedia);

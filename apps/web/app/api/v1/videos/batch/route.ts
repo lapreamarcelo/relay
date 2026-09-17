@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     try {
       const labels = project.labels.length ? project.labels.map((label, labelIndex) => labelIndex === 0 ? { ...label, text: hook } : label) : [{ id: crypto.randomUUID(), text: hook, x: .5, y: .18, width: .84, height: .12, fontSize: 72, font: "modern" as const, textColor: "#FFFFFF", background: "dark" as const, style: "dark" as const }];
       const safeHook = hook.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 64) || `video-${index + 1}`;
-      const rendered = await renderVideoArtifactDetails({ projectId, sourceUrl: project.sourceUrl, musicUrl, labels, targetKey: `media-projects/${outputFolderId}/media/${String(index + 1).padStart(2, "0")}-${safeHook}.mp4` });
+      const rendered = await renderVideoArtifactDetails({ projectId, sourceUrl: project.sourceUrl, musicUrl, labels, timeline: project.timeline ? { ...project.timeline, music: { ...project.timeline.music, url: musicUrl ?? "" }, labels: project.timeline.labels.length ? project.timeline.labels.map((label,i) => i === 0 ? { ...label, text: hook } : label) : labels.map(label => ({ ...label, startMs: 0, endMs: project.timeline!.clips.reduce((sum,c) => sum+c.outMs-c.inMs,0) })) } : undefined, targetKey: `media-projects/${outputFolderId}/media/${String(index + 1).padStart(2, "0")}-${safeHook}.mp4` });
       const renderedUrl = rendered.url;
       let post: unknown = null;
       if (accounts.length) {

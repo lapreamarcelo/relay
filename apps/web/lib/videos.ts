@@ -3,6 +3,9 @@ import type { VideoMusicMode, VideoProject } from "@relay/core";
 import { normalizeCreativeLabels } from "./creative-labels.ts";
 
 export interface VideoProjectRow {
+  timeline?: import("@relay/core").VideoTimeline | null;
+  revision?: number;
+  template_id?: string | null;
   id: string;
   brand_id: string | null;
   name: string;
@@ -13,6 +16,7 @@ export interface VideoProjectRow {
   music_folder_id: string | null;
   labels: unknown;
   rendered_url: string | null;
+  rendered_cover_url?: string | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -24,6 +28,8 @@ export function safeWebUrl(value: unknown): string {
 
 export function serializeVideoProject(row: VideoProjectRow): VideoProject {
   return {
+    renderedCoverUrl: row.rendered_cover_url ?? undefined,
+    timeline: row.timeline ?? undefined, revision: row.revision ?? 1, templateId: row.template_id ?? undefined,
     id: row.id, brandId: row.brand_id ?? "", name: row.name, caption: row.caption, sourceUrl: row.source_url,
     sourceFolderId: row.source_folder_id ?? undefined, musicUrl: row.music_url ?? undefined, musicFolderId: row.music_folder_id ?? undefined,
     labels: normalizeCreativeLabels(row.labels) ?? [], renderedUrl: row.rendered_url ?? undefined,

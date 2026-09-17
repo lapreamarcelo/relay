@@ -1,0 +1,6 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { upcomingQueueSlots,validateQueueSlots } from "./queue-slots.ts";
+test("weekly slots preserve Madrid wall time across DST",()=>{const rows=upcomingQueueSlots([{day:1,time:"09:00"}],"Europe/Madrid",new Date("2026-10-19T00:00:00Z"),2);assert.deepEqual(rows.map(r=>r.scheduledAt),["2026-10-19T07:00:00.000Z","2026-10-26T08:00:00.000Z"]);});
+test("nonexistent local times are skipped and ambiguous times appear once",()=>{const spring=upcomingQueueSlots([{day:0,time:"02:30"}],"Europe/Madrid",new Date("2026-03-28T00:00:00Z"),1);assert.equal(spring[0].scheduledAt,"2026-04-05T00:30:00.000Z");const fall=upcomingQueueSlots([{day:0,time:"02:30"}],"Europe/Madrid",new Date("2026-10-24T00:00:00Z"),1);assert.equal(fall[0].scheduledAt,"2026-10-25T00:30:00.000Z");});
+test("quarter hour zones and slot validation",()=>{assert.equal(upcomingQueueSlots([{day:1,time:"09:00"}],"Asia/Kathmandu",new Date("2026-09-06T00:00:00Z"),1)[0].scheduledAt,"2026-09-07T03:15:00.000Z");assert.throws(()=>validateQueueSlots([{day:8,time:"09:00"}]));assert.throws(()=>validateQueueSlots([{day:1,time:"24:00"}]));assert.throws(()=>validateQueueSlots([{day:1,time:"09:00"},{day:1,time:"09:00"}]));});

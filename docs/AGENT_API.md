@@ -325,3 +325,7 @@ Video labels accept `font: "modern" | "editorial" | "mono"`; slideshow labels us
 `GET /api/v1/analytics?from=<ISO>&to=<ISO>` returns period deltas, prior-period growth, daily series, metric availability, and content rankings. Optional filters are `brandId`, `accountId`, `campaignId`, `provider`, and `mediaType`. Add `format=csv` for a downloadable report. Relay keeps unavailable provider metrics as `null` instead of implying zero.
 
 `GET /api/v1/analytics/reports` lists scheduled reports. `POST /api/v1/analytics/reports` accepts `{ "name": "Weekly growth", "cadence": "weekly", "filters": { "days": 7, "brandId": "..." } }`. `DELETE` accepts `{ "id": "..." }`. The worker creates an in-app notification with a fresh CSV link at each due time.
+
+## Creative Studio, queues and agent access
+
+See [Creative Studio and agent workflows](CREATIVE_STUDIO.md) for timeline JSON, asynchronous renders, captions, templates, variants, recurring queues, ideas, creative analytics, and MCP stdio/HTTP setup.

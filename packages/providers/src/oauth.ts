@@ -331,8 +331,19 @@ function createYouTubeAdapter(env: OAuthEnvironment, appUrl: string): OAuthAdapt
       return [{ provider: "youtube", authMethod: "youtube", providerAccountId, username, displayName, avatarUrl: asString(channel?.snippet?.thumbnails?.default?.url), accessToken, refreshToken, tokenExpiresAt: expiresAt, refreshTokenExpiresAt: null, refreshAfterAt: refreshAt(expiresAt, 10 * MINUTE), grantedScopes: grantedScopes.length ? grantedScopes : requestedScopes, providerMetadata: {} }];
     },
     async refresh(input) {
-      const token = await tokenRequest(form({ client_id: clientId, client_secret: clientSecret, refresh_token: input.refreshToken, grant_type: "refresh_token" }), "YouTube token refresh");
-      const accessToken = asString(token.access_token); if (!accessToken) throw new ProviderOAuthError("YouTube did not return a refreshed token.", true);
+      let token: Awaited<ReturnType<typeof tokenRequest>>;
+      try {
+        token = await tokenRequest(form({ client_id: clientId, client_secret: clientSecret, refresh_token: input.refreshToken, grant_type: "refresh_token" }), "YouTube token refresh");
+      } catch (error) {
+        if (error instanceof ProviderOAuthError) {
+          // Google uses HTTP 400 for both revoked/expired refresh tokens and
+          // recoverable or application-level failures. Only invalid_grant says
+          // that this account's authorization can no longer be refreshed.
+          throw new ProviderOAuthError(error.message, error.diagnostic?.providerCode === "invalid_grant", error.diagnostic);
+        }
+        throw error;
+      }
+      const accessToken = asString(token.access_token); if (!accessToken) throw new ProviderOAuthError("YouTube did not return a refreshed token.");
       const expiresAt = expiry(token.expires_in, 60 * 60);
       return { accessToken, expiresAt, refreshAfterAt: refreshAt(expiresAt, 10 * MINUTE), grantedScopes: scopes(token.scope).length ? scopes(token.scope) : input.grantedScopes };
     },
