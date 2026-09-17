@@ -35,7 +35,6 @@ services:
       DATABASE_URL: postgresql://relay:${POSTGRES_PASSWORD}@postgres:5432/relay
       DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-5}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_TEXT_MODEL: ${OPENAI_TEXT_MODEL:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in Coolify}
       ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
       RELAY_SETUP_TOKEN: ${RELAY_SETUP_TOKEN:-}
@@ -110,7 +109,6 @@ services:
       R2_BUCKET_NAME: ${R2_BUCKET_NAME:?Set R2_BUCKET_NAME in Coolify}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:?Set R2_PUBLIC_URL in Coolify}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_TEXT_MODEL: ${OPENAI_TEXT_MODEL:-}
     cpus: 2
     mem_limit: 3g
     depends_on:

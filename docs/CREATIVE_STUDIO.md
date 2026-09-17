@@ -20,7 +20,6 @@ docker compose up -d --build
 
 Automatic captions require `OPENAI_API_KEY` on the web and renderer. Caption generation sends the timeline's trimmed source audio to OpenAI Whisper, returns editable timed segments, and does not silently replace text in the project. Adding the returned captions creates a normal editable revision. Review machine transcription before publishing.
 
-Writing assistance additionally requires `OPENAI_TEXT_MODEL`, a Responses API-compatible model available to the account. It uses the supplied brief, owned brand guidance and up to ten previous posts. It returns draft text and never schedules posts. Writing assistance is limited to 20 requests per owner per hour. No external AI request occurs simply by opening the editor.
 
 ## CLI
 
@@ -49,7 +48,6 @@ relay brand-kits list
 relay brand-kits set --data @brand-kit.json
 relay analytics creative --query hours=72
 relay analytics timing --query accountId=ACCOUNT_ID
-relay creative assist --data @brief.json
 ```
 
 Use `pnpm relay --` in place of `relay` for a repository-local installation.

@@ -14,7 +14,7 @@ const sections = [
 const commandGroups = [
   { name: "Discover", detail: "Read the workspace before making changes.", commands: ["capabilities get", "accounts list", "brands list", "folders list", "media list", "posts list"] },
   { name: "Organize", detail: "Manage brands, campaigns, templates, and R2 media.", commands: ["brands create|update|delete", "campaigns create|update|delete", "templates create|delete", "media upload|rename|move|delete", "media search-stock|import-stock", "folders create|rename|delete", "queues list|set|fill", "campaigns operate", "ideas list|create|update|delete", "brand-kits list|set"] },
-  { name: "Create", detail: "Build, render, and schedule social content.", commands: ["posts create|update|delete", "slideshows create|update|render|schedule", "videos create|update|render|schedule|batch|captions|variants", "render-jobs list|get|update", "video-templates list|create|delete", "creative assist"] },
+  { name: "Create", detail: "Build, render, and schedule social content.", commands: ["posts create|update|delete", "slideshows create|update|render|schedule", "videos create|update|render|schedule|batch|captions|variants", "render-jobs list|get|update", "video-templates list|create|delete"] },
   { name: "Measure", detail: "Retrieve performance and automate reporting.", commands: ["analytics report|creative|timing", "reports list|create|delete", "notifications list|read", "providers list", "settings get|set"] },
 ];
 

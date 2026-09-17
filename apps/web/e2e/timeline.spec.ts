@@ -13,7 +13,7 @@ test("timeline edits autosave, render asynchronously and hand off to composer",a
  await page.locator(".timeline-clips>button").first().click();await page.getByLabel("Trim end (ms)").fill("3000");
  await page.getByRole("button",{name:"Duplicate",exact:true}).click();await expect(page.locator(".timeline-clips>button")).toHaveCount(4);
  await page.getByRole("button",{name:"Undo",exact:true}).click();await expect(page.locator(".timeline-clips>button")).toHaveCount(3);
- await page.getByRole("button",{name:"templates",exact:true}).click();await page.getByRole("button",{name:/Three quick tips/}).click();await expect(page.locator(".timeline-text-lane button")).toHaveCount(3);
+ await page.getByRole("button",{name:"templates",exact:true}).click();await page.getByRole("button",{name:/Three quick tips/}).click();await expect(page.locator(".timeline-text-lane button")).toHaveCount(3);await page.getByRole("button",{name:"Close video assets"}).click();
  await expect.poll(()=>saved?.timeline.aspectRatio).toBe("1:1");await expect.poll(()=>saved?.timeline.clips[0].outMs).toBe(3000);
  await page.getByRole("button",{name:"Render video",exact:true}).click();await expect.poll(()=>renderRequest?.async).toBe(true);await expect(page.getByRole("button",{name:/Create post from revision/})).toBeVisible();
  await page.screenshot({path:`/tmp/relay-timeline-${test.info().project.name}.png`,fullPage:true});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);

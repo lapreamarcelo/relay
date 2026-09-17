@@ -4,7 +4,7 @@ import test from "node:test";
 
 const expectedTools = [
   "list_campaign_recipes", "save_campaign_recipe", "apply_campaign_recipe", "delete_campaign_recipe",
-  "generate_video_captions", "create_video_variants", "creative_analytics", "posting_time_recommendations", "assist_content",
+  "generate_video_captions", "create_video_variants", "creative_analytics", "posting_time_recommendations",
   "list_queues", "save_queue", "fill_queue", "operate_campaign", "list_ideas", "save_idea", "delete_idea", "list_brand_kits", "save_brand_kit", "get_capabilities", "prepare_media_upload",
   "list_video_render_jobs", "get_video_render_job", "update_video_render_job", "list_video_templates", "save_video_template", "delete_video_template",
   "analytics_report", "assign_posts_to_campaign", "bulk_reschedule_posts", "create_asset_folder", "create_brand",

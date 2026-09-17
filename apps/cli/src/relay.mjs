@@ -26,7 +26,6 @@ const commands = new Map(Object.entries({
   "capabilities get": ["GET", "/api/v1/capabilities"],
   "videos captions": ["POST", "/api/v1/videos/captions", "body-id"], "videos variants": ["POST", "/api/v1/videos/variants"],
   "analytics creative": ["GET", "/api/v1/analytics/creative"], "analytics timing": ["GET", "/api/v1/analytics/timing"],
-  "creative assist": ["POST", "/api/v1/creative/assist"],
   "campaign-recipes list": ["GET", "/api/v1/campaigns/recipes"], "campaign-recipes create": ["POST", "/api/v1/campaigns/recipes"], "campaign-recipes apply": ["POST", "/api/v1/campaigns/recipes"], "campaign-recipes delete": ["DELETE", "/api/v1/campaigns/recipes", "body-id"],
   "analytics report": ["GET", "/api/v1/analytics"],
   "reports list": ["GET", "/api/v1/analytics/reports"], "reports create": ["POST", "/api/v1/analytics/reports"], "reports delete": ["DELETE", "/api/v1/analytics/reports", "body-id"],
@@ -65,7 +64,6 @@ Resources and actions:
   capabilities get
   videos captions|variants
   analytics report|creative|timing
-  creative assist
   campaign-recipes list|create|apply|delete
   reports list|create|delete
   settings get|set
