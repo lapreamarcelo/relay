@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 test("CLI docs are URL-backed and guide both installation modes", async ({ page }) => {
@@ -361,18 +362,21 @@ test("historical analytics filters persist in the URL and reports can be schedul
 });
 
 test("video studio exposes draggable labels, style shortcuts, and bulk music policies", async ({ page }) => {
-  const project = { id: "video-1", brandId: "brand-aster", name: "Hook reel", caption: "{hook}", sourceUrl: "", sourceFolderId: "media-folder", labels: [{ id: "label-1", text: "Launch hook", x: .5, y: .18, width: .84, fontSize: 72, font: "modern", textColor: "#FFFFFF", background: "dark", backgroundColor: "#000000", style: "dark" }], createdAt: "2026-08-20T10:00:00.000Z", updatedAt: "2026-08-23T10:00:00.000Z" };
+  let project:any = { revision:1, id: "video-1", brandId: "brand-aster", name: "Hook reel", caption: "{hook}", sourceUrl: "", sourceFolderId: "media-folder", labels: [{ id: "label-1", text: "Launch hook", x: .5, y: .18, width: .84, fontSize: 72, font: "modern", textColor: "#FFFFFF", background: "dark", backgroundColor: "#000000", style: "dark" }], createdAt: "2026-08-20T10:00:00.000Z", updatedAt: "2026-08-23T10:00:00.000Z" };
   const mediaMutations: Array<{ method: string; body: Record<string, unknown> }> = [];
-  await page.route("**/api/v1/videos", (route) => route.fulfill({ json: { data: route.request().method() === "GET" ? [project] : { ...project, ...route.request().postDataJSON() } } }));
+  await page.route("https://media.example.com/**",route=>route.fulfill({contentType:route.request().url().endsWith(".mp3")?"audio/mpeg":"video/mp4",body:readFileSync(new URL("./fixtures/source.mp4",import.meta.url))}));
+  await page.route("**/api/v1/videos", route=>{if(route.request().method()==="GET")return route.fulfill({json:{data:[project]}});project={...project,...route.request().postDataJSON(),revision:project.revision+1};return route.fulfill({json:{data:project}});});
+  for(const endpoint of ["brands/kit","videos/templates"])await page.route(`**/api/v1/${endpoint}`,route=>route.fulfill({json:{data:[]}}));
+  await page.route("**/api/v1/videos/jobs*",route=>route.fulfill({json:{data:route.request().url().includes("?id=")?{id:"label-render",projectId:project.id,revision:project.revision,status:"completed",progress:100,renderedUrl:"https://media.example.com/hook-reel.mp4"}:[]}}));
   await page.route("**/api/v1/videos/batch", (route) => route.fulfill({ status: 201, json: { summary: { created: 2, failed: 0 } } }));
-  await page.route("**/api/v1/videos/render", (route) => route.fulfill({ json: { data: { ...project, sourceUrl: "https://media.example.com/device.mp4", renderedUrl: "https://media.example.com/hook-reel.mp4" }, folder: { id: "video-output", name: "Hook reel · render" } } }));
+  await page.route("**/api/v1/videos/render",route=>route.fulfill({status:202,json:{job:{id:"label-render",projectId:project.id,revision:project.revision,status:"queued",progress:0}}}));
   await page.route("**/api/v1/media/projects", (route) => route.fulfill({ json: { data: [{ id: "media-folder", name: "Aster clips", kind: "media", count: 1, createdAt: "2026-08-20T10:00:00.000Z" }, { id: "music-folder", name: "Launch music", kind: "music", count: 3, createdAt: "2026-08-20T10:00:00.000Z" }] } }));
   await page.route("**/api/v1/media", (route) => { const method = route.request().method(); const body = route.request().postDataJSON() as Record<string, unknown> | null; if (body) mediaMutations.push({ method, body }); return route.fulfill({ json: { key: method === "POST" ? "staging/user/media/device.mp4" : "media-projects/media-folder/media/device.mp4", uploadUrl: "https://upload.example.test/device.mp4", url: "https://media.example.com/device.mp4" } }); });
   await page.route("**/api/v1/media?**", (route) => route.request().method() === "POST" ? route.fulfill({ json: { key: "media-folder/device.mp4", uploadUrl: "https://upload.example.test/device.mp4", url: "https://media.example.com/device.mp4" } }) : route.fulfill({ json: { data: route.request().url().includes("kind=music") ? [{ key: "music-folder/track.mp3", name: "track.mp3", url: "https://media.example.com/track.mp3", kind: "music" }] : [{ key: "media-folder/source.mp4", name: "source.mp4", url: "https://media.example.com/source.mp4", kind: "media" }] } }));
   await page.route("https://upload.example.test/**", (route) => route.fulfill({ status: 200, body: "" }));
   await page.goto("/demo?view=videos");
   await page.getByRole("button", { name: /Hook reel/ }).first().click();
-  await page.getByRole("button", { name: "Label recipes / bulk hooks" }).click();
+  await expect(page.getByRole("button",{name:/Open timeline editor|Label recipes/})).toHaveCount(0);
   await expect(page.locator(".video-studio")).toHaveCSS("opacity", "1");
   await expect(page.getByText("Add a source video")).toBeVisible();
   await expect(page.locator(".video-empty-actions").getByRole("button", { name: "Upload video" })).toBeVisible();
@@ -387,10 +391,11 @@ test("video studio exposes draggable labels, style shortcuts, and bulk music pol
   await expect(page.locator(".video-source-thumb")).toHaveCount(1);
   await expect(page.locator(".video-source-thumb-fallback")).toContainText(/Loading preview|Preview unavailable/);
   await page.getByRole("button", { name: /source.mp4/ }).click();
-  await page.locator('input[type="file"][accept*="video"]').setInputFiles({ name: "device.mp4", mimeType: "video/mp4", buffer: Buffer.from("video") });
-  await expect(page.getByText("device.mp4 is uploaded temporarily and will be added to Media when you save.")).toBeVisible();
-  expect(mediaMutations.find((request) => request.method === "POST")?.body.staged).toBe(true);
-  await expect(page.locator(".video-label-canvas > video")).toHaveAttribute("controls", "");
+  await expect(page.locator(".timeline-clips > button")).toHaveCount(1);
+  const chooserPromise=page.waitForEvent("filechooser");await sourceSection.getByRole("button",{name:"Upload video"}).click();
+  const chooser=await chooserPromise;await chooser.setFiles({name:"device.mp4",mimeType:"video/mp4",buffer:readFileSync(new URL("./fixtures/source.mp4",import.meta.url))});
+  await expect(page.locator(".timeline-clips > button")).toHaveCount(1);
+  await expect(page.locator(".video-label-canvas > video")).toHaveAttribute("src","https://media.example.com/device.mp4");
   await expect(page.locator(".video-label-canvas .creative-label")).toBeVisible();
   await expect(page.getByText("Drag any label directly on the video")).toBeVisible();
   await expect(page.locator(".label-style-shortcuts button")).toHaveCount(3);
@@ -405,6 +410,10 @@ test("video studio exposes draggable labels, style shortcuts, and bulk music pol
   await expect(page.locator(".video-label-canvas .creative-label")).toHaveAttribute("style", /min-height: 20%/);
   await page.getByLabel("Label text", { exact: true }).fill("A longer hook that wraps onto several lines and makes its background grow with the full message");
   await expect.poll(() => page.locator(".video-label-canvas").evaluate((canvas) => canvas.querySelector<HTMLElement>(".creative-label")!.offsetHeight / (canvas as HTMLElement).offsetHeight)).toBeGreaterThan(.2);
+  const canvas=page.locator(".video-label-canvas");await canvas.scrollIntoViewIfNeeded();
+  const bounds=await canvas.boundingBox();const target=await page.locator(".creative-label").boundingBox();
+  await page.mouse.move(target!.x+target!.width/2,target!.y+target!.height/2);await page.mouse.down();await page.mouse.move(bounds!.x+bounds!.width*.5,bounds!.y+bounds!.height*.5,{steps:5});await page.mouse.up();
+  await expect.poll(()=>project.timeline?.labels[0].y).toBeGreaterThan(.4);
   await page.getByRole("button", { name: "Add label" }).click();
   await expect(page.locator(".video-label-tabs button")).toHaveCount(2);
   await page.getByRole("button", { name: "White / clear" }).click();
@@ -412,7 +421,6 @@ test("video studio exposes draggable labels, style shortcuts, and bulk music pol
   await page.getByLabel("Video music folder").selectOption("music-folder");
   await page.getByLabel("Video music track").selectOption("https://media.example.com/track.mp3");
   await expect(page.locator(".video-preview-music")).toHaveAttribute("src", "https://media.example.com/track.mp3");
-  await expect(page.getByText("Play the video preview to hear this track with the hook.")).toBeVisible();
   const videoHandoff = page.locator(".video-inspector .slideshow-handoff");
   await expect(videoHandoff.getByLabel("Brand")).toHaveCount(0);
   await expect(videoHandoff.getByLabel("Caption")).toHaveCount(0);
@@ -434,7 +442,6 @@ test("video studio exposes draggable labels, style shortcuts, and bulk music pol
   await page.getByLabel(/Hooks/).fill("First hook\nSecond hook");
   await page.getByRole("button", { name: "Create batch" }).click();
   await expect(page.getByText("2 videos created in R2.")).toBeVisible();
-  expect(mediaMutations.find((request) => request.method === "PATCH")?.body.commit).toBe(true);
   await videoHandoff.getByRole("button", { name: "Create post" }).click();
   const composer = page.getByRole("dialog", { name: "Create post" });
   await expect(composer.getByText("Hook reel.mp4")).toBeVisible();
