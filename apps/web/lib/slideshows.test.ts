@@ -27,3 +27,9 @@ test("rejects an invalid source URL or more than 35 slides", () => {
   assert.equal(normalizeSlides([{ mediaUrl: "file:///private/image.png" }]), null);
   assert.equal(normalizeSlides(Array.from({ length: 36 }, () => ({ mediaUrl: "https://media.example.com/image.png" }))), null);
 });
+
+test("normalizes device frames and rejects invalid frame colors", () => {
+  const slides = normalizeSlides([{ mediaUrl: "https://media.example.com/one.jpg", deviceFrame: { device: "tablet", background: "#abcdef", color: "#123456" } }]);
+  assert.deepEqual(slides?.[0].deviceFrame, { device: "tablet", background: "#ABCDEF", color: "#123456" });
+  assert.equal(normalizeSlides([{ mediaUrl: "https://media.example.com/one.jpg", deviceFrame: { device: "tablet", background: "cream", color: "#123456" } }]), null);
+});

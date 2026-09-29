@@ -58,7 +58,14 @@ const postFields = {
   targets: z.array(postTargetSchema).min(1).max(20),
 };
 
+const deviceFrameSchema = z.object({
+  device: z.enum(["phone", "tablet", "browser"]),
+  background: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+});
+
 const slideSchema = z.object({
+  deviceFrame: deviceFrameSchema.optional(),
   id: z.string().min(1).max(120).optional(),
   mediaUrl: z.string().url().describe("Public URL returned by Relay's media library"),
   text: z.string().max(500).optional().describe("Optional visible title for this slide; omit it for an image-only slide"),
@@ -316,7 +323,7 @@ const creativeLabelSchema = z.object({
 
 const timelineSchema = z.object({
   version: z.literal(1), aspectRatio: z.enum(["9:16", "4:5", "1:1", "16:9"]),
-  clips: z.array(z.object({ id: z.string().optional(), sourceUrl: z.string().url(), name: z.string().max(120), kind: z.enum(["video", "image"]), inMs: z.number().min(0), outMs: z.number().min(100), sourceDurationMs: z.number().min(100).max(86400000).optional(), fit: z.enum(["cover", "contain"]).default("cover"), x: z.number().min(0).max(1).default(.5), y: z.number().min(0).max(1).default(.5), zoom: z.number().min(1).max(3).default(1), volume: z.number().min(0).max(1).default(1) })).max(50),
+  clips: z.array(z.object({ deviceFrame: deviceFrameSchema.optional(), id: z.string().optional(), sourceUrl: z.string().url(), name: z.string().max(120), kind: z.enum(["video", "image"]), inMs: z.number().min(0), outMs: z.number().min(100), sourceDurationMs: z.number().min(100).max(86400000).optional(), fit: z.enum(["cover", "contain"]).default("cover"), x: z.number().min(0).max(1).default(.5), y: z.number().min(0).max(1).default(.5), zoom: z.number().min(1).max(3).default(1), volume: z.number().min(0).max(1).default(1) })).max(50),
   labels: z.array(creativeLabelSchema.extend({startMs:z.number().min(0),endMs:z.number().min(100)})).max(200),
   music:z.object({url:z.string().default(""),volume:z.number().min(0).max(1).default(.8),offsetMs:z.number().min(0).default(0),fadeInMs:z.number().min(0).default(0),fadeOutMs:z.number().min(0).default(0)}),
   coverMs:z.number().min(0).default(0),

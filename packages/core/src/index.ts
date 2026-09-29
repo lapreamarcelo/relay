@@ -229,6 +229,7 @@ export interface SlideshowSlide {
   textColor: string;
   textBackground: SlideshowTextBackground;
   textBackgroundColor?: string;
+  deviceFrame?: DeviceFrame;
 }
 
 export interface SlideshowProject {
@@ -262,6 +263,12 @@ export interface VideoProject {
 
 export type VideoMusicMode = "none" | "fixed" | "rotate" | "random";
 
+export interface DeviceFrame {
+  device: "phone" | "tablet" | "browser";
+  background: string;
+  color: string;
+}
+
 export const brands: Brand[] = [];
 export const accounts: SocialAccount[] = [];
 export const initialPosts: RelayPost[] = [];
@@ -280,6 +287,7 @@ export interface VideoClip {
   y: number;
   zoom: number;
   volume: number;
+  deviceFrame?: DeviceFrame;
 }
 export interface TimedVideoLabel extends CreativeLabel { startMs: number; endMs: number }
 export interface VideoTimeline {
@@ -287,7 +295,7 @@ export interface VideoTimeline {
   aspectRatio: "9:16" | "4:5" | "1:1" | "16:9";
   clips: VideoClip[];
   labels: TimedVideoLabel[];
-  music: { url: string; volume: number; offsetMs: number; fadeInMs: number; fadeOutMs: number };
+  music: { url: string; name?: string; volume: number; offsetMs: number; fadeInMs: number; fadeOutMs: number; startMs?: number; endMs?: number };
   coverMs: number;
 }
 export interface VideoRenderJob {

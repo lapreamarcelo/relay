@@ -1,8 +1,15 @@
 import type { VideoClip, VideoTimeline } from "@relay/core";
 import { normalizeCreativeLabels } from "./creative-labels.ts";
+import { normalizeDeviceFrame } from "./device-frames.ts";
 
 export const videoSizes = { "9:16": [1080, 1920], "4:5": [1080, 1350], "1:1": [1080, 1080], "16:9": [1920, 1080] } as const;
 export const timelineDuration = (timeline: VideoTimeline) => timeline.clips.reduce((sum, clip) => sum + clip.outMs - clip.inMs, 0);
+export function effectiveMusicRange(music: VideoTimeline["music"], durationMs: number): { startMs: number; endMs: number; durationMs: number } | null {
+  const duration = Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0;
+  const startMs = Math.max(0, Math.min(duration, music.startMs ?? 0));
+  const endMs = Math.max(0, Math.min(duration, music.endMs ?? duration));
+  return endMs > startMs ? { startMs, endMs, durationMs: endMs - startMs } : null;
+}
 export const emptyTimeline = (): VideoTimeline => ({ version: 1, aspectRatio: "9:16", clips: [], labels: [], music: { url: "", volume: .8, offsetMs: 0, fadeInMs: 0, fadeOutMs: 0 }, coverMs: 0 });
 const object = (v: unknown): Record<string, unknown> => { if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("Expected a timeline object."); return v as Record<string, unknown>; };
 const number = (v: unknown, min: number, max: number, fallback: number): number => { const n = v === undefined ? fallback : v; if (typeof n !== "number" || !Number.isFinite(n) || n < min || n > max) throw new Error(`Expected a number between ${min} and ${max}.`); return n; };
@@ -22,7 +29,8 @@ export function normalizeVideoTimeline(value: unknown): VideoTimeline {
     if (outMs - inMs < 100) throw new Error("Each clip must be at least 100ms long.");
     if (c.kind !== "video" && c.kind !== "image") throw new Error("Clip kind must be video or image.");
     if (c.fit !== undefined && c.fit !== "cover" && c.fit !== "contain") throw new Error("Clip fit must be cover or contain.");
-    return { id, sourceUrl: url(c.sourceUrl), name: typeof c.name === "string" ? c.name.slice(0,120) : "Clip", kind: c.kind, inMs, outMs, ...(sourceDurationMs === undefined ? {} : {sourceDurationMs}), fit: c.fit === "contain" ? "contain" : "cover", x: number(c.x,0,1,.5), y: number(c.y,0,1,.5), zoom: number(c.zoom,1,3,1), volume: number(c.volume,0,1,1) };
+    const deviceFrame = normalizeDeviceFrame(c.deviceFrame);
+    return { id, sourceUrl: url(c.sourceUrl), name: typeof c.name === "string" ? c.name.slice(0,120) : "Clip", kind: c.kind, inMs, outMs, ...(sourceDurationMs === undefined ? {} : {sourceDurationMs}), fit: c.fit === "contain" ? "contain" : "cover", x: number(c.x,0,1,.5), y: number(c.y,0,1,.5), zoom: number(c.zoom,1,3,1), volume: number(c.volume,0,1,1), ...(deviceFrame ? { deviceFrame } : {}) };
   });
   const duration = clips.reduce((sum, c) => sum + c.outMs-c.inMs,0);
   if (duration > 900_000) throw new Error("A timeline may be at most 15 minutes.");
@@ -30,7 +38,12 @@ export function normalizeVideoTimeline(value: unknown): VideoTimeline {
   const labels = v.labels.map(entry => { const l = object(entry); const normalized = normalizeCreativeLabels([l]); if (!normalized?.length) throw new Error("Labels need text."); const startMs = number(l.startMs,0,900_000,0); const endMs = number(l.endMs,100,900_000,duration || 5000); if (endMs <= startMs) throw new Error("Label end must follow its start."); return { ...normalized[0], startMs, endMs }; });
   if (new Set(labels.map(l => l.id)).size !== labels.length) throw new Error("Label ids must be unique.");
   const music = v.music === undefined ? {} : object(v.music);
-  return { version: 1, aspectRatio: v.aspectRatio as VideoTimeline["aspectRatio"], clips, labels, music: { url: url(music.url,true), volume: number(music.volume,0,1,.8), offsetMs: number(music.offsetMs,0,3_600_000,0), fadeInMs: number(music.fadeInMs,0,900_000,0), fadeOutMs: number(music.fadeOutMs,0,900_000,0) }, coverMs: number(v.coverMs,0,Math.max(0,duration-1),0) };
+  const hasMusicRange = music.startMs !== undefined || music.endMs !== undefined;
+  const musicStartMs = hasMusicRange ? number(music.startMs,0,900_000,0) : undefined;
+  const musicEndMs = hasMusicRange ? number(music.endMs,0,900_000,duration) : undefined;
+  if (musicStartMs !== undefined && musicEndMs !== undefined && musicEndMs <= musicStartMs) throw new Error("Audio end must follow its start.");
+  const musicName = typeof music.name === "string" && music.name.trim() ? music.name.trim().slice(0,120) : undefined;
+  return { version: 1, aspectRatio: v.aspectRatio as VideoTimeline["aspectRatio"], clips, labels, music: { url: url(music.url,true), ...(musicName ? { name: musicName } : {}), volume: number(music.volume,0,1,.8), offsetMs: number(music.offsetMs,0,3_600_000,0), fadeInMs: number(music.fadeInMs,0,900_000,0), fadeOutMs: number(music.fadeOutMs,0,900_000,0), ...(hasMusicRange ? { startMs: musicStartMs, endMs: musicEndMs } : {}) }, coverMs: number(v.coverMs,0,Math.max(0,duration-1),0) };
 }
 export function splitVideoClip(timeline: VideoTimeline, id: string, localMs: number): VideoTimeline {
   const index = timeline.clips.findIndex(c => c.id === id); const clip = timeline.clips[index];

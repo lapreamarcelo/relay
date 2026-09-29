@@ -1,12 +1,14 @@
 # Creative Studio and agent workflows
 
-Relay now stores editable, versioned video timelines. The browser, REST API, CLI and MCP use the same project document. Existing single-clip recipes remain available under **Label recipes / bulk hooks**.
+Relay now stores editable, versioned video timelines. The browser, REST API, CLI and MCP use the same project document. The Video Studio starts with a blank media timeline; existing single-clip projects remain editable.
 
 ## Editing and rendering
 
-Video Studio supports a sequential track of up to 50 videos/images, split/trim/reorder/duplicate, crop positioning and zoom, four aspect ratios, timed text, music volume/offset/fades, undo/redo, autosave, local recovery and cover-frame selection. Subtitles can be imported/exported as SRT. Eight starter layouts and saved composition templates are available under Templates; brand text styles can be applied in the inspector.
+Video Studio supports a sequential track of up to 50 videos/images, split/trim/reorder/duplicate, crop positioning and zoom, four aspect ratios, timed text, music volume/offset/fades, undo/redo, autosave, local recovery and cover-frame selection. Subtitles can be imported/exported as SRT. The editor offers Media, Audio, and Text, without templates or bulk-hook setup. Audio can be uploaded or chosen from the library, then moved and trimmed on the timeline with source offset, volume, and fade controls. One audio track loops within its selected range; original clip audio remains independently adjustable.
 
-Rendering runs in a separate `renderer` service, with a persisted job, progress, cancellation and retry. A job captures the exact project revision. Updating a project does not change previously rendered URLs or posts already using them. MP4s and JPEG covers are added to the Media library. The cover passes into the composer for destinations that support custom images or frame offsets.
+Rendering runs in a separate `renderer` service, with a persisted job, progress, cancellation and retry. A job captures the exact project revision. Updating a project does not change previously rendered URLs or posts already using them. MP4s and JPEG covers are added to the Media library. **Save & download** saves the MP4 to Media and downloads it without opening the composer. **Create post** prepares the video and opens the composer. Completed exports also offer Download MP4 and Preview export. The cover passes into the composer for destinations that support custom images or frame offsets.
+
+`GET /api/v1/videos/download?jobId=JOB_ID` streams a completed render as an MP4 attachment, scoped to the authenticated owner (`videos:read` for API keys).
 
 The original synchronous render endpoint remains compatible with existing integrations. New integrations should request asynchronous rendering, poll the job, and create the post only after completion. Legacy batch rendering remains synchronous; `videos variants` provides editable variants with queued rendering.
 
@@ -194,3 +196,23 @@ Posting-time recommendations require at least 20 comparable posts and three obse
 `campaign-recipes list|create|apply|delete` and the corresponding MCP tools manage reusable plans. Built-ins cover a launch, tutorial series and weekly content. Each entry has `title`, `text`, `dayOffset` and `format` (`video`, `image` or `text`).
 
 Apply a recipe with `{recipeId, accountIds, clientRequestId, startAt?}`. The CLI sets `action:"apply"`; direct REST callers must include it. This creates a campaign and draft briefs with suggested dates, never scheduled posts. Add media, complete the copy and review destinations before scheduling. Offsets are elapsed 24-hour periods. Stable request IDs make retries reuse the same campaign and posts.
+
+## Device frames for images and videos
+
+The device-frame controls in the video clip inspector and slideshow editor wrap existing media in an original generic phone, tablet, or browser frame. Choose the frame and background colors, or choose None to return to the original full-canvas media. A slideshow exports a framed JPEG; a video timeline exports the framed clip in its MP4 and cover. Frames are static in this version.
+
+The frame setting is stored per video clip or slideshow slide, so projects, duplicates, and templates retain it. REST, CLI, and MCP accept the same optional field:
+
+```json
+{
+  "deviceFrame": {
+    "device": "phone",
+    "background": "#E8E4DF",
+    "color": "#20242A"
+  }
+}
+```
+
+`device` is `phone`, `tablet`, or `browser`; colors are six-digit hex values. Omit `deviceFrame` to disable framing. Video crop controls operate inside the device screen. Labels remain positioned on the full output canvas.
+
+These generic frames are drawn from shared geometry in Relay and require no downloaded device packs, AI services, or provider keys. Apple bezel downloads are local reference assets and are not included in the repository or release. Image/video background uploads, animated device motion, and named manufacturer models are not part of this initial version.

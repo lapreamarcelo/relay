@@ -11,3 +11,6 @@ node_modules
 .qa
 *.log
 *.tsbuildinfo
+
+# Downloaded reference assets are not part of releases.
+/local-assets/

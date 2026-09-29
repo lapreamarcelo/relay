@@ -1,21 +1,14 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import type { SlideshowSlide } from "@relay/core";
 import { sql } from "@relay/database";
-import sharp from "sharp";
 
 import { requireApiSession } from "../../../../../lib/api-session";
 import { getR2Client, getR2Config, publicObjectUrl } from "../../../../../lib/r2";
-import { creativeLabelsSvg } from "../../../../../lib/creative-label-svg";
 import { serializeSlideshow, type SlideshowRow } from "../../../../../lib/slideshows";
+import { renderSlideshowImage } from "../../../../../lib/slideshow-renderer";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
-
-function titleOverlay(slide: SlideshowSlide): Buffer | null {
-  if (!slide.text) return null;
-  const style = slide.textBackground === "light" ? "light" : slide.textBackground === "none" ? "outline" : "dark";
-  return creativeLabelsSvg([{ id: slide.id, text: slide.text, x: slide.textX ?? .5, y: slide.textY ?? (slide.textPosition === "top" ? .18 : slide.textPosition === "center" ? .5 : .78), width: slide.textWidth ?? .87, height: slide.textHeight ?? .12, fontSize: slide.textSize, font: slide.textFont, textColor: slide.textColor, background: slide.textBackground, backgroundColor: slide.textBackgroundColor, style }]);
-}
 
 function allowedMediaUrl(value: string): boolean {
   const publicBase = new URL(`${getR2Config().publicUrl}/`);
@@ -31,10 +24,7 @@ async function renderSlide(folderId: string, index: number, slide: SlideshowSlid
   if (contentLength > 30 * 1024 * 1024) throw new Error("A source image exceeds the 30 MB rendering limit.");
   const source = Buffer.from(await response.arrayBuffer());
   if (source.length > 30 * 1024 * 1024) throw new Error("A source image exceeds the 30 MB rendering limit.");
-  let pipeline = sharp(source).rotate().resize(1080, 1920, { fit: slide.fit, position: "centre", background: "#11110f" });
-  const overlay = titleOverlay(slide);
-  if (overlay) pipeline = pipeline.composite([{ input: overlay, top: 0, left: 0 }]);
-  const output = await pipeline.jpeg({ quality: 95, chromaSubsampling: "4:4:4" }).toBuffer();
+  const output = await renderSlideshowImage(source, slide);
   const key = `media-projects/${folderId}/media/${String(index + 1).padStart(2, "0")}-${slide.id}.jpg`;
   const config = getR2Config();
   await getR2Client().send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: output, ContentType: "image/jpeg", CacheControl: "public, max-age=31536000, immutable" }));

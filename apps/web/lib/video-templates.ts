@@ -32,5 +32,5 @@ export function applySavedVideoTemplate(template: VideoTimeline, replacement: Vi
   return after;
  };
  const duration = replacement.clips.reduce((sum, c) => sum + c.outMs - c.inMs, 0);
- return {...structuredClone(template), clips:replacement.clips, coverMs:Math.min(duration-1,mapTime(template.coverMs)), labels:template.labels.map(l=>({...l,id:crypto.randomUUID(),startMs:mapTime(l.startMs),endMs:mapTime(l.endMs)})).filter(l=>l.endMs>l.startMs)};
+ return {...structuredClone(template), clips:replacement.clips.map((clip,i)=>({...clip,...(template.clips[i].deviceFrame ? {deviceFrame:structuredClone(template.clips[i].deviceFrame)} : {})})), coverMs:Math.min(duration-1,mapTime(template.coverMs)), labels:template.labels.map(l=>({...l,id:crypto.randomUUID(),startMs:mapTime(l.startMs),endMs:mapTime(l.endMs)})).filter(l=>l.endMs>l.startMs)};
 }

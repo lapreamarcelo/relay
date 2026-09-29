@@ -8,8 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 
-import { timelineDuration, videoSizes } from "./video-timeline";
+import { effectiveMusicRange, timelineDuration, videoSizes } from "./video-timeline";
 import { creativeLabelsSvg } from "./creative-label-svg";
+import { deviceFrameGeometry, deviceFrameSvg } from "./device-frames";
 import { getR2Client, getR2Config, publicObjectUrl } from "./r2";
 
 function allowedAssetUrl(value: string): boolean {
@@ -90,11 +91,24 @@ async function renderTimeline(input: { projectId: string; timeline: VideoTimelin
       const seconds=(c.outMs-c.inMs)/1000;
       if (c.kind === "video" && (!Number.isFinite(Number(probe.format?.duration)) || c.outMs > Number(probe.format?.duration)*1000+100)) throw new Error(`Trim exceeds duration of ${c.name}.`);
       const audio=c.kind === "video" && probe.streams?.some(s=>s.codec_type==="audio");
-      const sw=Math.ceil(width*c.zoom/2)*2, sh=Math.ceil(height*c.zoom/2)*2;
-      const fit=c.fit === "cover" ? `scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${width}:${height}:(iw-ow)*${c.x}:(ih-oh)*${c.y}` : `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)*${c.x}:(oh-ih)*${c.y}:black`;
+      const geometry=c.deviceFrame ? deviceFrameGeometry(width,height,c.deviceFrame.device) : null;
+      const targetWidth=geometry?.screen.width ?? width, targetHeight=geometry?.screen.height ?? height;
+      const sw=Math.ceil(targetWidth*c.zoom/2)*2, sh=Math.ceil(targetHeight*c.zoom/2)*2;
+      let fit=c.fit === "cover" ? `scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${targetWidth}:${targetHeight}:(iw-ow)*${c.x}:(ih-oh)*${c.y}` : `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)*${c.x}:(oh-ih)*${c.y}:black`;
+      if (geometry) fit += `,pad=${width}:${height}:${geometry.screen.x}:${geometry.screen.y}:color=black`;
       const args=[...(c.kind==="image"?["-loop","1"]:["-ss",String(c.inMs/1000)]),"-i",source];
+      let videoMap="0:v:0";
+      if (c.deviceFrame) {
+        const frame=join(dir,`frame-${i}.png`);
+        await writeFile(frame,await sharp(Buffer.from(deviceFrameSvg(width,height,c.deviceFrame))).png().toBuffer());
+        args.push("-loop","1","-i",frame);
+        videoMap="[framed]";
+      }
+      const silentAudioIndex=c.deviceFrame ? 2 : 1;
       if (!audio) args.push("-f","lavfi","-i","anullsrc=r=48000:cl=stereo");
-      args.push("-t",String(seconds),"-vf",`${fit},setsar=1,fps=30,format=yuv420p`,"-af",`volume=${c.volume},aresample=48000`,"-map","0:v:0","-map",audio?"0:a:0":"1:a:0","-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-ac","2",dest);
+      if (c.deviceFrame) args.push("-filter_complex",`[0:v]format=rgba,${fit},setsar=1,fps=30[screen];[screen][1:v]overlay=0:0:format=auto,format=yuv420p[framed]`);
+      else args.push("-vf",`${fit},setsar=1,fps=30,format=yuv420p`);
+      args.push("-t",String(seconds),"-af",`volume=${c.volume},aresample=48000`,"-map",videoMap,"-map",audio?"0:a:0":`${silentAudioIndex}:a:0`,"-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac","-ac","2",dest);
       await run(args); segments.push(dest); await input.onProgress?.(Math.round((i+1)/timeline.clips.length*70));
     }
     const list=join(dir,"concat.txt"); await writeFile(list,segments.map(path=>`file '${path}'`).join("\n"));
@@ -108,11 +122,17 @@ async function renderTimeline(input: { projectId: string; timeline: VideoTimelin
       const out=`v${i}`; filters.push(`[${video}][${i+1}:v]overlay=0:0:enable='gte(t,${label.startMs/1000})*lt(t,${label.endMs/1000})'[${out}]`); video=out;
     }
     let audio="0:a";
-    if(timeline.music.url) {
+    const musicRange=effectiveMusicRange(timeline.music,durationMs);
+    if(timeline.music.url&&musicRange) {
       const file=join(dir,"music"); await writeFile(file,await download(timeline.music.url,100*1024*1024));
       const index=timeline.labels.length+1; args.push("-stream_loop","-1","-ss",String(timeline.music.offsetMs/1000),"-i",file);
-      const fadeIn=Math.min(durationMs,timeline.music.fadeInMs)/1000, fadeOut=Math.min(durationMs,timeline.music.fadeOutMs)/1000;
-      filters.push(`[${index}:a]volume=${timeline.music.volume},afade=t=in:st=0:d=${Math.max(.001,fadeIn)},afade=t=out:st=${durationMs/1000-fadeOut}:d=${Math.max(.001,fadeOut)}[music]`);
+      const activeSeconds=musicRange.durationMs/1000;
+      const fadeIn=Math.min(musicRange.durationMs,timeline.music.fadeInMs)/1000, fadeOut=Math.min(musicRange.durationMs,timeline.music.fadeOutMs)/1000;
+      const musicFilters=[`atrim=duration=${activeSeconds}`,"asetpts=PTS-STARTPTS",`volume=${timeline.music.volume}`];
+      if(fadeIn>0) musicFilters.push(`afade=t=in:st=0:d=${fadeIn}`);
+      if(fadeOut>0) musicFilters.push(`afade=t=out:st=${activeSeconds-fadeOut}:d=${fadeOut}`);
+      if(musicRange.startMs>0) musicFilters.push(`adelay=${musicRange.startMs}:all=1`);
+      filters.push(`[${index}:a]${musicFilters.join(",")}[music]`);
       filters.push("[0:a][music]amix=inputs=2:duration=first:normalize=0[audio]"); audio="audio";
     }
     if(filters.length) args.push("-filter_complex_threads","1","-filter_complex",filters.join(";"));
