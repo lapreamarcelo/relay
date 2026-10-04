@@ -25,6 +25,8 @@ Use Relay's CLI as the primary agent interface. It is a thin client over the sam
 
 ## Creative workflows
 
+Before designing app screenshots, carousels, or product-demo videos, run `device-frames list` (or `capabilities get`). The catalog gives supported devices, exact screen geometry, examples, and design constraints. Set `deviceFrame` per `slides[]` item or `timeline.clips[]` item; it supports screenshots and videos without AI keys. See the workflow reference for rendering and safe updates.
+
 The CLI can set every persisted field used by Relay's slideshow and video editors. It cannot reproduce the browser's drag interaction; express positions, dimensions, fonts, colors, fit, music, and labels in project JSON, then retrieve the saved project to verify the normalized values.
 
 Read [references/workflows.md](references/workflows.md) only when executing a slideshow, video, bulk, or analytics workflow.

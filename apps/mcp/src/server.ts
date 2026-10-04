@@ -58,14 +58,41 @@ const postFields = {
   targets: z.array(postTargetSchema).min(1).max(20),
 };
 
-const deviceFrameSchema = z.object({
-  device: z.enum(["phone", "tablet", "browser"]),
-  background: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+const animationEasingSchema = z.enum(["linear", "ease-in", "ease-out", "ease-in-out"]);
+const animationSchema = (device = false) => z.object({
+  entrance: z.object({ preset: z.enum(device ? ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom"] : ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom", "typewriter"]), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional() }).strict().optional(),
+  exit: z.object({ preset: z.enum(device ? ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom"] : ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom", "typewriter"]), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional() }).strict().optional(),
+  keyframes: z.array(z.object({ timeMs: z.number().min(0).max(900000), easing: animationEasingSchema.optional().describe("Easing toward the next keyframe, linear by default."), x: z.number().min(0).max(1).optional(), y: z.number().min(0).max(1).optional(), scale: z.number().min(device ? .25 : .1).max(device ? 1.5 : 3).optional(), rotateZ: z.number().min(-180).max(180).optional(), opacity: z.number().min(0).max(1).optional(), ...(device ? { rotateX: z.number().min(-60).max(60).optional(), rotateY: z.number().min(-60).max(60).optional(), foldAngle: z.number().min(0).max(165).optional().describe("Duo only.") } : {}) }).strict()).max(100).optional().describe("Sparse property keyframes, unique increasing times in local layer milliseconds."),
+}).strict();
+const clipTransitionSchema = z.object({ kind: z.enum(["crossfade", "slide-left", "slide-right", "wipe-left", "wipe-right", "zoom"]), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional() }).strict();
+
+const deviceFrameSchemaBase = z.object({
+  animation: animationSchema(true).optional().describe("Frame entrance/exit and keyframes in local clip time. Call list_video_animations for examples."),
+  motionEasing: animationEasingSchema.optional(),
+  device: z.enum(["phone", "tablet", "browser", "iphone", "iphone-duo", "mac", "watch", "android"]).describe("Built-in stylized device; call list_device_frames for geometry and supported controls."),
+  background: z.string().regex(/^#[0-9A-Fa-f]{6}$/).describe("Solid background outside the device, #RRGGBB."),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).describe("Device frame color, #RRGGBB."),
+  backgroundEnd: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().describe("Optional second color for a diagonal gradient."),
+  x: z.number().min(0).max(1).optional().describe("Device center on the whole canvas, default .5; distinct from clip crop x."),
+  y: z.number().min(0).max(1).optional().describe("Device center on the whole canvas, default .5."),
+  scale: z.number().min(.25).max(1.5).optional(),
+  rotateX: z.number().min(-60).max(60).optional(),
+  rotateY: z.number().min(-60).max(60).optional(),
+  rotateZ: z.number().min(-180).max(180).optional(),
+  foldAngle: z.number().min(0).max(165).optional().describe("Duo hinge angle in degrees; 0 is open. Duo only."),
+  motion: z.enum(["none", "orbit", "float", "fold", "unfold", "fold-cycle"]).optional().describe("Time-based preset; folding presets require iphone-duo. Video timelines only."),
+  motionDurationMs: z.number().min(500).max(60000).optional().describe("Preset duration in local clip time, default 4000ms."),
+});
+
+const staticDeviceFrameSchema = deviceFrameSchemaBase.pick({device:true,background:true,color:true,backgroundEnd:true}).strict();
+const deviceFrameSchema = deviceFrameSchemaBase.superRefine((frame, context) => {
+  if (frame.device !== "iphone-duo" && (frame.foldAngle !== undefined || frame.animation?.keyframes?.some(key => key.foldAngle !== undefined) || ["fold", "unfold", "fold-cycle"].includes(frame.motion ?? "none"))) {
+    context.addIssue({ code: "custom", message: "Fold angles and folding motion require the iPhone Duo frame." });
+  }
 });
 
 const slideSchema = z.object({
-  deviceFrame: deviceFrameSchema.optional(),
+  deviceFrame: staticDeviceFrameSchema.optional().describe("Wrap media in a built-in device. Call list_device_frames for background, pose, motion and slideshow constraints. Omit to disable."),
   id: z.string().min(1).max(120).optional(),
   mediaUrl: z.string().url().describe("Public URL returned by Relay's media library"),
   text: z.string().max(500).optional().describe("Optional visible title for this slide; omit it for an image-only slide"),
@@ -247,7 +274,7 @@ server.registerTool("list_slideshows", {
 }, async ({ id }) => result(await relay(`/api/v1/slideshows${id ? `?id=${encodeURIComponent(id)}` : ""}`)));
 
 server.registerTool("save_slideshow", {
-  description: "Create or update a reusable slideshow. Each image may have its own optional visible text.",
+  description: "Create or update a reusable slideshow. Each image may have its own optional visible text and deviceFrame. Call list_device_frames before designing framed images. Omit renderedUrl after changing a slide; render_slideshow produces JPEGs.",
   inputSchema: projectSchema.shape,
 }, async (project) => result(await relay("/api/v1/slideshows", { method: project.id ? "PATCH" : "POST", body: JSON.stringify(project) })));
 
@@ -321,22 +348,32 @@ const creativeLabelSchema = z.object({
   style: z.enum(["dark", "light", "outline"]).default("dark"), textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default("#FFFFFF"), background: z.enum(["dark", "light", "none"]).default("dark"), backgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default("#000000"),
 });
 
+const videoClipSchema = z.object({ transition: clipTransitionSchema.optional().describe("Incoming transition overlaps preceding clip; first clip ignores it. Duration caps at half either clip, reducing total timeline length."), deviceFrame: deviceFrameSchema.optional().describe("Wrap media in a built-in device. Call list_device_frames for background, pose, motion and slideshow constraints. Omit to disable."), id: z.string().optional(), sourceUrl: z.string().url(), name: z.string().max(120), kind: z.enum(["video", "image"]), inMs: z.number().min(0), outMs: z.number().min(100), sourceDurationMs: z.number().min(100).max(86400000).optional(), fit: z.enum(["cover", "contain"]).default("cover"), x: z.number().min(0).max(1).default(.5), y: z.number().min(0).max(1).default(.5), zoom: z.number().min(1).max(3).default(1), volume: z.number().min(0).max(1).default(1) });
+const videoLayerSchema = videoClipSchema.omit({transition:true}).extend({startMs:z.number().min(0).max(899900).describe("Timeline start in milliseconds; duration is outMs-inMs. Source and animation clocks restart locally.")}).strict();
+
 const timelineSchema = z.object({
+  background: z.object({color:z.string().regex(/^#[0-9A-Fa-f]{6}$/),endColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional()}).optional().describe("Canvas background; overrides frame background, visible around contain-fit media."),
   version: z.literal(1), aspectRatio: z.enum(["9:16", "4:5", "1:1", "16:9"]),
-  clips: z.array(z.object({ deviceFrame: deviceFrameSchema.optional(), id: z.string().optional(), sourceUrl: z.string().url(), name: z.string().max(120), kind: z.enum(["video", "image"]), inMs: z.number().min(0), outMs: z.number().min(100), sourceDurationMs: z.number().min(100).max(86400000).optional(), fit: z.enum(["cover", "contain"]).default("cover"), x: z.number().min(0).max(1).default(.5), y: z.number().min(0).max(1).default(.5), zoom: z.number().min(1).max(3).default(1), volume: z.number().min(0).max(1).default(1) })).max(50),
-  labels: z.array(creativeLabelSchema.extend({startMs:z.number().min(0),endMs:z.number().min(100)})).max(200),
-  music:z.object({url:z.string().default(""),volume:z.number().min(0).max(1).default(.8),offsetMs:z.number().min(0).default(0),fadeInMs:z.number().min(0).default(0),fadeOutMs:z.number().min(0).default(0)}),
+  clips: z.array(videoClipSchema).max(50),
+  layers: z.array(videoLayerSchema).max(12).optional().describe("Independent simultaneous device/media layers, back-to-front array order above sequential clips and below labels. Each has its own source, startMs, trims, frame pose/motion/keyframes and volume. Multiple layers may use the same recording. Layer backgrounds are transparent outside their frames; timeline.background is shared. Omit transition on layers. Empty clips supports a layers-only scene."),
+  labels: z.array(creativeLabelSchema.extend({startMs:z.number().min(0),endMs:z.number().min(100),animation:animationSchema().optional().describe("Text entrance/exit, typewriter and keyframes; time zero is this label's startMs.")})).max(200),
+  music:z.object({url:z.string().default(""),name:z.string().max(120).optional(),startMs:z.number().min(0).max(900000).optional(),endMs:z.number().min(0).max(900000).optional(),volume:z.number().min(0).max(1).default(.8),offsetMs:z.number().min(0).default(0),fadeInMs:z.number().min(0).default(0),fadeOutMs:z.number().min(0).default(0)}),
   coverMs:z.number().min(0).default(0),
 });
 
 const videoSchema = z.object({
   timeline: timelineSchema.optional(), revision:z.number().int().positive().optional(), templateId:z.string().optional(),
-  id: z.string().optional(), name: z.string().min(1).max(120), brandId: z.string().optional(), caption: z.string().max(2200).optional(), sourceUrl: z.string().url().optional(), sourceFolderId: z.string().optional(), musicUrl: z.string().url().optional(), musicFolderId: z.string().optional(), labels: z.array(creativeLabelSchema).max(12).default([]),
+  id: z.string().optional(), name: z.string().min(1).max(120), brandId: z.string().optional(), caption: z.string().max(2200).optional(), sourceUrl: z.union([z.string().url(), z.literal("")]).optional().describe("Legacy single source; may be empty when timeline clips or layers define the media."), sourceFolderId: z.string().optional(), musicUrl: z.union([z.string().url(), z.literal("")]).optional(), musicFolderId: z.string().optional(), labels: z.array(creativeLabelSchema).max(12).default([]),
 });
 
-server.registerTool("list_videos", { description: "List reusable video-label recipes or retrieve one by id.", inputSchema: { id: z.string().optional() } }, async ({ id }) => result(await relay(`/api/v1/videos${id ? `?id=${encodeURIComponent(id)}` : ""}`)));
+server.registerTool("list_videos", { description: "List editable video projects or retrieve one complete project by id, including timeline, timed labels, device motion, background, audio and revision. Retrieve before updating with save_video.", inputSchema: { id: z.string().optional() } }, async ({ id }) => result(await relay(`/api/v1/videos${id ? `?id=${encodeURIComponent(id)}` : ""}`)));
 
-server.registerTool("save_video", { description: "Create or update a video. Supply timeline for multiple clips, trims, crops, timed text and audio. Pass the retrieved revision to detect conflicting saves.", inputSchema: videoSchema.shape }, async (video) => result(await relay("/api/v1/videos", { method: video.id ? "PATCH" : "POST", body: JSON.stringify(video) })));
+server.registerTool("save_video", { description: "Create or update an editable video timeline: sequential clips, independent simultaneous device layers (for Watch+iPhone or multiple Watches), transitions, crops, animated timed text, audio, device pose/motion and Duo folding. Labels and device frames accept entrance/exit effects and eased keyframes. Pass the retrieved revision to detect conflicts. Call list_device_frames and list_video_animations before composing; all edits remain editable in the browser.", inputSchema: videoSchema.shape }, async (video) => result(await relay("/api/v1/videos", { method: video.id ? "PATCH" : "POST", body: JSON.stringify(video) })));
+server.registerTool("get_video_composer", { description: "Check whether prompt-based video composition is configured and discover its limits. Requires videos:read; never returns provider credentials." }, async () => result(await relay("/api/v1/videos/compose")));
+server.registerTool("generate_video_composition", {
+  description: "Turn a prompt and existing footage into an editable promotional timeline through the workspace's configured OpenAI account. Sends the prompt and bounded recording frames to OpenAI. Returns a preview only: review the timeline, then use save_video with the current project revision to apply it. Never saves, renders, or publishes by itself. Requires videos:write; check get_video_composer first.",
+  inputSchema: { prompt: z.string().trim().min(10).max(4000), timeline: timelineSchema, productName: z.string().trim().min(1).max(120).optional(), durationMs: z.number().int().min(1000).max(60000).optional() },
+}, async input => result(await relay("/api/v1/videos/compose", { method: "POST", body: JSON.stringify(input) })));
 
 server.registerTool("delete_video", {
   description: "Permanently delete a saved Relay video project.",
@@ -445,11 +482,13 @@ server.registerTool("save_idea",{description:"Create or update an idea with note
 server.registerTool("delete_idea",{description:"Permanently delete an idea.",inputSchema:{id:z.string().min(1),confirmDelete:z.literal(true)}},async({id})=>result(await relay("/api/v1/ideas",{method:"DELETE",body:JSON.stringify({id})})));
 server.registerTool("list_brand_kits",{description:"Read brand colors, text styles, logo URLs, voice and guidelines."},async()=>result(await relay("/api/v1/brands/kit")));
 server.registerTool("save_brand_kit",{description:"Replace a brand's reusable creative and writing guidelines.",inputSchema:{id:z.string().min(1),kit:z.object({textColor:z.string().optional(),backgroundColor:z.string().optional(),font:z.enum(["modern","editorial","mono"]).optional(),logoUrl:z.string().optional(),voice:z.string().max(5000).optional(),guidelines:z.string().max(10000).optional(),defaultCta:z.string().max(500).optional()})}},async(input)=>result(await relay("/api/v1/brands/kit",{method:"PUT",body:JSON.stringify(input)})));
-server.registerTool("get_capabilities",{description:"Discover API version, authenticated scopes and creative workflow limits."},async()=>result(await relay("/api/v1/capabilities")));
+server.registerTool("list_device_frames",{description:"Discover built-in device frames for images and videos, including iPhone Duo, pose and motion controls, backgrounds, screen geometry per aspect ratio, examples and design constraints. No AI keys required. Use before composing product demos."},async()=>result(await relay("/api/v1/capabilities?section=device-frames")));
+server.registerTool("list_video_animations",{description:"Discover text/frame entrance and exit effects, typewriter, keyframes/easing, clip overlap transitions, timing rules and editable project examples."},async()=>result(await relay("/api/v1/capabilities?section=video-animation")));
+server.registerTool("get_capabilities",{description:"Discover API version, authenticated scopes, creative workflow limits and the device-frame design catalog."},async()=>result(await relay("/api/v1/capabilities")));
 server.registerTool("prepare_media_upload",{description:"Get a signed upload URL. Upload bytes with HTTP PUT from the agent's environment, then use the returned media URL.",inputSchema:{fileName:z.string().min(1),contentType:z.string().min(1),kind:z.enum(["media","music"]).default("media"),projectId:z.string().optional()}},async(input)=>result(await relay("/api/v1/media",{method:"POST",body:JSON.stringify(input)})));
 
 server.registerTool("generate_video_captions",{description:"Queue automatic transcription of a saved timeline through the workspace's configured OpenAI account. Poll the returned job and apply its editable captions through save_video.",inputSchema:{id:z.string().min(1)}},async(input)=>result(await relay("/api/v1/videos/captions",{method:"POST",body:JSON.stringify(input)})));
-server.registerTool("create_video_variants",{description:"Create editable timeline hook variants with stable retry ids. Optionally enqueue rendering; does not publish.",inputSchema:{id:z.string().min(1),hooks:z.array(z.string().min(1).max(500)).min(1).max(20),clientRequestId:z.string().min(1).max(190),render:z.boolean().default(false)}},async(input)=>result(await relay("/api/v1/videos/variants",{method:"POST",body:JSON.stringify(input)})));
+server.registerTool("create_video_variants",{description:"Create up to 20 editable timeline text variants with stable retry ids, preserving device layers, music, timing and animations. labelId chooses the label to replace; omitted uses the first label or adds one. Optionally enqueue rendering; does not publish.",inputSchema:{id:z.string().min(1),labelId:z.string().trim().min(1).optional(),hooks:z.array(z.string().max(500).trim().min(1)).min(1).max(20),clientRequestId:z.string().min(1).max(190),render:z.boolean().default(false)}},async(input)=>result(await relay("/api/v1/videos/variants",{method:"POST",body:JSON.stringify(input)})));
 server.registerTool("creative_analytics",{description:"Compare template and hook results in a common post-age observation window, within each account/platform.",inputSchema:{hours:z.enum(["24","72","168"]).default("72"),brandId:z.string().optional()}},async({hours,brandId})=>result(await relay(`/api/v1/analytics/creative?hours=${hours}${brandId?`&brandId=${encodeURIComponent(brandId)}`:""}`)));
 server.registerTool("posting_time_recommendations",{description:"Get account-specific posting-time observations when enough comparable history exists.",inputSchema:{accountId:z.string().min(1)}},async({accountId})=>result(await relay(`/api/v1/analytics/timing?accountId=${encodeURIComponent(accountId)}`)));
 server.registerTool("list_campaign_recipes",{description:"List reusable launch, tutorial and weekly-content campaign plans."},async()=>result(await relay("/api/v1/campaigns/recipes")));
@@ -458,4 +497,3 @@ server.registerTool("apply_campaign_recipe",{description:"Create a campaign of d
 server.registerTool("delete_campaign_recipe",{description:"Delete a saved campaign recipe.",inputSchema:{id:z.string().min(1),confirmDelete:z.literal(true)}},async({id})=>result(await relay("/api/v1/campaigns/recipes",{method:"DELETE",body:JSON.stringify({id})})));
 return server;
 }
-

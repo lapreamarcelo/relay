@@ -44,6 +44,8 @@ pnpm relay -- analytics report \
 
 | Resource | Actions |
 | --- | --- |
+| `capabilities` | `get` |
+| `device-frames` | `list` |
 | `accounts` | `list` |
 | `brands` | `list`, `create`, `update`, `delete` |
 | `posts` | `list`, `create`, `update`, `delete` |
@@ -61,6 +63,35 @@ pnpm relay -- analytics report \
 | `health` | `check` |
 
 Run `pnpm relay -- --help` for the same command summary.
+
+### Design with device frames
+
+Run `relay device-frames list` before composing a product demo. The authenticated catalog returns built-in device choices including iPhone Duo, pose/motion controls, solid/gradient backgrounds, defaults, per-aspect-ratio screen geometry, JSON examples, and design constraints. `relay capabilities get` includes the same catalog under `data.deviceFrames`.
+
+Set `deviceFrame: {"device":"phone","background":"#E8E2D8","color":"#171717"}` on a video timeline clip or slideshow slide. Use `fit: "contain"` to keep the whole UI visible. Frames work with screenshots and recordings; no AI keys or frame image downloads are needed.
+
+```sh
+relay device-frames list
+relay slideshows create --data @framed-image.json
+relay slideshows render --id SLIDESHOW_ID
+relay videos create --data @framed-video.json
+relay videos render --id VIDEO_ID --data '{"async":true}'
+relay render-jobs get --id JOB_ID
+```
+
+See [complete image/video payloads and design rules](AGENT_API.md#device-frames-for-product-demos). Retrieve existing projects before updating; preserve the full document and video revision. Render results can then be attached to draft posts. These commands do not schedule or publish content.
+
+### Animate app demos
+
+`relay capabilities get` includes `data.videoAnimations`: text/frame entrance and exit presets, typewriter text, sparse keyframes, easing choices, clip transitions, bounds and examples. The same catalog is available through MCP `list_video_animations` or authenticated `GET /api/v1/capabilities?section=video-animation`.
+
+Put `animation` on timed labels or `deviceFrame`, and `transition` on the incoming clip. Label keyframe time zero is its `startMs`; frame keyframe time zero is the trimmed clip's start, independent of source `inMs`. A departing keyframe controls easing to the next key. Transitions shorten the timeline by overlapping at most half of either adjacent clip; calculate label/music/cover times accordingly. Frame/label animations are supported on video timelines, including image clips, and remain editable through `videos create`/`update` and MCP `save_video`/`save_video_template`. See [bounds, timing and a complete save payload](AGENT_API.md#text-frame-animation-and-transitions).
+
+### Prompt-based app demos
+
+Multiple devices are expressed as `timeline.layers` in the normal videos create/update payload: independently timed Watch/iPhone recordings with per-device pose, animation and volume. Array order controls stacking. See [the multi-device example](AGENT_API.md#multiple-devices-in-one-video).
+
+`relay video-composer status` checks provider configuration and limits. `relay videos compose --data @composition-request.json` sends `{prompt,timeline,productName?,durationMs?}` and returns an editable preview in `data.timeline`, with a summary and warnings. Generation uses the server's configured OpenAI account and bounded recording frames; it does not save the project. Review the result, then use `videos update` with the full document and current revision, followed by `videos render` when ready. See [the shared composition contract](AGENT_API.md#prompt-based-video-composition).
 
 ### Media uploads
 

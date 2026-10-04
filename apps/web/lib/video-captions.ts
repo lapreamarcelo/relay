@@ -3,17 +3,21 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { TimedVideoLabel,VideoTimeline } from "@relay/core";
 import { command,download } from "./video-renderer";
+import { timelineDuration } from "./video-timeline";
+import { captionAudioJoinFilter } from "./video-caption-audio";
 export async function transcribeTimeline(timeline:VideoTimeline,signal:AbortSignal,onProgress:(p:number)=>Promise<void>):Promise<TimedVideoLabel[]>{
  const key=process.env.OPENAI_API_KEY;if(!key)throw new Error("Set OPENAI_API_KEY on the renderer to enable automatic captions.");
  const dir=await mkdtemp(join(tmpdir(),"relay-captions-"));
  try{
   const segments:string[]=[];
-  for(let i=0;i<timeline.clips.length;i++){
-   signal.throwIfAborted();const clip=timeline.clips[i];const source=join(dir,`source-${i}`),output=join(dir,`audio-${i}.wav`);let hasAudio=false;
-   if(clip.kind==="video"){await writeFile(source,await download(clip.sourceUrl,500*1024*1024));const probe=JSON.parse(await command("ffprobe",["-v","error","-show_entries","stream=codec_type","-of","json",source],signal));hasAudio=probe.streams?.some((s:{codec_type:string})=>s.codec_type==="audio")??false;}
-   await command("ffmpeg",["-y",...(hasAudio?["-ss",String(clip.inMs/1000),"-i",source]:["-f","lavfi","-i","anullsrc=r=16000:cl=mono"]),"-t",String((clip.outMs-clip.inMs)/1000),"-vn","-ac","1","-ar","16000","-c:a","pcm_s16le",output],signal);segments.push(output);await onProgress(Math.round((i+1)/timeline.clips.length*60));
+  const media=[...timeline.clips,...(timeline.layers??[])];
+  if(!media.length)throw new Error("Add clips or device layers before generating captions.");
+  for(let i=0;i<media.length;i++){
+   signal.throwIfAborted();const clip=media[i];const source=join(dir,`source-${i}`),output=join(dir,`audio-${i}.wav`);let hasAudio=false;
+   if(clip.kind==="video"){await writeFile(source,await download(clip.sourceUrl,500*1024*1024,signal));const probe=JSON.parse(await command("ffprobe",["-v","error","-show_entries","stream=codec_type","-of","json",source],signal));hasAudio=probe.streams?.some((s:{codec_type:string})=>s.codec_type==="audio")??false;}
+   await command("ffmpeg",["-y",...(hasAudio?["-ss",String(clip.inMs/1000),"-i",source]:["-f","lavfi","-i","anullsrc=r=16000:cl=mono"]),"-t",String((clip.outMs-clip.inMs)/1000),"-vn","-ac","1","-ar","16000","-c:a","pcm_s16le",output],signal);segments.push(output);await onProgress(Math.round((i+1)/media.length*60));
   }
-  const list=join(dir,"list.txt");await writeFile(list,segments.map(s=>`file '${s}'`).join("\n"));const output=join(dir,"speech.mp3");await command("ffmpeg",["-y","-f","concat","-safe","0","-i",list,"-c:a","libmp3lame","-b:a","64k",output],signal);
+  const output=join(dir,"speech.mp3");await command("ffmpeg",["-y",...segments.flatMap(segment=>["-i",segment]),"-filter_complex",captionAudioJoinFilter(timeline.clips,timeline.layers,timelineDuration(timeline)),"-map","[speech]","-c:a","libmp3lame","-b:a","64k",output],signal);
   const bytes=await readFile(output);if(bytes.length>25*1024*1024)throw new Error("Audio exceeds transcription upload limit.");
   const form=new FormData();form.set("file",new Blob([new Uint8Array(bytes)],{type:"audio/mpeg"}),"speech.mp3");form.set("model","whisper-1");form.set("response_format","verbose_json");form.append("timestamp_granularities[]","segment");
   await onProgress(70);

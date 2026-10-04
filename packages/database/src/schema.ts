@@ -120,6 +120,7 @@ export const socialAccount = pgTable(
     grantedScopes: jsonb("granted_scopes").$type<string[]>().notNull().default([]),
     providerMetadata: jsonb("provider_metadata").$type<Record<string, unknown>>().notNull().default({}),
     status: text("status").notNull().default("connected"),
+    connectionError: text("connection_error"),
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
     refreshLeaseOwner: text("refresh_lease_owner"),
     refreshLeaseExpiresAt: timestamp("refresh_lease_expires_at", { withTimezone: true }),

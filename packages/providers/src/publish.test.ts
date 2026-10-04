@@ -2,6 +2,73 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ProviderPublishError, ProviderPublishRegistry } from "./publish.ts";
 
+test("publish errors do not require a reconnect by default", () => {
+  assert.equal(new ProviderPublishError("Invalid media").reconnectRequired, false);
+});
+
+test("marks Meta invalid tokens for reconnect without labeling them as TikTok errors", async () => {
+  for (const authMethod of ["instagram-standalone", "instagram-facebook"] as const) {
+    for (const code of [190, 102]) {
+      const fetchImpl: typeof fetch = async () => Response.json({ error: { code, type: "OAuthException", error_subcode: 460, message: "Error validating access token: The session has been invalidated.", log_id: "not-a-tiktok-log" } }, { status: 400 });
+      await assert.rejects(() => new ProviderPublishRegistry(fetchImpl).publish({
+        provider: "instagram", authMethod, providerAccountId: "ig-1", providerMetadata: {}, accessToken: "invalid-token",
+        text: "Caption", mediaType: "image", mediaUrl: "https://media.example.com/image.jpg", settings: { kind: "instagram", publishType: "feed" },
+      }), (error: unknown) => {
+        assert.ok(error instanceof ProviderPublishError);
+        assert.equal(error.reconnectRequired, true);
+        assert.equal(error.retryable, false);
+        assert.match(error.message, /session has been invalidated/);
+        assert.match(error.message, new RegExp(`Meta code: ${code}`));
+        assert.doesNotMatch(error.message, /TikTok|not-a-tiktok-log/);
+        return true;
+      });
+    }
+  }
+});
+
+test("preserves Meta validation, permission, and transient error retryability", async () => {
+  for (const { code, status, retryable } of [
+    { code: 100, status: 400, retryable: false },
+    { code: 200, status: 403, retryable: false },
+    { code: 1, status: 400, retryable: true },
+    { code: 2, status: 503, retryable: true },
+    { code: 4, status: 429, retryable: true },
+  ]) {
+    const fetchImpl: typeof fetch = async () => Response.json({ error: { code, type: "OAuthException", message: "Provider rejected the request." } }, { status });
+    await assert.rejects(() => new ProviderPublishRegistry(fetchImpl).publish({
+      provider: "facebook", authMethod: "facebook", providerAccountId: "page-1", providerMetadata: {}, accessToken: "token",
+      text: "Caption", mediaType: "none", settings: { kind: "facebook", publishType: "feed" },
+    }), (error: unknown) => {
+      assert.ok(error instanceof ProviderPublishError);
+      assert.equal(error.reconnectRequired, false);
+      assert.equal(error.retryable, retryable);
+      assert.match(error.message, new RegExp(`Meta code: ${code}`));
+      assert.doesNotMatch(error.message, /TikTok/);
+      return true;
+    });
+  }
+});
+
+test("marks TikTok token rejection and missing user authorization for reconnect", async () => {
+  for (const code of ["access_token_invalid", "scope_not_authorized", "scope_permission_missed"]) {
+    for (const status of [200, 401]) {
+      const fetchImpl: typeof fetch = async () => Response.json({ error: { code, message: "The access token was rejected.", log_id: "tiktok-auth-log" } }, { status });
+      await assert.rejects(() => new ProviderPublishRegistry(fetchImpl).publish({
+        provider: "tiktok", authMethod: "tiktok", providerAccountId: "open-id", providerMetadata: {}, accessToken: "invalid-token",
+        text: "Caption", mediaType: "image", mediaUrl: "https://media.example.com/image.jpg",
+        settings: { kind: "tiktok", privacyLevel: "SELF_ONLY", allowComments: false, allowDuet: false, allowStitch: false },
+      }), (error: unknown) => {
+        assert.ok(error instanceof ProviderPublishError);
+        assert.equal(error.reconnectRequired, true);
+        assert.equal(error.retryable, false);
+        assert.match(error.message, new RegExp(`TikTok code: ${code}`));
+        assert.match(error.message, /TikTok log ID: tiktok-auth-log/);
+        return true;
+      });
+    }
+  }
+});
+
 test("publishes an Instagram image container and returns its permalink", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
   const fetchImpl: typeof fetch = async (url, init) => {

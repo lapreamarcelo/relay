@@ -4,7 +4,7 @@ Relay now stores editable, versioned video timelines. The browser, REST API, CLI
 
 ## Editing and rendering
 
-Video Studio supports a sequential track of up to 50 videos/images, split/trim/reorder/duplicate, crop positioning and zoom, four aspect ratios, timed text, music volume/offset/fades, undo/redo, autosave, local recovery and cover-frame selection. Subtitles can be imported/exported as SRT. The editor offers Media, Audio, and Text, without templates or bulk-hook setup. Audio can be uploaded or chosen from the library, then moved and trimmed on the timeline with source offset, volume, and fade controls. One audio track loops within its selected range; original clip audio remains independently adjustable.
+Video Studio supports a sequential track of up to 50 videos/images, split/trim/reorder/duplicate, clip transitions, crop positioning and zoom, four aspect ratios, solid/gradient canvas backgrounds, device pose/rotation/scale and motion (including Duo folding), animated timed text and frames, eased keyframes, music volume/offset/fades, undo/redo, autosave, local recovery and cover-frame selection. Subtitles can be imported/exported as SRT. The editor offers Media, Audio, Text and a **Bulk text** panel above the video preview. Audio can be uploaded or chosen from the library, then moved and trimmed on the timeline with source offset, volume, and fade controls. One audio track loops within its selected range; original clip audio remains independently adjustable.
 
 Rendering runs in a separate `renderer` service, with a persisted job, progress, cancellation and retry. A job captures the exact project revision. Updating a project does not change previously rendered URLs or posts already using them. MP4s and JPEG covers are added to the Media library. **Save & download** saves the MP4 to Media and downloads it without opening the composer. **Create post** prepares the video and opens the composer. Completed exports also offer Download MP4 and Preview export. The cover passes into the composer for destinations that support custom images or frame offsets.
 
@@ -113,16 +113,19 @@ Render jobs are deduplicated by project, revision and kind (`render` or `caption
 
 ### Editable hook variants
 
+In the browser, open **Video Studio → a video → Bulk text**. Choose the label to vary and enter one text per line (1–20 texts, up to 500 characters each). Select any row to preview that headline with the source's frame placement, styling, timing and animations. **Create & render** saves the source first, creates separate editable projects, and queues their exports. Disable **Render MP4s after creating** to create drafts only. Results show per-video status, retry, editing, MP4 downloads, playable export previews and post-composer handoff. Created projects also appear in the video library. Unchanged requests reuse the same batch identity on retry.
+
 ```json
 {
   "id": "VIDEO_ID",
+  "labelId": "LABEL_TO_VARY",
   "clientRequestId": "launch-variants-2026-09",
   "hooks": ["Your first hook", "Your second hook"],
   "render": true
 }
 ```
 
-The first timed label changes for each variant; all other edits remain intact. A caption containing `{hook}` is filled automatically. Reuse the same request ID with the same input when retrying. Each result includes an editable project and, when requested, a render job. Review all entries: HTTP 207 can indicate individual enqueue failures.
+The selected timed label changes for each variant; omit `labelId` to vary the first label (or add a default label when none exists). An unknown label ID is rejected before project creation. All other edits, including simultaneous device layers and music, remain intact. A caption containing `{hook}` is filled automatically. Reuse the same request ID with the same input when retrying. Each result includes an editable project and, when requested, a render job. Review all entries: HTTP 207 can indicate individual enqueue failures.
 
 ### Weekly queues and campaigns
 
@@ -199,7 +202,9 @@ Apply a recipe with `{recipeId, accountIds, clientRequestId, startAt?}`. The CLI
 
 ## Device frames for images and videos
 
-The device-frame controls in the video clip inspector and slideshow editor wrap existing media in an original generic phone, tablet, or browser frame. Choose the frame and background colors, or choose None to return to the original full-canvas media. A slideshow exports a framed JPEG; a video timeline exports the framed clip in its MP4 and cover. Frames are static in this version.
+Agents can discover supported frames, geometry, examples and design guidance with `relay device-frames list` or MCP `list_device_frames`. `capabilities get` / `get_capabilities` includes the same catalog. See [complete agent payloads](AGENT_API.md#device-frames-for-product-demos).
+
+The device-frame controls wrap existing media in built-in phone, tablet, browser, iPhone, Duo, Mac display, watch and Android frames. Choose frame/background colors, or None for full-canvas media. Slideshow frames export static JPEGs; video frames support pose, motion, entrance/exit effects and keyframes in the MP4 and cover.
 
 The frame setting is stored per video clip or slideshow slide, so projects, duplicates, and templates retain it. REST, CLI, and MCP accept the same optional field:
 
@@ -213,6 +218,51 @@ The frame setting is stored per video clip or slideshow slide, so projects, dupl
 }
 ```
 
-`device` is `phone`, `tablet`, or `browser`; colors are six-digit hex values. Omit `deviceFrame` to disable framing. Video crop controls operate inside the device screen. Labels remain positioned on the full output canvas.
+`device` is `phone`, `tablet`, `browser`, `iphone`, `iphone-duo`, `mac`, `watch`, or `android`; colors are six-digit hex values. Omit `deviceFrame` to disable framing. Video crop controls operate inside the device screen. Labels remain positioned on the full output canvas.
 
-These generic frames are drawn from shared geometry in Relay and require no downloaded device packs, AI services, or provider keys. Apple bezel downloads are local reference assets and are not included in the repository or release. Image/video background uploads, animated device motion, and named manufacturer models are not part of this initial version.
+These stylized frames use shared Relay geometry and require no downloaded device packs, AI services, or provider keys. Apple bezel downloads are local reference assets and are not included in the repository or release. Image/video background uploads and photorealistic manufacturer meshes remain future work.
+
+
+## App demo editor and Matte research
+
+Upload or choose a recording, add a label, drag it or adjust its position, select a device, choose a background, pose/animate it, and export. All settings are saved in the versioned timeline JSON and available through REST, CLI and MCP. See the [pose and motion contract](AGENT_API.md#device-pose-backgrounds-and-motion).
+
+Text supports fade, slide, pop, zoom and typewriter entrance/exit effects; frames support the same effects except typewriter. Both have sparse keyframes for position, scale, opacity and rotation; Duo also supports hinge keyframes. Clip transitions include crossfade, slide, wipe and zoom with selectable easing. Effects use layer-local time; transitions overlap the incoming clip by at most half either adjacent clip. Labels/audio/cover follow the resulting shorter timeline. Splitting starts each clip's animation again at local time zero. MCP `list_video_animations` and capabilities discovery expose the same controls; see the [timing rules and editable JSON example](AGENT_API.md#text-frame-animation-and-transitions).
+
+**Device layers** supports up to 12 independently timed devices in the same scene: Watch + iPhone, two Watches, or any combination of the built-in frames. Each layer has its own recording, pose, motion, keyframes and audio volume. Add from selected footage, Media or upload; duplicate, move on the canvas, and change stacking order. Text labels stay above the devices; the canvas background is shared. The same layers are editable through MCP and survive save/reload/export. See [the paired-device contract](AGENT_API.md#multiple-devices-in-one-video).
+
+The prompt composer turns selected footage and a written brief into a separate editable preview. Review its scenes, titles and warnings, then Apply composition as one undoable edit. Normal autosave and export follow; generated layers remain editable. It requires the server’s OpenAI configuration, and MCP `generate_video_composition` returns the same preview. See [the composition workflow](AGENT_API.md#prompt-based-video-composition).
+
+Research checked October 2, 2026: [prompt-to-launch demo](https://x.com/josesaezmerino/status/2105766004039315786), [supplied demo](https://x.com/josesaezmerino/status/2105701314306982039), [Matte overview](https://matte.app/), [device guide](https://matte.app/features/3d-device-mockups/), [3D editing](https://matte.app/3d/) and [release notes](https://matte.app/changelog/). The demo's central idea is an agent-authored project that stays editable by humans and other agents. Relay follows this through its existing timeline API.
+
+| Matte feature family | Relay status |
+| --- | --- |
+| Import recordings/images | Library and upload; editable sequential clips |
+| Agent-authored editable projects | Shared REST/CLI/MCP timeline JSON; revision conflict checks |
+| Multiple devices in one scene | Up to 12 independently timed layers, per-device sources/animation/audio, stacking, browser and MCP support |
+| Prompt to launch video | Configured OpenAI generation from selected footage; reviewable editable preview, one undoable Apply, MCP/CLI support |
+| Movable/resizable timed text | Drag, position/size/style controls, entrance/exit effects, typewriter, eased keyframes, SRT import/export |
+| Backgrounds | Solid/diagonal gradients; image/video wallpaper and patterns remain future work |
+| Device mockups | Stylized phone, iPhone, Duo, Android, tablet, Mac display, watch and browser |
+| Pose and animation | Position, scale, perspective rotation, orbit/float, Duo fold/unfold/cycle, frame entrance/exit effects and keyframes |
+| Clip transitions | Crossfade, slide, wipe and zoom; eased visuals and overlapping source audio |
+| Photorealistic meshes/finishes and MacBook lid | Future work; Relay uses projected panels |
+| Trim/split/reorder/duplicate | Implemented on one sequential video track |
+| Multiple video/audio tracks, nests, ripple/slip edit | Future work; Relay supports overlapping labels and one music track |
+| Speed/freeze frames | Future work; image clips are supported |
+| Audio mixing | Clip volume and one ranged looping music track; trim/offset/fades |
+| Automatic captions | Existing optional transcription job; editable labels, not on-device |
+| Presets | Existing templates/variants and per-clip motion presets |
+| Keyframes and easing | Sparse property keyframes with linear/ease-in/ease-out/ease-in-out interpolation |
+| Custom curves, camera tracks and Director | Future work |
+| Auto Zoom, cursor/gesture/tap/pinch/keystroke effects | Future work |
+| Censor/blur | Future work |
+| Motion blur, depth of field, bloom, lighting and 3D text | Future work |
+| Webcam/simultaneous capture | Future work; browser editor imports recordings |
+| Simulator/live USB/Device Hub/menu bar capture | Native companion integration needed |
+| Duo dual recording and pose detection | Future work; hinge currently splits one source across two panels |
+| Logo/branding intros/outros/watermarks | Text/brand styles exist; dedicated branding layers remain future work |
+| Export | 30fps H.264 MP4, JPEG cover, four aspect ratios |
+| 4K/custom sizes/HEVC/ProRes/alpha/GIF/PNG/export ranges | Future work |
+
+This inventory records remaining work; the current implementation does not claim complete Matte parity.

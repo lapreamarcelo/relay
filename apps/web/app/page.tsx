@@ -24,13 +24,13 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     SELECT id, name, monogram, color, timezone FROM "brand" WHERE "owner_id" = ${session.user.id} ORDER BY "created_at" ASC
   `;
   const brands = brandRows.map((brand) => ({ id: brand.id, name: brand.name, monogram: brand.monogram, color: brand.color, timezone: brand.timezone }));
-  const accountRows = await sql<{ id: string; brand_id: string | null; provider: ProviderId; auth_method: ProviderAuthMethod; provider_account_id: string; username: string; display_name: string; avatar_url: string | null; status: "connected" | "warning" | "expired"; token_expires_at: string | Date | null; refresh_token_expires_at: string | Date | null; last_checked_at: string | Date | null }[]>`
+  const accountRows = await sql<{ id: string; brand_id: string | null; provider: ProviderId; auth_method: ProviderAuthMethod; provider_account_id: string; username: string; display_name: string; avatar_url: string | null; status: "connected" | "warning" | "expired"; token_expires_at: string | Date | null; refresh_token_expires_at: string | Date | null; connection_error: string | null; last_checked_at: string | Date | null }[]>`
     SELECT id, brand_id, provider, auth_method, provider_account_id, username, display_name, avatar_url, status,
-      token_expires_at, refresh_token_expires_at, last_checked_at
+      token_expires_at, refresh_token_expires_at, connection_error, last_checked_at
     FROM "social_account" WHERE "owner_id" = ${session.user.id} ORDER BY "created_at" ASC
   `;
   const iso = (value: string | Date | null) => value === null ? undefined : new Date(value).toISOString();
-  const accounts: SocialAccount[] = accountRows.map((account) => ({ id: account.id, brandId: account.brand_id, provider: account.provider, authMethod: account.auth_method, providerAccountId: account.provider_account_id, handle: account.username.startsWith("@") ? account.username : `@${account.username}`, displayName: account.display_name, avatarUrl: account.avatar_url ?? undefined, status: account.status, followers: "", tokenExpiresAt: iso(account.token_expires_at), refreshTokenExpiresAt: iso(account.refresh_token_expires_at), lastCheckedAt: iso(account.last_checked_at) }));
+  const accounts: SocialAccount[] = accountRows.map((account) => ({ id: account.id, brandId: account.brand_id, provider: account.provider, authMethod: account.auth_method, providerAccountId: account.provider_account_id, handle: account.username.startsWith("@") ? account.username : `@${account.username}`, displayName: account.display_name, avatarUrl: account.avatar_url ?? undefined, status: account.status, connectionError: account.connection_error ?? undefined, followers: "", tokenExpiresAt: iso(account.token_expires_at), refreshTokenExpiresAt: iso(account.refresh_token_expires_at), lastCheckedAt: iso(account.last_checked_at) }));
   const posts = await listPostsForOwner(session.user.id);
 
   const query = await searchParams;

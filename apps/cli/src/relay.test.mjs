@@ -124,3 +124,34 @@ test("new creative and planning commands preserve structured agent payloads",asy
  await run(["queues","fill","--data",'{"accountId":"account","postIds":["draft"],"preview":true}'],io);assert.equal(calls.at(-1).url,"https://relay.example/api/v1/queues");assert.equal(JSON.parse(calls.at(-1).init.body).preview,true);
  await run(["analytics","creative","--query","hours=72"],io);assert.equal(calls.at(-1).url,"https://relay.example/api/v1/analytics/creative?hours=72");
 });
+
+test("agents discover frames and send frame settings for images and videos", async () => {
+  const calls=[];
+  const catalog={version:1,frames:[{device:"phone"}],design:{fit:"contain preserves UI"}};
+  const fetchImpl=async(url,init)=>{calls.push({url,init});return Response.json({data:catalog});};
+  const io={env:{RELAY_URL:"https://relay.example",RELAY_API_KEY:"relay_sk_test"},stdout:{write(){}},fetchImpl};
+  assert.deepEqual((await run(["device-frames","list"],io)).data,catalog);
+  assert.equal(calls[0].url,"https://relay.example/api/v1/capabilities?section=device-frames");
+  assert.equal(calls[0].init.headers.Authorization,"Bearer relay_sk_test");
+  const deviceFrame={device:"browser",background:"#E8E2D8",color:"#171717"};
+  const slide={mediaUrl:"https://media.example/image.png",fit:"contain",deviceFrame};
+  await run(["slideshows","create","--data",JSON.stringify({name:"Screenshot",slides:[slide]})],io);
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body).slides[0].deviceFrame,deviceFrame);
+  const clip={sourceUrl:"https://media.example/recording.mp4",kind:"video",inMs:0,outMs:2000,deviceFrame};
+  await run(["videos","update","--data",JSON.stringify({id:"video",revision:2,name:"Demo",timeline:{version:1,aspectRatio:"16:9",clips:[clip],labels:[],music:{url:""},coverMs:0}})],io);
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body).timeline.clips[0].deviceFrame,deviceFrame);
+  assert.equal(JSON.parse(calls.at(-1).init.body).revision,2);
+  const printed=output();await run(["--help"],{stdout:printed.stream});assert.match(printed.read(),/device-frames list/);
+});
+
+test("prompt composition returns an editable preview without saving the project", async () => {
+  const calls=[];
+  const preview={timeline:{version:1,aspectRatio:"9:16",clips:[],labels:[],music:{url:""},coverMs:0},summary:"Launch preview",warnings:[],provider:"openai"};
+  const fetchImpl=async(url,init)=>{calls.push({url,init});return Response.json({data:init.method==="GET"?{available:true}:preview});};
+  const io={env:{RELAY_URL:"https://relay.example",RELAY_API_KEY:"relay_sk_test"},stdout:{write(){}},fetchImpl};
+  assert.equal((await run(["video-composer","status"],io)).data.available,true);
+  const request={prompt:"Create a cinematic app launch",productName:"My app",durationMs:15000,timeline:preview.timeline};
+  assert.deepEqual((await run(["videos","compose","--data",JSON.stringify(request)],io)).data,preview);
+  assert.deepEqual(calls.map(call=>({url:call.url,method:call.init.method})),[{url:"https://relay.example/api/v1/videos/compose",method:"GET"},{url:"https://relay.example/api/v1/videos/compose",method:"POST"}]);
+  assert.deepEqual(JSON.parse(calls[1].init.body),request);
+});

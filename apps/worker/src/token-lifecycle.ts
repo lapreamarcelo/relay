@@ -5,8 +5,8 @@ import { ProviderAuthorizationError, type ProviderRefreshRegistry } from "@relay
 const MINUTE = 60_000;
 
 export class AccountReconnectRequiredError extends Error {
-  constructor(readonly accountId: string) {
-    super(`Account ${accountId} must be reconnected`);
+  constructor(readonly accountId: string, reason?: string | null) {
+    super(reason ?? "This account’s authorization has expired. Reconnect it in Accounts, then retry the failed post.");
     this.name = "AccountReconnectRequiredError";
   }
 }
@@ -52,7 +52,7 @@ export class TokenLifecycleService {
 
   async getValidAccessToken(accountId: string, now = new Date()): Promise<string> {
     const account = await this.requireAccount(accountId);
-    if (account.status === "expired") throw new AccountReconnectRequiredError(accountId);
+    if (account.status === "expired") throw new AccountReconnectRequiredError(accountId, account.connectionError);
 
     if (!this.needsRefresh(account, now)) return this.cipher.decrypt(account.accessTokenEncrypted);
     return this.refreshAccount(accountId, now);
@@ -75,6 +75,13 @@ export class TokenLifecycleService {
     return result;
   }
 
+  async markAuthorizationRejected(accountId: string, rejectedAccessToken: string, reason: string, now = new Date()): Promise<void> {
+    const account = await this.requireAccount(accountId);
+    // A publish response for an old token must not expire freshly reconnected credentials.
+    if (this.cipher.decrypt(account.accessTokenEncrypted) !== rejectedAccessToken) return;
+    await this.repository.markAuthorizationRejected(accountId, account.accessTokenEncrypted, reason, now);
+  }
+
   private needsRefresh(account: AccountCredential, now: Date): boolean {
     if (account.refreshAfterAt) return account.refreshAfterAt <= now;
     if (!account.tokenExpiresAt) return false;
@@ -87,7 +94,7 @@ export class TokenLifecycleService {
     if (!claimed) throw new TokenRefreshInProgressError(accountId);
 
     if (!claimed.refreshTokenEncrypted || (claimed.refreshTokenExpiresAt && claimed.refreshTokenExpiresAt <= now)) {
-      await this.repository.markExpired(accountId, leaseOwner, now);
+      await this.repository.markExpired(accountId, leaseOwner, now, "The refresh authorization is missing or expired. Reconnect this account to resume publishing.");
       throw new AccountReconnectRequiredError(accountId);
     }
 
@@ -116,8 +123,8 @@ export class TokenLifecycleService {
       return refreshed.accessToken;
     } catch (error) {
       if (error instanceof ProviderAuthorizationError && error.reconnectRequired) {
-        await this.repository.markExpired(accountId, leaseOwner, now);
-        throw new AccountReconnectRequiredError(accountId);
+        await this.repository.markExpired(accountId, leaseOwner, now, error.message);
+        throw new AccountReconnectRequiredError(accountId, error.message);
       }
       await this.repository.markRefreshWarning(accountId, leaseOwner, now);
       throw error;

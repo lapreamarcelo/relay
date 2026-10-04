@@ -22,7 +22,7 @@ export interface ProviderPublishResult {
 }
 
 export class ProviderPublishError extends Error {
-  constructor(message: string, readonly retryable = false) { super(message); this.name = "ProviderPublishError"; }
+  constructor(message: string, readonly retryable = false, readonly reconnectRequired = false) { super(message); this.name = "ProviderPublishError"; }
 }
 
 type Fetch = typeof fetch;
@@ -50,12 +50,17 @@ async function requestJson<T>(fetchImpl: Fetch, url: string | URL, init: Request
   const providerLogId = stringValue(nested?.log_id) ?? stringValue(nested?.logid);
   const providerCode = stringValue(nested?.error_subcode) ?? stringValue(nested?.type) ?? stringValue(payload.code);
   const providerMessage = stringValue(nested?.message) ?? stringValue(payload.message);
-  const tiktokError = nested && stringValue(nested.code) && stringValue(nested.code) !== "ok";
-  if (!response.ok || tiktokError) {
-    const retryable = response.status === 429 || response.status >= 500 || code === "1" || code === "internal_error" || code === "rate_limit_exceeded" || providerCode === "internal_error" || providerCode === "rate_limit_exceeded";
+  const hostname = new URL(url).hostname;
+  const tiktokRequest = hostname === "open.tiktokapis.com";
+  const metaRequest = hostname === "graph.facebook.com" || hostname === "graph.instagram.com" || hostname === "rupload.facebook.com";
+  const providerError = nested && code && code !== "ok";
+  const tiktokError = tiktokRequest && providerError;
+  if (!response.ok || providerError) {
+    const reconnectRequired = (metaRequest && (code === "190" || code === "102")) || (tiktokRequest && (code === "access_token_invalid" || code === "scope_not_authorized" || code === "scope_permission_missed"));
+    const retryable = !reconnectRequired && (response.status === 429 || response.status >= 500 || code === "1" || code === "internal_error" || code === "rate_limit_exceeded" || providerCode === "internal_error" || providerCode === "rate_limit_exceeded");
     const message = tiktokErrorMessage(tiktokError ? code : undefined, providerMessage);
     const details = message ? `: ${message}` : providerCode ? ` (${providerCode})` : code ? ` (${code})` : ` (HTTP ${response.status})`;
-    throw new ProviderPublishError(`${action} failed${details}.${tiktokError && code ? ` TikTok code: ${code}.` : ""}${providerLogId ? ` TikTok log ID: ${providerLogId}.` : ""}`, retryable);
+    throw new ProviderPublishError(`${action} failed${details}.${tiktokError && code ? ` TikTok code: ${code}.` : metaRequest && code ? ` Meta code: ${code}.` : ""}${tiktokRequest && providerLogId ? ` TikTok log ID: ${providerLogId}.` : ""}`, retryable, reconnectRequired);
   }
   return payload as T;
 }

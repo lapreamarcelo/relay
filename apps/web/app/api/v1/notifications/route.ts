@@ -28,13 +28,20 @@ export async function GET(request: Request) {
   const rows = await sql<{
     id: string; event_key: string; post_id: string | null; target_id: string | null; provider: string | null;
     kind: string; title: string; message: string; external_url: string | null; read_at: string | Date | null; created_at: string | Date;
+    account_id: string | null;
   }[]>`
-    SELECT id, event_key, post_id, target_id, provider, kind, title, message, external_url, read_at, created_at
-    FROM "notification" WHERE owner_id = ${authorization.session.user.id}
-    ORDER BY created_at DESC LIMIT 100
+    SELECT notification.id, notification.event_key, notification.post_id, notification.target_id, notification.provider,
+      notification.kind, notification.title, notification.message, notification.external_url, notification.read_at,
+      notification.created_at, account.id AS account_id
+    FROM "notification"
+    LEFT JOIN "post_target" target ON target.id = notification.target_id
+    LEFT JOIN "social_account" account ON account.id = target.social_account_id AND account.owner_id = notification.owner_id
+    WHERE notification.owner_id = ${authorization.session.user.id}
+    ORDER BY notification.created_at DESC LIMIT 100
   `;
   return Response.json({ data: rows.map((row) => ({
     id: row.id, eventKey: row.event_key, postId: row.post_id, targetId: row.target_id, provider: row.provider,
+    accountId: row.account_id,
     kind: row.kind, title: row.title, message: row.message, externalUrl: row.external_url,
     readAt: row.read_at ? new Date(row.read_at).toISOString() : null, createdAt: new Date(row.created_at).toISOString(),
   })) });

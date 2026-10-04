@@ -13,6 +13,7 @@ export interface AccountCredential {
   refreshAfterAt: Date | null;
   grantedScopes: string[];
   status: AccountStatus;
+  connectionError?: string | null;
   lastCheckedAt: Date | null;
   refreshLeaseOwner: string | null;
   refreshLeaseExpiresAt: Date | null;
@@ -33,5 +34,6 @@ export interface AccountCredentialRepository {
   claimRefresh(accountId: string, leaseOwner: string, leaseExpiresAt: Date): Promise<AccountCredential | null>;
   saveRefreshed(accountId: string, leaseOwner: string, tokens: RotatedAccountTokens, checkedAt: Date): Promise<void>;
   markRefreshWarning(accountId: string, leaseOwner: string, checkedAt: Date): Promise<void>;
-  markExpired(accountId: string, leaseOwner: string, checkedAt: Date): Promise<void>;
+  markExpired(accountId: string, leaseOwner: string, checkedAt: Date, reason?: string): Promise<void>;
+  markAuthorizationRejected(accountId: string, accessTokenEncrypted: string, reason: string, checkedAt: Date): Promise<void>;
 }

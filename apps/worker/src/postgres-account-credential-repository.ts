@@ -7,6 +7,7 @@ interface CredentialRow {
   access_token_encrypted: string; refresh_token_encrypted: string | null; token_expires_at: string | Date | null;
   refresh_token_expires_at: string | Date | null; refresh_after_at: string | Date | null; granted_scopes: string[];
   provider_metadata: Record<string, unknown>; status: AccountStatus; last_checked_at: string | Date | null;
+  connection_error: string | null;
   refresh_lease_owner: string | null; refresh_lease_expires_at: string | Date | null;
 }
 
@@ -15,7 +16,7 @@ function date(value: string | Date | null): Date | null {
 }
 
 function credential(row: CredentialRow): AccountCredential {
-  return { accountId: row.id, provider: row.provider, authMethod: row.auth_method, providerAccountId: row.provider_account_id, providerMetadata: row.provider_metadata, accessTokenEncrypted: row.access_token_encrypted, refreshTokenEncrypted: row.refresh_token_encrypted, tokenExpiresAt: date(row.token_expires_at), refreshTokenExpiresAt: date(row.refresh_token_expires_at), refreshAfterAt: date(row.refresh_after_at), grantedScopes: row.granted_scopes, status: row.status, lastCheckedAt: date(row.last_checked_at), refreshLeaseOwner: row.refresh_lease_owner, refreshLeaseExpiresAt: date(row.refresh_lease_expires_at) };
+  return { accountId: row.id, provider: row.provider, authMethod: row.auth_method, providerAccountId: row.provider_account_id, providerMetadata: row.provider_metadata, accessTokenEncrypted: row.access_token_encrypted, refreshTokenEncrypted: row.refresh_token_encrypted, tokenExpiresAt: date(row.token_expires_at), refreshTokenExpiresAt: date(row.refresh_token_expires_at), refreshAfterAt: date(row.refresh_after_at), grantedScopes: row.granted_scopes, status: row.status, connectionError: row.connection_error, lastCheckedAt: date(row.last_checked_at), refreshLeaseOwner: row.refresh_lease_owner, refreshLeaseExpiresAt: date(row.refresh_lease_expires_at) };
 }
 
 export class PostgresAccountCredentialRepository implements AccountCredentialRepository {
@@ -23,7 +24,7 @@ export class PostgresAccountCredentialRepository implements AccountCredentialRep
     const [row] = await sql<CredentialRow[]>`
       SELECT id, provider, auth_method, provider_account_id, access_token_encrypted, refresh_token_encrypted,
         token_expires_at, refresh_token_expires_at, refresh_after_at, granted_scopes, provider_metadata, status,
-        last_checked_at, refresh_lease_owner, refresh_lease_expires_at
+        last_checked_at, connection_error, refresh_lease_owner, refresh_lease_expires_at
       FROM "social_account" WHERE id = ${accountId}
     `;
     return row ? credential(row) : null;
@@ -33,7 +34,7 @@ export class PostgresAccountCredentialRepository implements AccountCredentialRep
     const rows = await sql<CredentialRow[]>`
       SELECT id, provider, auth_method, provider_account_id, access_token_encrypted, refresh_token_encrypted,
         token_expires_at, refresh_token_expires_at, refresh_after_at, granted_scopes, provider_metadata, status,
-        last_checked_at, refresh_lease_owner, refresh_lease_expires_at
+        last_checked_at, connection_error, refresh_lease_owner, refresh_lease_expires_at
       FROM "social_account"
       WHERE status <> 'expired' AND refresh_after_at IS NOT NULL AND refresh_after_at <= ${refreshBefore.toISOString()}
         AND (refresh_lease_expires_at IS NULL OR refresh_lease_expires_at <= NOW())
@@ -48,7 +49,7 @@ export class PostgresAccountCredentialRepository implements AccountCredentialRep
       WHERE id = ${accountId} AND status <> 'expired' AND (refresh_lease_expires_at IS NULL OR refresh_lease_expires_at <= NOW())
       RETURNING id, provider, auth_method, provider_account_id, access_token_encrypted, refresh_token_encrypted,
         token_expires_at, refresh_token_expires_at, refresh_after_at, granted_scopes, provider_metadata, status,
-        last_checked_at, refresh_lease_owner, refresh_lease_expires_at
+        last_checked_at, connection_error, refresh_lease_owner, refresh_lease_expires_at
     `;
     return row ? credential(row) : null;
   }
@@ -58,7 +59,7 @@ export class PostgresAccountCredentialRepository implements AccountCredentialRep
       UPDATE "social_account" SET access_token_encrypted = ${tokens.accessTokenEncrypted}, refresh_token_encrypted = ${tokens.refreshTokenEncrypted},
         token_expires_at = ${tokens.tokenExpiresAt?.toISOString() ?? null}, refresh_token_expires_at = ${tokens.refreshTokenExpiresAt?.toISOString() ?? null},
         refresh_after_at = ${tokens.refreshAfterAt?.toISOString() ?? null}, granted_scopes = ${JSON.stringify(tokens.grantedScopes)}::jsonb, status = 'connected',
-        last_checked_at = ${checkedAt.toISOString()}, refresh_lease_owner = NULL, refresh_lease_expires_at = NULL, updated_at = NOW()
+        last_checked_at = ${checkedAt.toISOString()}, connection_error = NULL, refresh_lease_owner = NULL, refresh_lease_expires_at = NULL, updated_at = NOW()
       WHERE id = ${accountId} AND refresh_lease_owner = ${leaseOwner}
     `;
   }
@@ -67,7 +68,14 @@ export class PostgresAccountCredentialRepository implements AccountCredentialRep
     await sql`UPDATE "social_account" SET status = 'warning', last_checked_at = ${checkedAt.toISOString()}, refresh_lease_owner = NULL, refresh_lease_expires_at = NULL, updated_at = NOW() WHERE id = ${accountId} AND refresh_lease_owner = ${leaseOwner}`;
   }
 
-  async markExpired(accountId: string, leaseOwner: string, checkedAt: Date): Promise<void> {
-    await sql`UPDATE "social_account" SET status = 'expired', last_checked_at = ${checkedAt.toISOString()}, refresh_lease_owner = NULL, refresh_lease_expires_at = NULL, updated_at = NOW() WHERE id = ${accountId} AND refresh_lease_owner = ${leaseOwner}`;
+  async markExpired(accountId: string, leaseOwner: string, checkedAt: Date, reason?: string): Promise<void> {
+    await sql`UPDATE "social_account" SET status = 'expired', connection_error = ${reason ?? null}, last_checked_at = ${checkedAt.toISOString()}, refresh_lease_owner = NULL, refresh_lease_expires_at = NULL, updated_at = NOW() WHERE id = ${accountId} AND refresh_lease_owner = ${leaseOwner}`;
+  }
+
+  async markAuthorizationRejected(accountId: string, accessTokenEncrypted: string, reason: string, checkedAt: Date): Promise<void> {
+    await sql`
+      UPDATE "social_account" SET status = 'expired', connection_error = ${reason}, last_checked_at = ${checkedAt.toISOString()}, updated_at = NOW()
+      WHERE id = ${accountId} AND access_token_encrypted = ${accessTokenEncrypted}
+    `;
   }
 }

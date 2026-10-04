@@ -1,4 +1,5 @@
 import type { TokenLifecycleService } from "./token-lifecycle.ts";
+import { ProviderPublishError } from "@relay/providers/publish";
 
 /**
  * Publishing must always go through this guard. The background sweep reduces
@@ -11,5 +12,12 @@ export async function withFreshAccountToken<T>(
   publish: (accessToken: string) => Promise<T>,
 ): Promise<T> {
   const accessToken = await lifecycle.getValidAccessToken(accountId);
-  return publish(accessToken);
+  try {
+    return await publish(accessToken);
+  } catch (error) {
+    if (error instanceof ProviderPublishError && error.reconnectRequired) {
+      await lifecycle.markAuthorizationRejected(accountId, accessToken, error.message);
+    }
+    throw error;
+  }
 }

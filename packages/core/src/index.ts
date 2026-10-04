@@ -25,6 +25,7 @@ export interface SocialAccount {
   tokenExpiresAt?: string;
   refreshTokenExpiresAt?: string;
   lastCheckedAt?: string;
+  connectionError?: string;
 }
 
 export interface InstagramPostSettings {
@@ -263,10 +264,46 @@ export interface VideoProject {
 
 export type VideoMusicMode = "none" | "fixed" | "rotate" | "random";
 
+export type AnimationEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+export interface AnimationEffect {
+  preset: "fade" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "pop" | "zoom" | "typewriter";
+  durationMs: number;
+  easing?: AnimationEasing;
+}
+export interface LayerKeyframe {
+  /** Local time within the clip or label. Sparse properties interpolate independently. */
+  timeMs: number;
+  /** Curve used from this keyframe to the next authored value. */
+  easing?: AnimationEasing;
+  x?: number; y?: number; scale?: number;
+  rotateX?: number; rotateY?: number; rotateZ?: number;
+  foldAngle?: number; opacity?: number;
+}
+export interface LayerAnimation { entrance?: AnimationEffect; exit?: AnimationEffect; keyframes?: LayerKeyframe[] }
+export interface ClipTransition {
+  kind: "crossfade" | "slide-left" | "slide-right" | "wipe-left" | "wipe-right" | "zoom";
+  durationMs: number;
+  easing?: AnimationEasing;
+}
+
 export interface DeviceFrame {
-  device: "phone" | "tablet" | "browser";
+  device: "phone" | "tablet" | "browser" | "iphone" | "iphone-duo" | "mac" | "watch" | "android";
   background: string;
   color: string;
+  backgroundEnd?: string;
+  /** Center in normalized canvas coordinates. Video timelines only. */
+  x?: number;
+  y?: number;
+  scale?: number;
+  rotateX?: number;
+  rotateY?: number;
+  rotateZ?: number;
+  /** Total angle between the two hinged halves, in degrees (iPhone Duo only). */
+  foldAngle?: number;
+  motion?: "none" | "orbit" | "float" | "fold" | "unfold" | "fold-cycle";
+  motionDurationMs?: number;
+  motionEasing?: AnimationEasing;
+  animation?: LayerAnimation;
 }
 
 export const brands: Brand[] = [];
@@ -288,12 +325,19 @@ export interface VideoClip {
   zoom: number;
   volume: number;
   deviceFrame?: DeviceFrame;
+  /** Incoming overlap with the preceding clip, capped at half of each clip. */
+  transition?: ClipTransition;
 }
-export interface TimedVideoLabel extends CreativeLabel { startMs: number; endMs: number }
+/** Independently timed visual/audio layer. Array order is back to front. */
+export type VideoLayer = Omit<VideoClip, "transition"> & { startMs: number };
+export interface TimedVideoLabel extends CreativeLabel { startMs: number; endMs: number; animation?: LayerAnimation }
 export interface VideoTimeline {
   version: 1;
   aspectRatio: "9:16" | "4:5" | "1:1" | "16:9";
+  background?: { color: string; endColor?: string };
   clips: VideoClip[];
+  /** Simultaneous overlays above the sequential clips and below timed labels. */
+  layers?: VideoLayer[];
   labels: TimedVideoLabel[];
   music: { url: string; name?: string; volume: number; offsetMs: number; fadeInMs: number; fadeOutMs: number; startMs?: number; endMs?: number };
   coverMs: number;

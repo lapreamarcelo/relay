@@ -413,7 +413,7 @@ test("video studio supports media, draggable labels, audio, and post handoff", a
   const bounds=await canvas.boundingBox();const target=await page.locator(".creative-label").boundingBox();
   await page.mouse.move(target!.x+target!.width/2,target!.y+target!.height/2);await page.mouse.down();await page.mouse.move(bounds!.x+bounds!.width*.5,bounds!.y+bounds!.height*.5,{steps:5});await page.mouse.up();
   await expect.poll(()=>project.timeline?.labels[0].y).toBeGreaterThan(.4);
-  await page.getByRole("button", { name: "Add label" }).click();
+  await page.locator(".video-quick-tools").getByRole("button", { name: "Add label", exact: true }).click();
   await expect(page.locator(".video-label-tabs button")).toHaveCount(2);
   await page.getByRole("button", { name: "White / clear" }).click();
   await expect(page.getByRole("button", { name: "White / clear" })).toHaveClass(/active/);

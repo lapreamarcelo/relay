@@ -58,7 +58,7 @@ export async function GET(request: Request, context: { params: Promise<{ provide
           access_token_encrypted = EXCLUDED.access_token_encrypted, refresh_token_encrypted = EXCLUDED.refresh_token_encrypted,
           token_expires_at = EXCLUDED.token_expires_at, refresh_token_expires_at = EXCLUDED.refresh_token_expires_at,
           refresh_after_at = EXCLUDED.refresh_after_at, granted_scopes = EXCLUDED.granted_scopes,
-          provider_metadata = EXCLUDED.provider_metadata, status = 'connected', last_checked_at = NOW(), updated_at = NOW(),
+          provider_metadata = EXCLUDED.provider_metadata, status = 'connected', connection_error = NULL, last_checked_at = NOW(), updated_at = NOW(),
           refresh_lease_owner = NULL, refresh_lease_expires_at = NULL
       `;
     }

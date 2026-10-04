@@ -8,7 +8,7 @@ import { getOAuthRegistry, getTokenCipherKey } from "../../../../lib/social-oaut
 interface AccountRow {
   id: string; brand_id: string | null; provider: ProviderId; auth_method: ProviderAuthMethod; provider_account_id: string;
   username: string; display_name: string; avatar_url: string | null; status: "connected" | "warning" | "expired";
-  token_expires_at: string | Date | null; refresh_token_expires_at: string | Date | null; last_checked_at: string | Date | null;
+  token_expires_at: string | Date | null; refresh_token_expires_at: string | Date | null; connection_error: string | null; last_checked_at: string | Date | null;
 }
 
 export async function GET(request: Request) {
@@ -16,11 +16,11 @@ export async function GET(request: Request) {
   if (authorization.response) return authorization.response;
   const rows = await sql<AccountRow[]>`
     SELECT id, brand_id, provider, auth_method, provider_account_id, username, display_name, avatar_url, status,
-      token_expires_at, refresh_token_expires_at, last_checked_at
+      token_expires_at, refresh_token_expires_at, connection_error, last_checked_at
     FROM "social_account" WHERE "owner_id" = ${authorization.session.user.id} ORDER BY "created_at" ASC
   `;
   const iso = (value: string | Date | null) => value === null ? undefined : new Date(value).toISOString();
-  return Response.json({ data: rows.map((row) => ({ id: row.id, brandId: row.brand_id, provider: row.provider, authMethod: row.auth_method, providerAccountId: row.provider_account_id, handle: row.username.startsWith("@") ? row.username : `@${row.username}`, displayName: row.display_name, avatarUrl: row.avatar_url ?? undefined, status: row.status, followers: "", tokenExpiresAt: iso(row.token_expires_at), refreshTokenExpiresAt: iso(row.refresh_token_expires_at), lastCheckedAt: iso(row.last_checked_at) })) });
+  return Response.json({ data: rows.map((row) => ({ id: row.id, brandId: row.brand_id, provider: row.provider, authMethod: row.auth_method, providerAccountId: row.provider_account_id, handle: row.username.startsWith("@") ? row.username : `@${row.username}`, displayName: row.display_name, avatarUrl: row.avatar_url ?? undefined, status: row.status, connectionError: row.connection_error ?? undefined, followers: "", tokenExpiresAt: iso(row.token_expires_at), refreshTokenExpiresAt: iso(row.refresh_token_expires_at), lastCheckedAt: iso(row.last_checked_at) })) });
 }
 
 export async function DELETE(request: Request) {

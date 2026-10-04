@@ -5,6 +5,8 @@ import type { AccountCredential, AccountCredentialRepository, RotatedAccountToke
 import { AesGcmTokenCipher } from "@relay/core/token-encryption";
 import { ProviderAuthorizationError, ProviderRefreshRegistry } from "@relay/providers/token-refresh";
 import { AccountReconnectRequiredError, TokenLifecycleService, TokenRefreshInProgressError } from "./token-lifecycle.ts";
+import { ProviderPublishError } from "@relay/providers/publish";
+import { withFreshAccountToken } from "./publisher-auth.ts";
 
 class MemoryCredentialRepository implements AccountCredentialRepository {
   constructor(readonly accounts: AccountCredential[]) {}
@@ -33,7 +35,7 @@ class MemoryCredentialRepository implements AccountCredentialRepository {
 
   async saveRefreshed(accountId: string, leaseOwner: string, tokens: RotatedAccountTokens, checkedAt: Date): Promise<void> {
     const account = this.withLease(accountId, leaseOwner);
-    Object.assign(account, tokens, { status: "connected", lastCheckedAt: checkedAt, refreshLeaseOwner: null, refreshLeaseExpiresAt: null });
+    Object.assign(account, tokens, { status: "connected", connectionError: null, lastCheckedAt: checkedAt, refreshLeaseOwner: null, refreshLeaseExpiresAt: null });
   }
 
   async markRefreshWarning(accountId: string, leaseOwner: string, checkedAt: Date): Promise<void> {
@@ -41,9 +43,14 @@ class MemoryCredentialRepository implements AccountCredentialRepository {
     Object.assign(account, { status: "warning", lastCheckedAt: checkedAt, refreshLeaseOwner: null, refreshLeaseExpiresAt: null });
   }
 
-  async markExpired(accountId: string, leaseOwner: string, checkedAt: Date): Promise<void> {
+  async markExpired(accountId: string, leaseOwner: string, checkedAt: Date, reason?: string): Promise<void> {
     const account = this.withLease(accountId, leaseOwner);
-    Object.assign(account, { status: "expired", lastCheckedAt: checkedAt, refreshLeaseOwner: null, refreshLeaseExpiresAt: null });
+    Object.assign(account, { status: "expired", connectionError: reason, lastCheckedAt: checkedAt, refreshLeaseOwner: null, refreshLeaseExpiresAt: null });
+  }
+
+  async markAuthorizationRejected(accountId: string, accessTokenEncrypted: string, reason: string, checkedAt: Date): Promise<void> {
+    const account = await this.findByAccountId(accountId);
+    if (account?.accessTokenEncrypted === accessTokenEncrypted) Object.assign(account, { status: "expired", connectionError: reason, lastCheckedAt: checkedAt });
   }
 
   private withLease(accountId: string, leaseOwner: string): AccountCredential {
@@ -166,4 +173,55 @@ test("the maintenance sweep refreshes due accounts before publishing", async () 
 
   assert.deepEqual(await lifecycle.sweep(now), { examined: 1, refreshed: 1, reconnectRequired: 0, deferred: 0 });
   assert.equal(context.cipher.decrypt(context.account.accessTokenEncrypted), "access-swept");
+});
+
+test("publishing a revoked token expires the account and preserves the reason", async () => {
+  const context = setup({ refreshAfterAt: new Date(now.getTime() + 60 * 60_000) });
+  const lifecycle = new TokenLifecycleService(context.repository, context.cipher, context.providers);
+  const failure = new ProviderPublishError("Meta invalidated the session after a password change.", false, true);
+  await assert.rejects(() => withFreshAccountToken(lifecycle, "account-1", async () => { throw failure; }), (error) => error === failure);
+  assert.equal(context.account.status, "expired");
+  assert.equal(context.account.connectionError, failure.message);
+  await assert.rejects(() => lifecycle.getValidAccessToken("account-1"), (error) => error instanceof AccountReconnectRequiredError && error.message === failure.message);
+});
+
+test("media and transient publishing failures do not expire authorization", async () => {
+  for (const retryable of [false, true]) {
+    const context = setup({ refreshAfterAt: new Date(now.getTime() + 60 * 60_000) });
+    const lifecycle = new TokenLifecycleService(context.repository, context.cipher, context.providers);
+    await assert.rejects(() => withFreshAccountToken(lifecycle, "account-1", async () => { throw new ProviderPublishError("Media failed", retryable); }));
+    assert.equal(context.account.status, "connected");
+  }
+});
+
+test("an old publish failure cannot invalidate reconnected credentials", async () => {
+  const context = setup({ refreshAfterAt: new Date(now.getTime() + 60 * 60_000) });
+  const lifecycle = new TokenLifecycleService(context.repository, context.cipher, context.providers);
+  await assert.rejects(() => withFreshAccountToken(lifecycle, "account-1", async () => {
+    context.account.accessTokenEncrypted = context.cipher.encrypt("reconnected-token");
+    throw new ProviderPublishError("Old token rejected", false, true);
+  }));
+  assert.equal(context.account.status, "connected");
+  assert.equal(await lifecycle.getValidAccessToken("account-1"), "reconnected-token");
+});
+
+test("a successful in-flight refresh can recover a rejected publish token", async () => {
+  const context = setup();
+  let completeRefresh!: () => void;
+  const gate = new Promise<void>((resolve) => { completeRefresh = resolve; });
+  context.providers.register("tiktok", async () => {
+    await gate;
+    return { accessToken: "access-new", expiresAt: new Date(now.getTime() + 60 * 60_000), refreshAfterAt: new Date(now.getTime() + 50 * 60_000) };
+  });
+  const lifecycle = new TokenLifecycleService(context.repository, context.cipher, context.providers);
+  const refresh = lifecycle.getValidAccessToken("account-1", now);
+  await new Promise((resolve) => setImmediate(resolve));
+  const lease = context.account.refreshLeaseOwner;
+  await lifecycle.markAuthorizationRejected("account-1", "access-old", "Old token rejected", now);
+  assert.equal(context.account.status, "expired");
+  assert.equal(context.account.refreshLeaseOwner, lease);
+  completeRefresh();
+  assert.equal(await refresh, "access-new");
+  assert.equal(context.account.status, "connected");
+  assert.equal(context.account.connectionError, null);
 });

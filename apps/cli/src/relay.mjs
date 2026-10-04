@@ -23,7 +23,9 @@ const commands = new Map(Object.entries({
   "campaigns operate": ["POST", "/api/v1/campaigns/operations"],
   "ideas list": ["GET", "/api/v1/ideas"], "ideas create": ["POST", "/api/v1/ideas"], "ideas update": ["PATCH", "/api/v1/ideas"], "ideas delete": ["DELETE", "/api/v1/ideas", "body-id"],
   "brand-kits list": ["GET", "/api/v1/brands/kit"], "brand-kits set": ["PUT", "/api/v1/brands/kit"],
+  "device-frames list": ["GET", "/api/v1/capabilities?section=device-frames"],
   "capabilities get": ["GET", "/api/v1/capabilities"],
+  "video-composer status": ["GET", "/api/v1/videos/compose"], "videos compose": ["POST", "/api/v1/videos/compose"],
   "videos captions": ["POST", "/api/v1/videos/captions", "body-id"], "videos variants": ["POST", "/api/v1/videos/variants"],
   "analytics creative": ["GET", "/api/v1/analytics/creative"], "analytics timing": ["GET", "/api/v1/analytics/timing"],
   "campaign-recipes list": ["GET", "/api/v1/campaigns/recipes"], "campaign-recipes create": ["POST", "/api/v1/campaigns/recipes"], "campaign-recipes apply": ["POST", "/api/v1/campaigns/recipes"], "campaign-recipes delete": ["DELETE", "/api/v1/campaigns/recipes", "body-id"],
@@ -62,7 +64,9 @@ Resources and actions:
   ideas list|create|update|delete
   brand-kits list|set
   capabilities get
-  videos captions|variants
+  device-frames list   Discover frames, colors, screen geometry and image/video design guidance
+  videos captions|variants|compose
+  video-composer status  Check prompt composition availability and limits
   analytics report|creative|timing
   campaign-recipes list|create|apply|delete
   reports list|create|delete
@@ -72,6 +76,7 @@ Resources and actions:
   health check
 
 All output is JSON. Mutating resource commands accept the same JSON objects as Relay's /api/v1 endpoints.
+Before designing product demos, run device-frames list. Set deviceFrame on timeline.clips[] or slides[].
 Use --compact for one-line output. Repeat --query for filters. Use --help to show this text.`;
 
 function parseArguments(argv) {

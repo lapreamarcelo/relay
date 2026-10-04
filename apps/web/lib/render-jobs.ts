@@ -8,7 +8,7 @@ export async function enqueueRender(ownerId:string,id:string,kind: "render" | "c
     const [row]=await tx<VideoProjectRow[]>`SELECT * FROM video_project WHERE id=${id} AND owner_id=${ownerId} FOR UPDATE`;
     if(!row) throw new Error("Video project not found.");
     const project=serializeVideoProject(row);
-    if(!project.timeline?.clips.length && !project.sourceUrl) throw new Error("Add a source clip before rendering.");
+    if(!project.timeline?.clips.length && !project.timeline?.layers?.length && !project.sourceUrl) throw new Error("Add a source clip before rendering.");
     const [job]=await tx<RenderJobRow[]>`INSERT INTO video_render_job(id,owner_id,project_id,revision,snapshot,kind) VALUES(${crypto.randomUUID()},${ownerId},${id},${row.revision??1},${JSON.stringify(project)}::jsonb,${kind}) ON CONFLICT(project_id,revision,kind) DO UPDATE SET updated_at=video_render_job.updated_at RETURNING *`;
     return {job:serializeRenderJob(job),data:project};
   });

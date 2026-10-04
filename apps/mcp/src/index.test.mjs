@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const expectedTools = [
+  "list_device_frames",
+  "list_video_animations",
+  "get_video_composer", "generate_video_composition",
   "list_campaign_recipes", "save_campaign_recipe", "apply_campaign_recipe", "delete_campaign_recipe",
   "generate_video_captions", "create_video_variants", "creative_analytics", "posting_time_recommendations",
   "list_queues", "save_queue", "fill_queue", "operate_campaign", "list_ideas", "save_idea", "delete_idea", "list_brand_kits", "save_brand_kit", "get_capabilities", "prepare_media_upload",
