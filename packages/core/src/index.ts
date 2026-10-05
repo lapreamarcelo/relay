@@ -331,10 +331,26 @@ export interface VideoClip {
 /** Independently timed visual/audio layer. Array order is back to front. */
 export type VideoLayer = Omit<VideoClip, "transition"> & { startMs: number };
 export interface TimedVideoLabel extends CreativeLabel { startMs: number; endMs: number; animation?: LayerAnimation }
+/** Camera focus in normalized canvas coordinates. Time uses the global timeline clock. */
+export interface VideoCameraKeyframe {
+  timeMs: number;
+  zoom?: number;
+  x?: number;
+  y?: number;
+  easing?: AnimationEasing;
+}
+export interface VideoCamera {
+  /** 1 is the full scene; up to 4 magnifies footage and device frames beneath labels. */
+  zoom: number;
+  x: number;
+  y: number;
+  keyframes?: VideoCameraKeyframe[];
+}
 export interface VideoTimeline {
   version: 1;
   aspectRatio: "9:16" | "4:5" | "1:1" | "16:9";
   background?: { color: string; endColor?: string };
+  camera?: VideoCamera;
   clips: VideoClip[];
   /** Simultaneous overlays above the sequential clips and below timed labels. */
   layers?: VideoLayer[];

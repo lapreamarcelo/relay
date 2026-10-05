@@ -240,12 +240,15 @@ test("an applied generated composition exports a real playable animated MP4", as
   expect(state.patches).toHaveLength(0);
   await page.getByRole("button", { name: "Apply composition", exact: true }).click();
   await page.getByLabel("Label text", { exact: true }).fill("Launch Relay");
+  await page.getByRole("region", { name: "Camera & focus", exact: true }).getByRole("button", { name: "Focus & return", exact: true }).click();
   const dir = await mkdtemp(join(tmpdir(), "relay-composed-export-"));
   let output: Buffer, revision = 0;
   try {
     await page.route("**/api/v1/videos/render", async route => {
       revision = state.project.revision;
       expect(state.project.timeline.labels[0].text).toBe("Launch Relay");
+      expect(state.project.timeline.camera?.keyframes).toHaveLength(4);
+      expect(state.project.timeline.camera?.keyframes?.[1].zoom).toBe(2);
       expect(state.project.timeline.clips[0].deviceFrame?.animation?.keyframes).toHaveLength(2);
       expect(state.project.timeline.clips[1].transition?.kind).toBe("crossfade");
       const document = join(dir, "timeline.json");

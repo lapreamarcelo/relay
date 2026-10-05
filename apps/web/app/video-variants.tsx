@@ -101,7 +101,7 @@ export function VideoVariants({ open, onClose, timeline, save, onSaved, onOpen, 
   };
 
   return <dialog ref={dialog} className="video-variants-dialog" aria-labelledby="video-variants-title" onCancel={event => { event.preventDefault(); if (!pending) onClose(); }}>{open && <>
-    <header><div><p className="eyebrow">Bulk text · up to 20 videos</p><h2 id="video-variants-title">Create text variants</h2><p>Your footage, device animations, label styling and music carry into every version.</p></div><button className="icon-button" aria-label="Close text variants" disabled={pending} onClick={onClose}><X/></button></header>
+    <header><div><p className="eyebrow">Bulk text · up to 20 videos</p><h2 id="video-variants-title">Create text variants</h2><p>Your footage, camera moves, device animations, label styling and music carry into every version.</p></div><button className="icon-button" aria-label="Close text variants" disabled={pending} onClick={onClose}><X/></button></header>
     <div className="video-variants-layout">
       <div className="video-variants-inputs">
         <label>Label to vary<select aria-label="Label to vary" value={target?.id ?? ""} disabled={pending || !timeline.labels.length} onChange={event => setLabelId(event.target.value)}>{timeline.labels.map((label, index) => <option key={label.id} value={label.id}>{index + 1} · {label.text || "Empty label"}</option>)}</select></label>

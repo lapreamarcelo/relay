@@ -38,7 +38,7 @@ test("timeline edits autosave, render asynchronously and hand off to composer",a
  for(let i=0;i<4;i++)await page.getByRole("button",{name:"Undo",exact:true}).click();
  await expect(page.locator(".timeline-clips>button")).toHaveCount(4);
  await page.route("**/api/v1/media",route=>{expect(route.request().postDataJSON().kind).toBe("music");return route.fulfill({json:{key:"music/narration.wav",url:"https://media.example.test/narration.wav",uploadUrl:"https://media.example.test/upload"}});});
- await page.getByRole("button",{name:"Add audio",exact:true}).click();
+ await page.getByRole("button",{name:"Replace audio",exact:true}).click();
  await page.locator('input[type="file"][accept="audio/*"]').setInputFiles({name:"Narration.wav",mimeType:"audio/wav",buffer:Buffer.from("test audio")});
  await expect(page.getByRole("button",{name:"Edit audio: Narration.wav"})).toBeVisible();
  await expect.poll(()=>saved?.timeline.music.name).toBe("Narration.wav");

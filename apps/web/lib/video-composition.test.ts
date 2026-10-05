@@ -91,3 +91,19 @@ test("parallel plans cannot exceed source trims, inject transitions, use invalid
   assert.throws(()=>compileVideoComposition(request,{...plan,layers:[{...layer,startMs:3000}]}),/No composition footage/);
   assert.throws(()=>compileVideoComposition(request,{...plan,layers:Array.from({length:13},()=>layer)}),/12/);
 });
+
+test("composer emits a global zoom/focus camera for unframed footage and rejects invalid focus or timing", () => {
+  const request = compositionFixtureRequest();
+  request.timeline.camera = {zoom:4,x:0,y:0};
+  const plan = compositionFixturePlan();
+  for (const shot of plan.shots) Object.assign(shot,{device:"none",camera:"still",entrance:"none",exit:"none"});
+  const camera = {zoom:1,x:.5,y:.5,keyframes:[{timeMs:0,zoom:1,easing:"ease-in-out"},{timeMs:1500,zoom:2.5,x:.7,y:.3},{timeMs:5000,zoom:1}]};
+  const result = compileVideoComposition(request,{...plan,camera});
+  assert.deepEqual(result.timeline.camera,camera);
+  assert.ok(result.timeline.clips.every(clip => !clip.deviceFrame));
+  assert.equal(compileVideoComposition(request,{...plan,camera:null}).timeline.camera,undefined,"new scenes clear the input camera when no move is requested");
+  for (const invalid of [{...camera,zoom:5},{...camera,x:-.1},{...camera,unknown:true},{...camera,keyframes:[{timeMs:7000,zoom:2}]}]) {
+    assert.throws(()=>compileVideoComposition(request,{...plan,camera:invalid}));
+  }
+  assert.deepEqual(videoComposerCatalog(true).sceneCamera.presets,["zoom-in","zoom-out","focus-return"]);
+});

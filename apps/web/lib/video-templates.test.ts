@@ -61,3 +61,13 @@ test("saved parallel-device templates replace each recording and retain independ
  assert.doesNotThrow(()=>normalizeVideoTimeline(result));
  assert.throws(()=>applySavedVideoTemplate(template,{...replacement,layers:[replacement.layers[0]]}),/2 device layers/);
 });
+
+test("saved cinematic camera tracks scale with replacement scene lifetime without losing nearby keys",()=>{
+ const template={...emptyTimeline(),clips:[clip("one",4000)],camera:{zoom:1,x:.5,y:.5,keyframes:[{timeMs:0,zoom:1,easing:"ease-in-out" as const},{timeMs:1,x:.6},{timeMs:1000,zoom:3},{timeMs:3000,x:.8},{timeMs:4000,zoom:1}]}};
+ const before=structuredClone(template);
+ const result=applySavedVideoTemplate(template,{...emptyTimeline(),clips:[clip("new",2000)]});
+ assert.deepEqual(result.camera?.keyframes?.map(key=>key.timeMs),[0,.5,500,1500,2000]);
+ assert.deepEqual(result.camera?.keyframes?.map(key=>key.zoom),[1,undefined,3,undefined,1]);
+ assert.deepEqual(template,before);
+ assert.doesNotThrow(()=>normalizeVideoTimeline(result));
+});

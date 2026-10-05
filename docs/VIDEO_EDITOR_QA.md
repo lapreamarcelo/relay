@@ -2,6 +2,32 @@
 
 Verified locally on 2026-10-02 against the production Next.js build.
 
+## Shared light/dark appearance — 2026-10-05
+
+The editor now follows the website's `relay-theme` preference instead of always using dark chrome. Its sun/moon control updates the existing website theme state, including Settings → Appearance and persistence across reloads. Light and dark palettes cover the inspector, fields, AI composer, dialogs, playback controls and colored timeline tracks. Media, device frames, titles, canvas backgrounds and exported content keep their saved colors.
+
+**38 affected browser checks passed**, with eight intentional profile-specific skips, against a fresh production build. Four theme checks cover both saved preferences on desktop and mobile, repeated switching, website Settings integration, reload persistence, unchanged video documents/canvas/label markup, device visibility, retained AI brief text and stable viewport geometry. The theme checks were rerun with decoded preview images before screenshot capture. Existing camera, bulk, composer, layout and real MP4 download/playback checks also passed. TypeScript and `git diff --check` passed; both appearance screenshots were inspected.
+
+## Matte-inspired workspace — 2026-10-05
+
+The editor now uses a charcoal workspace, compact neutral inspector panels, orange export and selection accents, and colored footage, camera, device, text and audio tracks, based on the editor shown at [matte.app](https://matte.app/). The inspector has seven section shortcuts; playback adds start/end controls and a compact timecode. Desktop preview/timeline geometry and the independently scrolling inspector remain intact. The underlying project format, render pipeline and MCP authoring interface are unchanged by this visual update.
+
+**66 browser checks passed** against fresh production builds across desktop Chromium and the mobile profile, with eight intentional profile-specific skips. These cover all four aspect ratios at four desktop sizes, settings navigation, start/end transport, empty states, camera focus/keyframes, frames and Duo folding, text/device animations, all clip transitions, multi-device scenes, ten-text bulk batches, save/reload, undo/recovery, audio editing and export/post handoff. Actual production-rendered MP4 downloads and playback passed on both profiles for edited, generated and multi-device demos. TypeScript and `git diff --check` passed; desktop screenshots were inspected and an independent scoped review found no material issue. Tests use local persistence/storage/provider adapters; external publishing and live AI generation were not exercised.
+
+## Animated camera update — 2026-10-04
+
+Camera controls now support 1×–4× scene zoom, canvas focus picking, pans, zoom-in/zoom-out/focus-and-return presets, eased sparse keyframes, and a camera timeline lane. Footage and framed devices move below steady labels. Camera edits survive save/reload, templates, bulk variants and MCP; saved-template replacement retimes the complete camera move. Prompt composition can author a global camera for fullscreen footage or device scenes.
+
+Verification covered **60 affected video browser checks** across desktop Chromium and the mobile profile (eight intentional profile-specific skips), including the existing editor/layout/composer/multi-device/bulk workflows and five new camera checks. Final camera checks were rerun after control naming and fractional-time refinements. They exercise inverse focus picking, zoomed device dragging, undo/redo, eased keyframe editing, save/reload, 100-keyframe limits, and bulk/composer preview parity. Both browser profiles edited a focus-and-return move, downloaded its actual production-rendered MP4 and played it successfully. **42 targeted web tests** and all **four MCP tests** passed. Export tests decode camera endpoints/midpoints, composited Watch placement/size, steady label bounds, unchanged audio/music, dimensions/frame rate/duration, global timing across cuts and 100-keyframe FFmpeg parser support. MCP checks cover discovery, camera schema validation and complete project/template/bulk/render snapshot preservation over stdio and Streamable HTTP. Web/MCP TypeScript and `git diff --check` passed; the camera workspace screenshot was inspected.
+
+These checks use local persistence/storage/provider adapters. No external publishing, cloud configuration or live AI generation is verified by this run.
+
+## Desktop workspace update — 2026-10-04
+
+The desktop preview, playback controls and timeline fit the viewport together. The right inspector independently scrolls through device, clip, text, audio, AI composer and export settings. Selecting a timeline item reveals its settings. Long timelines scroll their tracks internally while keeping the ruler and playhead available; mobile retains ordinary page scrolling.
+
+Five new Playwright checks cover 16 desktop size/aspect-ratio combinations (1280×720, 1366×768, 1440×900 and 1024×600), stationary preview/timeline geometry while the inspector scrolls, clip/audio editing and saving, 12 device tracks with timeline zoom/scroll, empty-project media actions and mobile overflow/editing. Together with the affected existing video suites, **59 browser checks passed**, with five intentional profile-specific skips. The layout and audio workflow checks were rerun on a fresh production build after the final empty-state refinement. The existing suites also exercised text/frame animations, transitions, multi-device scenes, bulk variants, recording playback and real MP4 exports. TypeScript and `git diff --check` passed.
+
 ## Results
 
 The complete Playwright suite passed **105 tests** across desktop Chromium and the Pixel 7 mobile profile. One desktop test was intentionally skipped because it checks the mobile planner. The web unit suite passed **107 tests**, including actual FFmpeg animation/transition/multi-device renders and recording-frame sampling. TypeScript and `git diff --check` passed. Desktop and mobile multi-device and bulk-text screenshots were also inspected.

@@ -84,3 +84,11 @@ test("incoming transitions overlap only half of either adjacent clip and preserv
   assert.equal(normalized.labels[0].animation?.entrance?.preset,"typewriter");
   assert.throws(()=>normalizeVideoTimeline({...base,clips:[{...clips[0],transition:{kind:"invalid",durationMs:100}}]}),/transition/);
 });
+
+test("timeline normalization preserves camera focus and global sparse keyframes", () => {
+ const camera={zoom:1,x:.5,y:.5,keyframes:[{timeMs:0,zoom:1,easing:"ease-in-out"},{timeMs:2500,zoom:3,x:.75},{timeMs:4500,zoom:1}]};
+ const result=normalizeVideoTimeline({...emptyTimeline(),camera});
+ assert.deepEqual(result.camera,camera);
+ assert.equal(normalizeVideoTimeline(emptyTimeline()).camera,undefined);
+ assert.throws(()=>normalizeVideoTimeline({...emptyTimeline(),camera:{zoom:5}}));
+});

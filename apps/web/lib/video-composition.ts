@@ -1,5 +1,6 @@
-import type { AnimationEffect, DeviceFrame, LayerKeyframe, TimedVideoLabel, VideoClip, VideoLayer, VideoTimeline } from "@relay/core";
+import type { AnimationEffect, DeviceFrame, LayerKeyframe, TimedVideoLabel, VideoCamera, VideoClip, VideoLayer, VideoTimeline } from "@relay/core";
 import { animationPresets, transitionKinds } from "./video-animation.ts";
+import { normalizeVideoCamera, videoCameraPresets } from "./video-camera.ts";
 import { deviceFrameDevices } from "./device-frames.ts";
 import { clipSchedule, normalizeVideoTimeline, timelineDuration } from "./video-timeline.ts";
 
@@ -21,7 +22,7 @@ type Camera = typeof cameras[number];
 type Title = { text: string; startMs: number; endMs: number; position: "top" | "middle" | "bottom"; font: "modern" | "editorial" | "mono"; fontSize: number; style: "dark" | "light" | "outline"; entrance: "none" | AnimationEffect["preset"]; exit: "none" | AnimationEffect["preset"] };
 type Shot = { sourceClipId: string; inMs: number; outMs: number; fit: "cover" | "contain"; device: "none" | DeviceFrame["device"]; camera: Camera; position: "center" | "left" | "right"; transition: "none" | NonNullable<VideoClip["transition"]>["kind"]; transitionDurationMs: number; entrance: "none" | Exclude<AnimationEffect["preset"], "typewriter">; exit: "none" | Exclude<AnimationEffect["preset"], "typewriter">; titles: Title[] };
 type CompositionLayer = Shot & { startMs: number; x: number; y: number; scale: number; rotateX: number; rotateY: number; rotateZ: number; volume: number };
-export interface VideoCompositionPlan { summary: string; background: string; backgroundEnd: string; shots: Shot[]; layers?: CompositionLayer[] }
+export interface VideoCompositionPlan { summary: string; background: string; backgroundEnd: string; shots: Shot[]; layers?: CompositionLayer[]; camera?: VideoCamera }
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected a composition object.");
@@ -66,12 +67,13 @@ export const videoCompositionPlanSchema = strictSchema({
   summary: { type: "string", minLength: 1, maxLength: 800 },
   background: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
   backgroundEnd: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+  camera: { anyOf: [{type:"null"}, strictSchema({ zoom: {type:"number",minimum:1,maximum:4}, x: {type:"number",minimum:0,maximum:1}, y: {type:"number",minimum:0,maximum:1}, keyframes: {type:"array",maxItems:100,items:strictSchema({timeMs:integerSchema(0,60000),zoom:{type:"number",minimum:1,maximum:4},x:{type:"number",minimum:0,maximum:1},y:{type:"number",minimum:0,maximum:1},easing:enumSchema(["linear","ease-in","ease-out","ease-in-out"])})} })] },
   shots: { type: "array", minItems: 0, maxItems: 12, items: strictSchema(shotProperties) },
   layers: { type: "array", maxItems: 12, items: strictSchema({ ...layerProperties, device: enumSchema(deviceFrameDevices), startMs: integerSchema(0, 59900), x: { type: "number", minimum: 0, maximum: 1 }, y: { type: "number", minimum: 0, maximum: 1 }, scale: { type: "number", minimum: .25, maximum: 1.5 }, rotateX: { type: "number", minimum: -60, maximum: 60 }, rotateY: { type: "number", minimum: -60, maximum: 60 }, rotateZ: { type: "number", minimum: -180, maximum: 180 }, volume: { type: "number", minimum: 0, maximum: 1 } }) },
 });
 
 function normalizePlan(raw: unknown): VideoCompositionPlan {
-  const plan = object(raw); keys(plan, ["summary", "background", "backgroundEnd", "shots", "layers"]);
+  const plan = object(raw); keys(plan, ["summary", "background", "backgroundEnd", "shots", "layers", "camera"]);
   const color = (value: unknown) => { if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error("Composition backgrounds require six-digit hex colors."); return value.toUpperCase(); };
   if (!Array.isArray(plan.shots) || plan.shots.length > 12 || (plan.layers !== undefined && (!Array.isArray(plan.layers) || plan.layers.length > 12))) throw new Error("Compose up to 12 shots and 12 device layers.");
   const normalizeShot = (rawShot: unknown): Shot => {
@@ -96,7 +98,7 @@ function normalizePlan(raw: unknown): VideoCompositionPlan {
     return { ...normalizeShot({ ...shot, position: "center", transition: "none", transitionDurationMs: 400 }), startMs: number(startMs, "Layer start", 0, 59900), x: scalar(x, "x", 0, 1), y: scalar(y, "y", 0, 1), scale: scalar(scale, "scale", .25, 1.5), rotateX: scalar(rotateX, "rotation X", -60, 60), rotateY: scalar(rotateY, "rotation Y", -60, 60), rotateZ: scalar(rotateZ, "rotation Z", -180, 180), volume: scalar(volume, "volume", 0, 1) } satisfies CompositionLayer;
   });
   if (!shots.length && !layers.length) throw new Error("Compose at least one shot or device layer.");
-  return { summary: text(plan.summary, "Summary", 1, 800), background: color(plan.background), backgroundEnd: color(plan.backgroundEnd), shots, layers };
+  return { summary: text(plan.summary, "Summary", 1, 800), background: color(plan.background), backgroundEnd: color(plan.backgroundEnd), shots, layers, ...(plan.camera == null ? {} : {camera:normalizeVideoCamera(plan.camera)}) };
 
 }
 function effect(preset: "none" | AnimationEffect["preset"], duration: number) {
@@ -138,7 +140,7 @@ export function compileVideoComposition(request: VideoCompositionRequest, rawPla
     return { ...source, id: crypto.randomUUID(), inMs: shot.inMs, outMs: shot.outMs, fit: shot.fit, deviceFrame: frameFor(shot, plan), transition: shot.transition === "none" ? undefined : { kind: shot.transition, durationMs: shot.transitionDurationMs, easing: "ease-in-out" as const } };
   };
   const clips = plan.shots.map(compileShot);
-  let timeline: VideoTimeline = { ...request.timeline, layers: [], background: { color: plan.background, endColor: plan.backgroundEnd }, clips, labels: [], coverMs: 0 };
+  let timeline: VideoTimeline = { ...request.timeline, camera: plan.camera, layers: [], background: { color: plan.background, endColor: plan.backgroundEnd }, clips, labels: [], coverMs: 0 };
   // Cut excess output on the overlap-aware clock; never stretch or fetch new footage.
   if (timelineDuration(timeline) > request.durationMs) {
     const schedule = clipSchedule(timeline);
@@ -175,6 +177,7 @@ export function compileVideoComposition(request: VideoCompositionRequest, rawPla
   if (layers.length) timeline.layers = layers; else delete timeline.layers;
   const schedule = clipSchedule(timeline);
   const actualDuration = timelineDuration(timeline);
+  if (plan.camera?.keyframes?.some(frame => frame.timeMs > actualDuration)) throw new Error("Camera keyframe timing exceeds the composed video.");
   const entries = [...schedule.map((entry,index) => ({...entry, shot:plan.shots[index], titleEnd:schedule[index+1]?.startMs ?? actualDuration})), ...layers.map((clip,index) => ({clip,startMs:clip.startMs,endMs:clip.startMs+clip.outMs-clip.inMs,shot:layerPlans[index],titleEnd:clip.startMs+clip.outMs-clip.inMs}))];
   for (const entry of entries) {
     const shot = entry.shot;
@@ -195,5 +198,5 @@ export function compileVideoComposition(request: VideoCompositionRequest, rawPla
 }
 
 export function videoComposerCatalog(available: boolean) {
-  return { version: 1, available, provider: "openai" as const, endpoint: "/api/v1/videos/compose", previewOnly: true, limits: { promptCharacters: [10, 4000], productNameCharacters: 120, durationMs: [1000, 60000], shots: 12, deviceLayers: 12, titlesPerShot: 2, sampledSources: 4, thumbnailsPerSource: 2 }, parallelDeviceLayers: true, layerOrder: "Back-to-front layers above sequential clips; text labels are topmost. startMs is timeline time; inMs/outMs are source trims and animation is local to the layer.", cameraPresets: cameras, devices: ["none", ...deviceFrameDevices], transitions: ["none", ...transitionKinds], textAnimations: ["none", ...animationPresets], workflow: "Submit selected footage and a prompt. Review the returned editable timeline, then apply/save it separately. No rendering, persistence, or publishing occurs during composition.", grounding: "Only selected sourceClipId and trim ranges are allowed. Titles must follow the prompt or visible product evidence. Sampling limitations and duration mismatches return warnings." };
+  return { version: 1, available, provider: "openai" as const, endpoint: "/api/v1/videos/compose", previewOnly: true, limits: { promptCharacters: [10, 4000], productNameCharacters: 120, durationMs: [1000, 60000], shots: 12, deviceLayers: 12, titlesPerShot: 2, sampledSources: 4, thumbnailsPerSource: 2 }, parallelDeviceLayers: true, layerOrder: "Back-to-front layers above sequential clips; text labels are topmost. startMs is timeline time; inMs/outMs are source trims and animation is local to the layer.", cameraPresets: cameras, sceneCamera: { presets: videoCameraPresets, zoom: [1,4], focus: [0,1], keyframes:100, timing:"Global timeline milliseconds; composited footage/device frames zoom below steady text labels." }, devices: ["none", ...deviceFrameDevices], transitions: ["none", ...transitionKinds], textAnimations: ["none", ...animationPresets], workflow: "Submit selected footage and a prompt. Review the returned editable timeline, then apply/save it separately. No rendering, persistence, or publishing occurs during composition.", grounding: "Only selected sourceClipId and trim ranges are allowed. Titles must follow the prompt or visible product evidence. Sampling limitations and duration mismatches return warnings." };
 }

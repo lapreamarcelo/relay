@@ -14,6 +14,7 @@ import { deviceBackgroundSvg, deviceFrameLayerSvg } from "./device-frames";
 import { deviceVideoSceneFilter } from "./device-motion";
 import { animatedLabelsMarkup } from "./animated-label-markup";
 import { timelineJoinFilter } from "./video-transition";
+import { videoCameraFilter } from "./video-camera";
 import { getR2Client, getR2Config, publicObjectUrl } from "./r2";
 
 function allowedAssetUrl(value: string): boolean {
@@ -196,6 +197,12 @@ async function renderTimeline(input: { projectId: string; timeline: VideoTimelin
     if (layers.length) {
       filters.push(`${layerAudio.map(name=>`[${name}]`).join("")}amix=inputs=${layerAudio.length}:duration=first:normalize=0[alayers]`);
       audio="alayers";
+    }
+    // The scene camera moves the composited footage and all device layers
+    // together. Text remains screen-aligned and audio retains its original time.
+    if (timeline.camera) {
+      filters.push(`[${video}]${videoCameraFilter(timeline.camera,width,height)}[vcamera]`);
+      video = "vcamera";
     }
     // Each label is composited only for its own half-open time interval.
     const animated = timeline.labels.some(label => label.animation && (label.animation.entrance || label.animation.exit || label.animation.keyframes?.length));

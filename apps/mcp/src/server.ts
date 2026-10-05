@@ -65,6 +65,19 @@ const animationSchema = (device = false) => z.object({
   keyframes: z.array(z.object({ timeMs: z.number().min(0).max(900000), easing: animationEasingSchema.optional().describe("Easing toward the next keyframe, linear by default."), x: z.number().min(0).max(1).optional(), y: z.number().min(0).max(1).optional(), scale: z.number().min(device ? .25 : .1).max(device ? 1.5 : 3).optional(), rotateZ: z.number().min(-180).max(180).optional(), opacity: z.number().min(0).max(1).optional(), ...(device ? { rotateX: z.number().min(-60).max(60).optional(), rotateY: z.number().min(-60).max(60).optional(), foldAngle: z.number().min(0).max(165).optional().describe("Duo only.") } : {}) }).strict()).max(100).optional().describe("Sparse property keyframes, unique increasing times in local layer milliseconds."),
 }).strict();
 const clipTransitionSchema = z.object({ kind: z.enum(["crossfade", "slide-left", "slide-right", "wipe-left", "wipe-right", "zoom"]), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional() }).strict();
+const cameraKeyframeSchema = z.object({
+  timeMs: z.number().min(0).max(900000),
+  zoom: z.number().min(1).max(4).optional(),
+  x: z.number().min(0).max(1).optional(),
+  y: z.number().min(0).max(1).optional(),
+  easing: animationEasingSchema.optional().describe("Easing toward the next keyframe; linear by default."),
+}).strict().refine(frame => frame.zoom !== undefined || frame.x !== undefined || frame.y !== undefined, "Each camera keyframe needs zoom or a focus coordinate.");
+const videoCameraSchema = z.object({
+  zoom: z.number().min(1).max(4).default(1).describe("1 shows the full canvas; up to 4 magnifies footage and device frames. Labels stay steady."),
+  x: z.number().min(0).max(1).default(.5).describe("Horizontal focus point on the unzoomed canvas. Edge focus clamps to avoid blank borders."),
+  y: z.number().min(0).max(1).default(.5).describe("Vertical focus point on the unzoomed canvas."),
+  keyframes: z.array(cameraKeyframeSchema).max(100).optional().describe("Unique increasing times on the global timeline clock, independent of source trims. Sparse properties interpolate from the base pose and hold their last value."),
+}).strict().refine(camera => (camera.keyframes ?? []).every((frame, index, frames) => index === 0 || frame.timeMs > frames[index - 1].timeMs), "Camera keyframe times must be unique and increasing.");
 
 const deviceFrameSchemaBase = z.object({
   animation: animationSchema(true).optional().describe("Frame entrance/exit and keyframes in local clip time. Call list_video_animations for examples."),
@@ -352,6 +365,7 @@ const videoClipSchema = z.object({ transition: clipTransitionSchema.optional().d
 const videoLayerSchema = videoClipSchema.omit({transition:true}).extend({startMs:z.number().min(0).max(899900).describe("Timeline start in milliseconds; duration is outMs-inMs. Source and animation clocks restart locally.")}).strict();
 
 const timelineSchema = z.object({
+  camera: videoCameraSchema.optional().describe("Animated camera zoom, focus and pans across the composed footage/devices below labels. Call list_video_animations for camera limits and cinematic examples. Omit to disable."),
   background: z.object({color:z.string().regex(/^#[0-9A-Fa-f]{6}$/),endColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional()}).optional().describe("Canvas background; overrides frame background, visible around contain-fit media."),
   version: z.literal(1), aspectRatio: z.enum(["9:16", "4:5", "1:1", "16:9"]),
   clips: z.array(videoClipSchema).max(50),
@@ -368,7 +382,7 @@ const videoSchema = z.object({
 
 server.registerTool("list_videos", { description: "List editable video projects or retrieve one complete project by id, including timeline, timed labels, device motion, background, audio and revision. Retrieve before updating with save_video.", inputSchema: { id: z.string().optional() } }, async ({ id }) => result(await relay(`/api/v1/videos${id ? `?id=${encodeURIComponent(id)}` : ""}`)));
 
-server.registerTool("save_video", { description: "Create or update an editable video timeline: sequential clips, independent simultaneous device layers (for Watch+iPhone or multiple Watches), transitions, crops, animated timed text, audio, device pose/motion and Duo folding. Labels and device frames accept entrance/exit effects and eased keyframes. Pass the retrieved revision to detect conflicts. Call list_device_frames and list_video_animations before composing; all edits remain editable in the browser.", inputSchema: videoSchema.shape }, async (video) => result(await relay("/api/v1/videos", { method: video.id ? "PATCH" : "POST", body: JSON.stringify(video) })));
+server.registerTool("save_video", { description: "Create or update an editable video timeline: sequential clips, independent simultaneous device layers (for Watch+iPhone or multiple Watches), transitions, crops, animated timed text, audio, device pose/motion, Duo folding and global camera zoom/focus/pans. Labels and device frames accept entrance/exit effects and eased keyframes. Pass the retrieved revision to detect conflicts. Call list_device_frames and list_video_animations before composing; all edits remain editable in the browser.", inputSchema: videoSchema.shape }, async (video) => result(await relay("/api/v1/videos", { method: video.id ? "PATCH" : "POST", body: JSON.stringify(video) })));
 server.registerTool("get_video_composer", { description: "Check whether prompt-based video composition is configured and discover its limits. Requires videos:read; never returns provider credentials." }, async () => result(await relay("/api/v1/videos/compose")));
 server.registerTool("generate_video_composition", {
   description: "Turn a prompt and existing footage into an editable promotional timeline through the workspace's configured OpenAI account. Sends the prompt and bounded recording frames to OpenAI. Returns a preview only: review the timeline, then use save_video with the current project revision to apply it. Never saves, renders, or publishes by itself. Requires videos:write; check get_video_composer first.",
@@ -483,7 +497,7 @@ server.registerTool("delete_idea",{description:"Permanently delete an idea.",inp
 server.registerTool("list_brand_kits",{description:"Read brand colors, text styles, logo URLs, voice and guidelines."},async()=>result(await relay("/api/v1/brands/kit")));
 server.registerTool("save_brand_kit",{description:"Replace a brand's reusable creative and writing guidelines.",inputSchema:{id:z.string().min(1),kit:z.object({textColor:z.string().optional(),backgroundColor:z.string().optional(),font:z.enum(["modern","editorial","mono"]).optional(),logoUrl:z.string().optional(),voice:z.string().max(5000).optional(),guidelines:z.string().max(10000).optional(),defaultCta:z.string().max(500).optional()})}},async(input)=>result(await relay("/api/v1/brands/kit",{method:"PUT",body:JSON.stringify(input)})));
 server.registerTool("list_device_frames",{description:"Discover built-in device frames for images and videos, including iPhone Duo, pose and motion controls, backgrounds, screen geometry per aspect ratio, examples and design constraints. No AI keys required. Use before composing product demos."},async()=>result(await relay("/api/v1/capabilities?section=device-frames")));
-server.registerTool("list_video_animations",{description:"Discover text/frame entrance and exit effects, typewriter, keyframes/easing, clip overlap transitions, timing rules and editable project examples."},async()=>result(await relay("/api/v1/capabilities?section=video-animation")));
+server.registerTool("list_video_animations",{description:"Discover text/frame entrance and exit effects, typewriter, keyframes/easing, clip overlap transitions, cinematic camera zoom/focus/pans, timing rules and editable project examples."},async()=>result(await relay("/api/v1/capabilities?section=video-animation")));
 server.registerTool("get_capabilities",{description:"Discover API version, authenticated scopes, creative workflow limits and the device-frame design catalog."},async()=>result(await relay("/api/v1/capabilities")));
 server.registerTool("prepare_media_upload",{description:"Get a signed upload URL. Upload bytes with HTTP PUT from the agent's environment, then use the returned media URL.",inputSchema:{fileName:z.string().min(1),contentType:z.string().min(1),kind:z.enum(["media","music"]).default("media"),projectId:z.string().optional()}},async(input)=>result(await relay("/api/v1/media",{method:"POST",body:JSON.stringify(input)})));
 

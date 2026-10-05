@@ -105,10 +105,20 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
     assert.equal(catalog.parallelLayers.maximum, 12);
     const animations = (await call("list_video_animations")).data;
     assert.ok(animations.textPresets.includes("typewriter")); assert.ok(animations.transitionKinds.includes("crossfade"));
+    assert.deepEqual(animations.camera.presets, ["zoom-in", "zoom-out", "focus-return"]);
+    assert.deepEqual(animations.camera.zoom, [1, 4]);
+    assert.equal(animations.examples.camera.keyframes.at(-1).zoom, 1);
+    assert.ok(tools.find(tool => tool.name === "save_video").inputSchema.properties.timeline.properties.camera);
     await call("get_capabilities");
     const upload = await call("prepare_media_upload", { fileName: "screen.mp4", contentType: "video/mp4" });
     assert.equal(upload.url, "https://media.example.test/screen.mp4");
     const timeline = { version: 1, aspectRatio: "9:16", background: { color: "#112233", endColor: "#445566" }, clips: [{ id: "recording", name: "My app", sourceUrl: upload.url, kind: "video", inMs: 1000, outMs: 6000, sourceDurationMs: 8000, fit: "contain", x: .4, y: .6, zoom: 1.2, volume: .35, deviceFrame: { device: "iphone-duo", color: "#171717", background: "#223344", x: .55, y: .45, scale: .85, rotateX: -8, rotateY: 15, rotateZ: -6, foldAngle: 150, motion: "fold-cycle", motionDurationMs: 2000 } }], labels: [{ id: "hook", text: "Meet my app", x: .4, y: .2, width: .7, height: .15, fontSize: 64, font: "editorial", textColor: "#FFFFFF", background: "dark", backgroundColor: "#332211", style: "dark", startMs: 500, endMs: 3500 }], music: { url: "https://media.example.test/music.wav", name: "Launch music", startMs: 1000, endMs: 4000, offsetMs: 250, volume: .45, fadeInMs: 500, fadeOutMs: 600 }, coverMs: 1500 };
+    timeline.camera = { zoom: 1, x: .5, y: .5, keyframes: [
+      {timeMs:0,zoom:1,x:.5,y:.5,easing:"ease-in-out"},
+      {timeMs:1000,zoom:2.5,x:.7,y:.3},
+      {timeMs:3000,x:.3,y:.7,easing:"ease-out"},
+      {timeMs:4000,zoom:1,x:.5,y:.5},
+    ] };
     timeline.clips[0].deviceFrame.motionEasing = "ease-in-out";
     timeline.clips[0].deviceFrame.animation = { entrance: { preset: "slide-up", durationMs: 500 }, exit: { preset: "fade", durationMs: 400 }, keyframes: [{ timeMs: 0, x: .4, foldAngle: 0, easing: "ease-in-out" }, { timeMs: 2000, x: .6, foldAngle: 150, opacity: .8 }] };
     timeline.labels[0].animation = { entrance: { preset: "typewriter", durationMs: 800, easing: "linear" }, exit: { preset: "pop", durationMs: 400 }, keyframes: [{ timeMs: 0, scale: .8 }, { timeMs: 1500, scale: 1.2, rotateZ: 12 }] };
@@ -138,6 +148,18 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
     const conflict = await client.callTool({ name: "save_video", arguments: stale });
     assert.equal(conflict.isError, true);
     assert.match(conflict.content[0].text, /Project changed/);
+    const beforeInvalidCamera = calls.filter(call => call.path === "/api/v1/videos").length;
+    for (const camera of [
+      {...timeline.camera, zoom: 4.1}, {...timeline.camera, x: -1}, {...timeline.camera, expression: "unsafe"},
+      {...timeline.camera, keyframes: [{timeMs:1,zoom:2},{timeMs:1,x:.7}]},
+      {...timeline.camera, keyframes: [{timeMs:1,easing:"linear"}]},
+      {...timeline.camera, keyframes: [{timeMs:1,zoom:2,easing:"bounce"}]},
+      {...timeline.camera, keyframes: Array.from({length:101},(_,timeMs)=>({timeMs,zoom:2}))},
+    ]) {
+      const invalidCamera = await client.callTool({name:"save_video", arguments:{...project,timeline:{...project.timeline,camera}}});
+      assert.equal(invalidCamera.isError,true);
+    }
+    assert.equal(calls.filter(call => call.path === "/api/v1/videos").length,beforeInvalidCamera,"invalid cameras are rejected before API writes");
     const beforeInvalidLayer = calls.filter(call=>call.path==="/api/v1/videos").length;
     const invalidLayer = await client.callTool({name:"save_video",arguments:{name:"Unsafe layer",timeline:{...project.timeline,layers:[{...project.timeline.layers[0],transition:{kind:"crossfade",durationMs:500}}]}}});
     assert.equal(invalidLayer.isError,true);

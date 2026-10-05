@@ -2,6 +2,7 @@ import type { VideoClip, VideoLayer, VideoTimeline } from "@relay/core";
 import { normalizeCreativeLabels } from "./creative-labels.ts";
 import { normalizeClipTransition, normalizeLayerAnimation } from "./video-animation.ts";
 import { normalizeDeviceFrame } from "./device-frames.ts";
+import { normalizeVideoCamera } from "./video-camera.ts";
 
 export const videoSizes = { "9:16": [1080, 1920], "4:5": [1080, 1350], "1:1": [1080, 1080], "16:9": [1920, 1080] } as const;
 /** Incoming transitions overlap the preceding clip. Half-duration caps keep
@@ -78,7 +79,8 @@ export function normalizeVideoTimeline(value: unknown): VideoTimeline {
     const color = (value: unknown) => { if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error("Background colors must be six-digit hex colors."); return value.toUpperCase(); };
     background = { color: color(b.color), ...(b.endColor === undefined ? {} : { endColor: color(b.endColor) }) };
   }
-  return { version: 1, aspectRatio: v.aspectRatio as VideoTimeline["aspectRatio"], ...(background ? { background } : {}), clips, ...(layers === undefined ? {} : {layers}), labels, music: { url: url(music.url,true), ...(musicName ? { name: musicName } : {}), volume: number(music.volume,0,1,.8), offsetMs: number(music.offsetMs,0,3_600_000,0), fadeInMs: number(music.fadeInMs,0,900_000,0), fadeOutMs: number(music.fadeOutMs,0,900_000,0), ...(hasMusicRange ? { startMs: musicStartMs, endMs: musicEndMs } : {}) }, coverMs: number(v.coverMs,0,Math.max(0,duration-1),0) };
+  const camera = normalizeVideoCamera(v.camera);
+  return { version: 1, aspectRatio: v.aspectRatio as VideoTimeline["aspectRatio"], ...(background ? { background } : {}), ...(camera ? {camera} : {}), clips, ...(layers === undefined ? {} : {layers}), labels, music: { url: url(music.url,true), ...(musicName ? { name: musicName } : {}), volume: number(music.volume,0,1,.8), offsetMs: number(music.offsetMs,0,3_600_000,0), fadeInMs: number(music.fadeInMs,0,900_000,0), fadeOutMs: number(music.fadeOutMs,0,900_000,0), ...(hasMusicRange ? { startMs: musicStartMs, endMs: musicEndMs } : {}) }, coverMs: number(v.coverMs,0,Math.max(0,duration-1),0) };
 }
 export function splitVideoClip(timeline: VideoTimeline, id: string, localMs: number): VideoTimeline {
   const index = timeline.clips.findIndex(c => c.id === id); const clip = timeline.clips[index];

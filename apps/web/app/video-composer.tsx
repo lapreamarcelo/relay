@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import type { VideoTimeline } from "@relay/core";
 import { ChevronDown, LoaderCircle, Sparkles, X } from "lucide-react";
 import { clipSchedule, layerSchedule, normalizeVideoTimeline, timelineDuration, videoSizes } from "../lib/video-timeline";
+import { videoCameraTransform } from "../lib/video-camera";
 import { animationEase } from "../lib/video-animation";
 import { animatedLabelsMarkup } from "../lib/animated-label-markup";
 import { DeviceFramePreview } from "./device-frame-controls";
@@ -36,7 +37,7 @@ export function CompositionPreview({ timeline, timeMs, label = "Generated compos
   const color = timeline.background?.color ?? active.at(-1)?.clip.deviceFrame?.background ?? "#000000";
   const endColor = timeline.background ? timeline.background.endColor : active.at(-1)?.clip.deviceFrame?.backgroundEnd;
   return <div className="video-composer-canvas" style={{ background: endColor ? `linear-gradient(135deg,${color},${endColor})` : color, aspectRatio: `${width}/${height}`, width: `min(100%, ${300 * width / height}px)` }} aria-label={label}>
-    {[...active,...layers].map((entry, index) => {
+    <div className="video-camera-scene" data-camera-preview style={{transform:videoCameraTransform(timeline.camera,timeMs),background:endColor ? `linear-gradient(135deg,${color},${endColor})` : color}}>{[...active,...layers].map((entry, index) => {
       const clip = entry.clip, local = timeMs - entry.startMs, kind = incoming?.clip.transition?.kind;
       const style: CSSProperties = {};
       const overlay = index >= active.length;
@@ -52,7 +53,7 @@ export function CompositionPreview({ timeline, timeMs, label = "Generated compos
           {clip.kind === "video" ? <video src={clip.sourceUrl} muted playsInline preload="metadata" style={{ objectFit: clip.fit, objectPosition: `${clip.x * 100}% ${clip.y * 100}%`, transform: clip.fit === "cover" ? `scale(${clip.zoom})` : undefined, transformOrigin: `${clip.x * 100}% ${clip.y * 100}%` }} /> : <img src={clip.sourceUrl} alt="" style={{ objectFit: clip.fit, objectPosition: `${clip.x * 100}% ${clip.y * 100}%`, transform: clip.fit === "cover" ? `scale(${clip.zoom})` : undefined, transformOrigin: `${clip.x * 100}% ${clip.y * 100}%` }} />}
         </DeviceFramePreview>
       </div>;
-    })}
+    })}</div>
     <div className="timeline-label-preview" aria-hidden="true" dangerouslySetInnerHTML={{ __html: animatedLabelsMarkup(timeline.labels, timeMs, width, height) }} />
   </div>;
 }

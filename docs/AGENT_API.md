@@ -520,7 +520,29 @@ Duo divides **one recording** across the left and right hinged panels. It does n
 
 Optional `timeline.background: {"color":"#182422","endColor":"#537C68"}` applies a solid or diagonal gradient to the whole video, overriding each frame's background. For unframed media choose `contain` to expose the background; `cover` fills the output. Per-frame `backgroundEnd` adds a gradient when no timeline background is set.
 
-Slideshow frames support static devices/colors/gradients. Device pose and animation require a video timeline; still-image clips inside video timelines support them. Unsupported slideshow animation is rejected. Custom frame assets, image/video backgrounds, separate camera tracks, custom Bezier curves, lighting and depth of field are not implemented. Settings survive saved templates and hook variants; saved-template footage replacement rescales frame keyframe times to clip lifetime and label keyframe times to the remapped label lifetime. Legacy single-source recipes and `videos batch` do not apply frames. Use timeline projects and `videos variants` for framed variants.
+Slideshow frames support static devices/colors/gradients. Device pose and animation require a video timeline; still-image clips inside video timelines support them. Unsupported slideshow animation is rejected. Custom frame assets, image/video backgrounds, custom Bezier curves, lighting and depth of field are not implemented. Settings survive saved templates and hook variants; saved-template footage replacement rescales frame keyframe times to clip lifetime, label keyframe times to the remapped label lifetime, and global camera keyframe times to the new scene lifetime. Legacy single-source recipes and `videos batch` do not apply frames. Use timeline projects and `videos variants` for framed variants.
+
+### Camera zoom, focus and pans
+
+Use `timeline.camera` to highlight a feature with a zoom-in, pan between details, hold a close-up and zoom back out. It transforms the composed clips/device layers below steady labels. It supports fullscreen recordings, Watch/iPhone scenes and images; audio and source trims are unchanged. The browser's **Camera & focus** controls edit the same document. `list_video_animations` exposes the camera contract and examples, and `save_video`/`save_video_template` accept it through both MCP transports. Prompt composition can also return a camera track.
+
+`zoom` is 1–4 (1 shows the whole scene); `x`/`y` are 0–1 focus coordinates on the unzoomed output canvas. Focus centers the viewport where possible and clamps near edges to avoid exposing blank borders. These coordinates are independent of source crop and device position. Up to 100 sparse keyframes use unique increasing `timeMs` in 0–900000 on the **global assembled timeline clock**, continuous across cuts and overlapping transitions. Include zoom or a focus coordinate in every key. Missing properties interpolate independently from the base pose; the last value holds. Easing belongs to the departing key and defaults to linear. Unknown camera fields and invalid values are rejected. Keep keys inside the scene lifetime to see them.
+
+Retrieve the complete project and revision before updating it. Add this camera to its timeline, keeping its clips, labels, layers and music. This four-second focus move zooms into the upper-right feature, holds, then returns to the full scene:
+
+```json
+{
+  "zoom": 1, "x": 0.5, "y": 0.5,
+  "keyframes": [
+    {"timeMs": 0, "zoom": 1, "x": 0.5, "y": 0.5, "easing": "ease-in-out"},
+    {"timeMs": 1000, "zoom": 2.5, "x": 0.7, "y": 0.35},
+    {"timeMs": 3000, "zoom": 2.5, "x": 0.7, "y": 0.35, "easing": "ease-in-out"},
+    {"timeMs": 4000, "zoom": 1, "x": 0.5, "y": 0.5}
+  ]
+}
+```
+
+Save through MCP `save_video`, preview/scrub in the editor, enqueue with `render_video` and poll `get_video_render_job`. Rendering captures the saved camera at that revision. Bulk text variants preserve the camera track, and saved templates retime it with replacement footage. Manual/MCP camera edits need no AI provider key.
 
 ### Text, frame animation and transitions
 

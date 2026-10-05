@@ -1,4 +1,4 @@
-import type { LayerAnimation, VideoTimeline } from "@relay/core";
+import type { LayerAnimation, VideoCameraKeyframe, VideoTimeline } from "@relay/core";
 import { clipSchedule, timelineDuration } from "./video-timeline.ts";
 export const videoTemplateCatalog = [
  {id:"hook-demo-cta",name:"Hook → demo → CTA",description:"Open with a promise, show the product, close with an action.",slots:["Your opening hook","Show it in action","Try it today"]},
@@ -63,5 +63,16 @@ export function applySavedVideoTemplate(template: VideoTimeline, replacement: Vi
   const startMs=mapTime(label.startMs),endMs=mapTime(label.endMs);
   return {...structuredClone(label),id:crypto.randomUUID(),startMs,endMs,...(label.animation ? {animation:remapAnimation(label.animation,label.endMs-label.startMs,endMs-startMs)} : {})};
  }).filter(label=>label.endMs>label.startMs);
- return {...structuredClone(template),clips,...(layers ? {layers} : {}),coverMs:Math.max(0,Math.min(duration-1,mapTime(template.coverMs))),labels};
+ const camera=template.camera ? structuredClone(template.camera) : undefined;
+ if(camera?.keyframes) {
+  // Camera time is global: resize the complete move with the new scene lifetime.
+  // Keep fractions so very short replacements do not collapse neighboring keys.
+  const keys=new Map<number,VideoCameraKeyframe>();
+  for(const key of camera.keyframes) {
+   const timeMs=Math.min(900000,key.timeMs*duration/Math.max(1,oldDuration));
+   keys.set(timeMs,{...keys.get(timeMs),...key,timeMs});
+  }
+  camera.keyframes=[...keys.values()];
+ }
+ return {...structuredClone(template),...(camera ? {camera} : {}),clips,...(layers ? {layers} : {}),coverMs:Math.max(0,Math.min(duration-1,mapTime(template.coverMs))),labels};
 }

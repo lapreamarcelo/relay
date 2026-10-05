@@ -4,13 +4,15 @@ Relay now stores editable, versioned video timelines. The browser, REST API, CLI
 
 ## Editing and rendering
 
-Video Studio supports a sequential track of up to 50 videos/images, split/trim/reorder/duplicate, clip transitions, crop positioning and zoom, four aspect ratios, solid/gradient canvas backgrounds, device pose/rotation/scale and motion (including Duo folding), animated timed text and frames, eased keyframes, music volume/offset/fades, undo/redo, autosave, local recovery and cover-frame selection. Subtitles can be imported/exported as SRT. The editor offers Media, Audio, Text and a **Bulk text** panel above the video preview. Audio can be uploaded or chosen from the library, then moved and trimmed on the timeline with source offset, volume, and fade controls. One audio track loops within its selected range; original clip audio remains independently adjustable.
+Video Studio supports a sequential track of up to 50 videos/images, split/trim/reorder/duplicate, clip transitions, crop positioning and zoom, animated scene camera zoom/focus/pans, four aspect ratios, solid/gradient canvas backgrounds, device pose/rotation/scale and motion (including Duo folding), animated timed text and frames, eased keyframes, music volume/offset/fades, undo/redo, autosave, local recovery and cover-frame selection. Subtitles can be imported/exported as SRT. The editor offers Media, Audio, Text and a **Bulk text** panel above the video preview. Audio can be uploaded or chosen from the library, then moved and trimmed on the timeline with source offset, volume, and fade controls. One audio track loops within its selected range; original clip audio remains independently adjustable.
 
 Rendering runs in a separate `renderer` service, with a persisted job, progress, cancellation and retry. A job captures the exact project revision. Updating a project does not change previously rendered URLs or posts already using them. MP4s and JPEG covers are added to the Media library. **Save & download** saves the MP4 to Media and downloads it without opening the composer. **Create post** prepares the video and opens the composer. Completed exports also offer Download MP4 and Preview export. The cover passes into the composer for destinations that support custom images or frame offsets.
 
 `GET /api/v1/videos/download?jobId=JOB_ID` streams a completed render as an MP4 attachment, scoped to the authenticated owner (`videos:read` for API keys).
 
 The original synchronous render endpoint remains compatible with existing integrations. New integrations should request asynchronous rendering, poll the job, and create the post only after completion. Legacy batch rendering remains synchronous; `videos variants` provides editable variants with queued rendering.
+
+Camera moves highlight details in an app recording or pan between framed devices. In **Camera & focus**, choose a focus point, adjust 1×–4× zoom, use a zoom-in/zoom-out/focus-and-return preset or capture keyframes at the playhead. Footage and device frames move together beneath steady text. Camera time is global and continues across cuts; it is preserved in bulk variants and retimed in saved templates. See [the MCP camera contract and example](AGENT_API.md#camera-zoom-focus-and-pans).
 
 ## Deploying
 
@@ -254,7 +256,8 @@ Research checked October 2, 2026: [prompt-to-launch demo](https://x.com/josesaez
 | Automatic captions | Existing optional transcription job; editable labels, not on-device |
 | Presets | Existing templates/variants and per-clip motion presets |
 | Keyframes and easing | Sparse property keyframes with linear/ease-in/ease-out/ease-in-out interpolation |
-| Custom curves, camera tracks and Director | Future work |
+| Camera zoom/focus/pans | Global camera keyframes, presets, canvas focus picking and MCP authoring |
+| Custom curves and Director | Future work |
 | Auto Zoom, cursor/gesture/tap/pinch/keystroke effects | Future work |
 | Censor/blur | Future work |
 | Motion blur, depth of field, bloom, lighting and 3D text | Future work |
