@@ -78,6 +78,25 @@ async function range(locator: Locator, value: number) {
   }, value);
 }
 
+async function sharedAppPalette(page: Page) {
+  const studio = page.locator(".unified-video-studio");
+  const palette = await studio.evaluate(element => {
+    const shared = getComputedStyle(document.documentElement), editor = getComputedStyle(element);
+    return ["--bg", "--surface", "--surface-2", "--surface-3", "--ink", "--muted", "--line", "--accent", "--accent-soft"].map(name => ({
+      name, app: shared.getPropertyValue(name).trim(), editor: editor.getPropertyValue(name).trim(),
+    }));
+  });
+  for (const token of palette) expect(token.editor, token.name).toBe(token.app);
+  await expect(studio).toHaveCSS("background-color", await page.locator("body").evaluate(element => getComputedStyle(element).backgroundColor));
+  const appButton = page.getByRole("button", { name: "Create post", exact: true }).first();
+  const saveButton = page.getByRole("button", { name: "Save & download", exact: true });
+  for (const property of ["background-color", "color"])
+    await expect(saveButton).toHaveCSS(property, await appButton.evaluate((element, name) => getComputedStyle(element).getPropertyValue(name), property));
+  await expect(page.getByRole("navigation", { name: "Video settings shortcuts" }).getByRole("button")).toHaveCount(6);
+  await expect(page.getByRole("button", { name: "AI settings", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "AI video composer", exact: true })).toHaveCount(0);
+}
+
 test("desktop preview and timeline fit every promotion ratio and remain fixed while settings scroll", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Desktop workspace geometry");
   const state = await editor(page);
@@ -118,7 +137,7 @@ test("timeline selection exposes clip and audio settings on the right without di
   await inspector.getByLabel("Fade in (s)", { exact: true }).fill("0.5");
   await inspector.getByLabel("Fade out (s)", { exact: true }).fill("0.8");
   await expect(inspector.getByLabel("Audio volume", { exact: true })).toBeVisible();
-  await expect(inspector.getByRole("region", { name: "AI video composer", exact: true })).toHaveCount(1);
+  await expect(inspector.getByRole("region", { name: "AI video composer", exact: true })).toHaveCount(0);
   const after = await pinnedWorkspace(page);
   expect(Math.abs(after.canvas.y - before.canvas.y)).toBeLessThanOrEqual(2);
   expect(Math.abs(after.timeline.y - before.timeline.y)).toBeLessThanOrEqual(2);
@@ -202,7 +221,7 @@ test("studio shortcuts reach every inspector section and transport controls pres
   const inspector = page.getByRole("complementary", { name: "Video settings", exact: true });
   const targets: Record<string, string> = {
     Camera: ".video-camera-controls", Device: "[data-device-settings]", Text: "[data-label-settings]",
-    Canvas: "[data-canvas-settings]", Audio: "[data-audio-settings]", AI: ".video-composer", Export: ".slideshow-handoff",
+    Canvas: "[data-canvas-settings]", Audio: "[data-audio-settings]", Export: ".slideshow-handoff",
   };
   const before = testInfo.project.name === "chromium" ? await pinnedWorkspace(page) : undefined;
   for (const [name, target] of Object.entries(targets)) {
@@ -255,11 +274,13 @@ for (const initialTheme of ["light", "dark"] as const) {
     const framedScreen = page.locator(".unified-video-canvas [data-device-panel]").first();
     await expect(framedScreen).toBeVisible();
     await expect(studio).toHaveCSS("color-scheme", initialTheme);
+    await sharedAppPalette(page);
     const alternate = initialTheme === "dark" ? "light" : "dark";
     const originalPalette = await inspector.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, color: getComputedStyle(element).color }));
     await page.getByRole("button", { name: `Switch to ${alternate} mode`, exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", alternate);
     await expect(studio).toHaveCSS("color-scheme", alternate);
+    await sharedAppPalette(page);
     await expect.poll(() => page.evaluate(() => localStorage.getItem("relay-theme"))).toBe(alternate);
     const nextPalette = await inspector.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, color: getComputedStyle(element).color }));
     expect(nextPalette.background).not.toBe(originalPalette.background);
@@ -273,23 +294,23 @@ for (const initialTheme of ["light", "dark"] as const) {
       expect(after.canvas.y).toBeCloseTo(before.canvas.y);
       expect(after.timeline.y).toBeCloseTo(before.timeline.y);
     }
-    await page.getByRole("navigation", { name: "Video settings shortcuts" }).getByRole("button", { name: "AI settings", exact: true }).click();
-    const composer = page.getByRole("region", { name: "AI video composer", exact: true });
-    await composer.locator(".video-composer-toggle").click();
-    await composer.getByLabel("Describe your video", { exact: true }).fill("Keep this draft while I change the appearance.");
     await page.getByRole("button", { name: `Switch to ${initialTheme} mode`, exact: true }).click();
-    await expect(composer.getByLabel("Describe your video", { exact: true })).toHaveValue("Keep this draft while I change the appearance.");
     await expect(studio).toHaveCSS("color-scheme", initialTheme);
     await page.getByRole("navigation", { name: "Video settings shortcuts" }).getByRole("button", { name: "Camera settings", exact: true }).click();
     if (initialTheme === "light") {
-      if (before) await page.screenshot({ path: "/tmp/relay-video-editor-light.png", fullPage: true });
+      await expect(framedScreen).toBeVisible();
+      if (before) await page.locator(".unified-video-canvas").evaluate(async element => {
+        await Promise.all([...element.querySelectorAll("img")].map(image => image.decode()));
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      });
+      if (before) await page.screenshot({ path: "/tmp/relay-video-editor-light.png", fullPage: true, animations: "disabled" });
       await page.getByRole("button", { name: "Switch to dark mode", exact: true }).click();
       await expect(framedScreen).toBeVisible();
       if (before) await page.locator(".unified-video-canvas").evaluate(async element => {
         await Promise.all([...element.querySelectorAll("img")].map(image => image.decode()));
         await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       });
-      if (before) await page.screenshot({ path: "/tmp/relay-video-editor-dark.png", fullPage: true });
+      if (before) await page.screenshot({ path: "/tmp/relay-video-editor-dark.png", fullPage: true, animations: "disabled" });
     }
     await page.reload();
     await page.getByRole("button", { name: /^Workspace layout demo/ }).click();

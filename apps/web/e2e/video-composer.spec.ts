@@ -23,13 +23,18 @@ function composition(body: unknown, title = "Meet Relay") {
   return compileVideoComposition(request, { summary: "A cinematic introduction with two device shots and editable titles.", background: "#112233", backgroundEnd: "#445566", shots: [shot, { ...shot, inMs: middle, outMs: source.outMs, camera: "pan-left", transition: "crossfade", titles: [] }] });
 }
 
-type Reply = { status?: number; data?: unknown; error?: string };
-async function editor(page: Page, options: { empty?: boolean; available?: boolean; twoSources?: boolean; realVideo?: boolean; disjointTrims?: boolean } = {}) {
-  const clip = { id: "screen", name: "Screen recording", sourceUrl: options.realVideo || options.disjointTrims ? "https://media.example.test/demo.mp4" : sourceUrl, kind: options.realVideo || options.disjointTrims ? "video" : "image", inMs: options.realVideo || options.disjointTrims ? 1000 : 0, outMs: options.realVideo || options.disjointTrims ? 3000 : 5000, sourceDurationMs: options.realVideo || options.disjointTrims ? 5000 : undefined, fit: "contain", x: .5, y: .5, zoom: 1, volume: .35 };
+async function editor(page: Page, options: { realVideo?: boolean; layers?: boolean } = {}) {
+  const clip = { id: "screen", name: "Screen recording", sourceUrl: options.realVideo ? "https://media.example.test/demo.mp4" : sourceUrl, kind: options.realVideo ? "video" : "image", inMs: options.realVideo ? 1000 : 0, outMs: options.realVideo ? 3000 : 5000, sourceDurationMs: options.realVideo ? 5000 : undefined, fit: "contain", x: .5, y: .5, zoom: 1, volume: .35 };
+  const source = normalizeVideoTimeline({ version: 1, aspectRatio: options.realVideo ? "1:1" : "9:16", clips: [clip], labels: [], music: { url: "", volume: .8, offsetMs: 0, fadeInMs: 0, fadeOutMs: 0 }, coverMs: 0 });
+  const request = normalizeVideoCompositionRequest({ prompt, timeline: source });
+  const layer = { sourceClipId: clip.id, inMs: 0, outMs: 4000, fit: "contain", device: "watch", camera: "orbit", entrance: "pop", exit: "fade", startMs: 0, x: .3, y: .5, scale: .6, rotateX: 0, rotateY: 0, rotateZ: 0, volume: 0, titles: [] };
+  // Agent-authored compositions enter the editor as saved project timelines.
+  const generated = options.layers
+    ? compileVideoComposition(request, { summary: "Watch first, then iPhone", background: "#112233", backgroundEnd: "#445566", shots: [], layers: [layer, { ...layer, device: "iphone", camera: "float", startMs: 1000, outMs: 3000, x: .7, scale: .5 }] })
+    : composition({ prompt, timeline: source });
   const state = {
-    project: { id: "composer-demo", name: "Relay launch", caption: "", brandId: "", labels: [], revision: 1, createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-02T00:00:00Z", timeline: normalizeVideoTimeline({ version: 1, aspectRatio: options.realVideo ? "1:1" : "9:16", clips: options.empty ? [] : options.disjointTrims ? [clip, { ...clip, id: "last-trim", name: "Last trim", inMs: 4000, outMs: 5000 }] : options.twoSources ? [clip, { ...clip, id: "other-screen", name: "Other recording", sourceUrl: "https://media.example.test/other.png" }] : [clip], labels: [], music: { url: "", volume: .8, offsetMs: 0, fadeInMs: 0, fadeOutMs: 0 }, coverMs: 0 }) },
-    patches: [] as any[], posts: [] as any[],
-    reply: async (body: unknown): Promise<Reply> => ({ data: composition(body) }),
+    project: { id: "composer-demo", name: "Relay launch", caption: "", brandId: "", labels: [], revision: 1, createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-02T00:00:00Z", timeline: generated.timeline },
+    patches: [] as unknown[],
   };
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -49,21 +54,14 @@ async function editor(page: Page, options: { empty?: boolean; available?: boolea
     }
     return route.fulfill({ json: { data: [state.project] } });
   });
-  await page.route("**/api/v1/videos/compose", async route => {
-    if (route.request().method() === "GET") return route.fulfill({ json: { data: { available: options.available ?? true, provider: "openai" } } });
-    const body = route.request().postDataJSON(); state.posts.push(body);
-    const reply = await state.reply(body);
-    await route.fulfill({ status: reply.status ?? 200, json: { data: reply.data, error: reply.error } }).catch(() => {});
-  });
   for (const path of ["videos/templates", "brands/kit", "videos/jobs*", "media/projects", "media?*"]) await page.route(`**/api/v1/${path}`, route => route.fulfill({ json: { data: [] } }));
   await page.goto("/demo?view=videos");
   await page.getByRole("button", { name: /^Relay launch/ }).click();
-  await page.getByRole("button", { name: /^Compose with AI/ }).click();
   return { state, errors };
 }
 
 async function playhead(page: Page, value: string) {
-  await page.getByLabel("Composition preview playhead", { exact: true }).evaluate((element, next) => {
+  await page.getByLabel("Timeline playhead", { exact: true }).evaluate((element, next) => {
     const input = element as HTMLInputElement;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, next);
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -71,49 +69,23 @@ async function playhead(page: Page, value: string) {
   }, value);
 }
 
-test("composition is reviewed separately, applied once, editable, undoable and persistent", async ({ page }, testInfo) => {
-  const { state, errors } = await editor(page, { twoSources: true });
-  let finish!: () => void;
-  const gate = new Promise<void>(resolve => { finish = resolve; });
-  state.reply = async body => { await gate; return { data: composition(body) }; };
-  await page.getByLabel("Describe your video", { exact: true }).fill(prompt);
-  await page.getByText("Recordings & direction", { exact: false }).click();
-  await page.getByRole("checkbox", { name: /^Other recording/ }).uncheck();
-  await page.getByLabel("App or product name", { exact: true }).fill("Relay");
-  await page.getByLabel("Target duration (seconds)", { exact: true }).fill("8");
-  await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-  await expect(page.getByRole("button", { name: "Cancel generation", exact: true })).toBeVisible();
-  expect(state.patches).toHaveLength(0);
-  expect(state.project.timeline.labels).toHaveLength(0);
-  await expect.poll(() => state.posts.length).toBe(1);
-  expect(state.posts[0]).toMatchObject({ prompt, productName: "Relay", durationMs: 8000, timeline: { clips: [expect.objectContaining({ id: "screen" })] } });
-  finish();
-  // aria-label on a div is discoverable by label; keep this scoped away from the main canvas.
-  const preview = page.locator('[aria-label="Review generated composition"]');
-  await expect(preview).toBeVisible();
-  await expect(preview.getByText("2 scenes · 1 text blocks", { exact: true })).toBeVisible();
-  await expect(preview.locator('[data-device-preview="iphone"]')).toBeVisible();
-  await expect(preview.getByText("The composition reuses selected footage in more than one shot.")).toBeVisible();
-  const transform = await preview.locator("[data-device-panel]").first().getAttribute("data-device-panel-transform");
-  await playhead(page, "1800");
-  await expect.poll(() => preview.locator("[data-device-panel]").first().getAttribute("data-device-panel-transform")).not.toBe(transform);
-  await page.getByRole("region", { name: "AI video composer" }).screenshot({ path: `/tmp/relay-composer-review-${testInfo.project.name}.png`, animations: "disabled" });
-  expect(state.patches).toHaveLength(0);
-  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "Apply composition", exact: true }).click();
-  await expect(page.getByLabel("Label text", { exact: true })).toHaveValue("Meet Relay");
-  await expect(page.getByLabel("Timeline playhead", { exact: true })).toHaveValue("0");
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(page.locator(".video-label-tabs button")).toHaveCount(0);
+test("an agent-generated timeline opens as editable media and persists title changes", async ({ page }, testInfo) => {
+  const { state, errors } = await editor(page);
   await expect(page.locator(".timeline-clips > button")).toHaveCount(2);
+  await expect(page.getByLabel("Label text", { exact: true })).toHaveValue("Meet Relay");
   await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "Redo", exact: true }).click();
   await page.getByLabel("Label text", { exact: true }).fill("Launch Relay today");
-  await expect.poll(() => state.project.timeline.labels[0]?.text).toBe("Launch Relay today");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByLabel("Label text", { exact: true })).toHaveValue("Meet Relay");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(page.getByLabel("Label text", { exact: true })).toHaveValue("Launch Relay today");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  expect(state.patches.length).toBeGreaterThan(0);
+  expect(state.project.timeline.labels[0]?.text).toBe("Launch Relay today");
   expect(state.project.timeline.clips[0].deviceFrame?.animation?.keyframes).toHaveLength(2);
   expect(state.project.timeline.clips[1].transition?.kind).toBe("crossfade");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await page.screenshot({ path: `/tmp/relay-composer-${testInfo.project.name}.png`, fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: `/tmp/relay-generated-timeline-${testInfo.project.name}.png`, fullPage: true, animations: "disabled" });
   await page.reload();
   await page.getByRole("button", { name: /^Relay launch/ }).click();
   await expect(page.getByLabel("Label text", { exact: true })).toHaveValue("Launch Relay today");
@@ -121,124 +93,17 @@ test("composition is reviewed separately, applied once, editable, undoable and p
   expect(errors).toEqual([]);
 });
 
-test("errors retain the brief, retry works, and discarding leaves the edit unchanged", async ({ page }) => {
-  const { state, errors } = await editor(page);
-  state.reply = async () => ({ status: 502, error: "The composition service is busy. Try again." });
-  await page.getByLabel("Describe your video", { exact: true }).fill(prompt);
-  await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-  await expect(page.getByRole("region", { name: "AI video composer" }).getByRole("alert")).toHaveText("The composition service is busy. Try again.");
-  await expect(page.getByLabel("Describe your video", { exact: true })).toHaveValue(prompt);
-  state.reply = async body => ({ data: composition(body) });
-  await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toBeVisible();
-  await page.getByLabel("Describe your video", { exact: true }).fill(`${prompt} Try a different title.`);
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toBeDisabled();
-  await expect(page.getByText("Your direction changed after this preview. Generate again before applying.", { exact: true })).toBeVisible();
-  await page.getByLabel("Describe your video", { exact: true }).fill(prompt);
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toBeEnabled();
-  await page.getByText("Recordings & direction", { exact: false }).click();
-  await page.getByRole("checkbox", { name: /^Screen recording/ }).uncheck();
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toBeDisabled();
-  await page.getByRole("checkbox", { name: /^Screen recording/ }).check();
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Discard composition", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toHaveCount(0);
-  expect(state.patches).toHaveLength(0);
-  expect(state.project.timeline.labels).toHaveLength(0);
-  expect(errors).toEqual([]);
-});
-
-test("cancelled and stale requests cannot replace a newer preview or subsequent edit", async ({ page }) => {
-  const { state, errors } = await editor(page);
-  const finishes: Array<() => void> = [];
-  state.reply = async body => { const number = finishes.length; await new Promise<void>(resolve => finishes.push(resolve)); return { data: composition(body, `Generation ${number + 1}`) }; };
-  await page.getByLabel("Describe your video", { exact: true }).fill(prompt);
-  await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-  await expect.poll(() => finishes.length).toBe(1);
-  await page.getByRole("button", { name: "Cancel generation", exact: true }).click();
-  await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-  await expect.poll(() => finishes.length).toBe(2);
-  finishes[1]();
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toBeVisible();
-  finishes[0]();
-  await page.getByRole("button", { name: "Apply composition", exact: true }).click();
-  await expect(page.getByLabel("Label text", { exact: true })).toHaveValue("Generation 2");
-  await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-  await expect.poll(() => finishes.length).toBe(3);
-  await page.getByLabel("Label text", { exact: true }).fill("My latest edit");
-  await expect(page.getByRole("region", { name: "AI video composer" }).getByRole("alert")).toHaveText("Your timeline changed. Generate again to include your latest edits.");
-  finishes[2]();
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toHaveCount(0);
-  state.reply = async body => ({ data: composition(body) });
-  await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toBeEnabled();
-  await page.getByLabel("Label text", { exact: true }).fill("Keep this edit");
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toBeDisabled();
-  await expect(page.getByText("Your timeline changed after this preview. Generate again before applying.", { exact: true })).toBeVisible();
-  await expect.poll(() => state.project.timeline.labels[0]?.text).toBe("Keep this edit");
-  expect(errors).toEqual([]);
-});
-
-test("malformed composition and unexpected recording or music URLs are rejected before preview", async ({ page }) => {
-  const { state, errors } = await editor(page);
-  await page.getByLabel("Describe your video", { exact: true }).fill(prompt);
-  for (const kind of ["recording", "music", "malformed"] as const) {
-    state.reply = async body => {
-      const result = composition(body);
-      if (kind === "recording") result.timeline.clips[0].sourceUrl = "https://outside.example.test/video.mp4";
-      if (kind === "music") result.timeline.music.url = "https://outside.example.test/music.mp3";
-      return { data: kind === "malformed" ? { timeline: { version: 99 }, summary: "Invalid", warnings: [] } : result };
-    };
-    await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-    await expect(page.getByRole("region", { name: "AI video composer" }).getByRole("alert")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^(?:Re)?generate composition$/i })).toBeEnabled();
-  }
-  expect(state.patches).toHaveLength(0);
-  expect(errors).toEqual([]);
-});
-
-test("empty media and an unconfigured provider offer actionable states without generation", async ({ page }) => {
-  const { state, errors } = await editor(page, { empty: true, available: false });
-  await page.getByLabel("Describe your video", { exact: true }).fill(prompt);
-  await expect(page.getByText("Upload a video or choose media first, then describe the demo you want.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Video composition needs OpenAI to be configured for this workspace. You can keep editing manually.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^(?:Re)?generate composition$/i })).toBeDisabled();
-  expect(state.posts).toHaveLength(0);
-  expect(state.patches).toHaveLength(0);
-  expect(errors).toEqual([]);
-});
-
-test("selected ranges stay bounded while separate trims of one recording remain usable", async ({ page }) => {
-  const { state, errors } = await editor(page, { disjointTrims: true });
-  await page.getByLabel("Describe your video", { exact: true }).fill(prompt);
-  for (const trim of [{ inMs: 0, outMs: 2000 }, { inMs: 2500, outMs: 4500 }]) {
-    state.reply = async body => { const result = composition(body); Object.assign(result.timeline.clips[0], trim); return { data: result }; };
-    await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-    await expect(page.getByRole("region", { name: "AI video composer" }).getByRole("alert")).toHaveText("The composition used media outside your selected recordings. Try again.");
-    await expect(page.getByRole("button", { name: /^(?:Re)?generate composition$/i })).toBeEnabled();
-  }
-  state.reply = async body => { const result = composition(body); Object.assign(result.timeline.clips[1], { inMs: 4000, outMs: 5000 }); return { data: result }; };
-  await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-  await expect(page.getByRole("button", { name: "Apply composition", exact: true })).toBeEnabled();
-  expect(state.patches).toHaveLength(0);
-  expect(errors).toEqual([]);
-});
-
-test("an applied generated composition exports a real playable animated MP4", async ({ page }, testInfo) => {
+test("an agent-generated timeline exports a real playable animated MP4", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const { state, errors } = await editor(page, { realVideo: true });
-  await page.getByLabel("Describe your video", { exact: true }).fill(prompt);
-  await page.getByRole("button", { name: /^(?:Re)?generate composition$/i }).click();
-  const preview = page.locator('[aria-label="Review generated composition"]');
-  await expect(preview).toBeVisible();
+  const preview = page.locator(".unified-video-canvas");
+  // Keep the existing title selected while scrubbing beyond its visible interval.
+  await page.locator(".video-label-tabs").getByRole("button").first().click();
   await playhead(page, "800");
   await expect.poll(() => preview.locator("video").first().evaluate((node: HTMLVideoElement) => node.currentTime)).toBeCloseTo(1.8, 1);
   await playhead(page, "900");
   await expect(preview.locator("video")).toHaveCount(2);
   await expect.poll(() => preview.locator("video").last().evaluate((node: HTMLVideoElement) => node.currentTime)).toBeCloseTo(2.15, 1);
-  expect(state.patches).toHaveLength(0);
-  await page.getByRole("button", { name: "Apply composition", exact: true }).click();
   await page.getByLabel("Label text", { exact: true }).fill("Launch Relay");
   await page.getByRole("region", { name: "Camera & focus", exact: true }).getByRole("button", { name: "Focus & return", exact: true }).click();
   const dir = await mkdtemp(join(tmpdir(), "relay-composed-export-"));
@@ -246,6 +111,7 @@ test("an applied generated composition exports a real playable animated MP4", as
   try {
     await page.route("**/api/v1/videos/render", async route => {
       revision = state.project.revision;
+      expect(state.project.timeline.labels).toHaveLength(1);
       expect(state.project.timeline.labels[0].text).toBe("Launch Relay");
       expect(state.project.timeline.camera?.keyframes).toHaveLength(4);
       expect(state.project.timeline.camera?.keyframes?.[1].zoom).toBe(2);
@@ -292,30 +158,27 @@ test("an applied generated composition exports a real playable animated MP4", as
   expect(errors).toEqual([]);
 });
 
-test("prompt preview supports staggered parallel devices and applies independently editable layers",async({page})=>{
-  const {state,errors}=await editor(page);
-  state.reply=async body=>{
-    const request=normalizeVideoCompositionRequest(body);
-    const source=request.timeline.clips[0];
-    const layer={sourceClipId:source.id,inMs:0,outMs:4000,fit:"contain",device:"watch",camera:"orbit",entrance:"pop",exit:"fade",startMs:0,x:.3,y:.5,scale:.6,rotateX:0,rotateY:0,rotateZ:0,volume:0,titles:[]};
-    return {data:compileVideoComposition(request,{summary:"Watch first, then iPhone",background:"#112233",backgroundEnd:"#445566",shots:[],layers:[layer,{...layer,device:"iphone",camera:"float",startMs:1000,outMs:3000,x:.7,scale:.5}]})};
-  };
-  await page.getByLabel("Describe your video",{exact:true}).fill("Show a rotating Apple Watch then an iPhone next to it.");
-  await page.getByRole("button",{name:"Generate composition",exact:true}).click();
-  const preview=page.locator('[aria-label="Review generated composition"]');
-  await expect(preview).toBeVisible();
+test("agent-generated parallel devices remain independently timed and editable", async ({ page }) => {
+  const { state, errors } = await editor(page, { layers: true });
+  const preview = page.locator(".unified-video-canvas");
+  await expect(page.locator(".timeline-clips > button")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Layer track:/ })).toHaveCount(2);
   await expect(preview.locator('[data-device-preview="watch"]')).toHaveCount(1);
   await expect(preview.locator('[data-device-preview="iphone"]')).toHaveCount(0);
-  await playhead(page,"1500");
+  await playhead(page, "1500");
   await expect(preview.locator('[data-device-preview="watch"]')).toHaveCount(1);
   await expect(preview.locator('[data-device-preview="iphone"]')).toHaveCount(1);
-  await expect(preview.getByText("0 scenes · 0 text blocks · 2 device layers",{exact:true})).toBeVisible();
-  expect(state.patches).toHaveLength(0);
-  await page.getByRole("button",{name:"Apply composition",exact:true}).click();
-  await expect.poll(()=>state.project.timeline.layers?.length).toBe(2);
-  expect(state.project.timeline.clips).toHaveLength(0);
-  expect(state.project.timeline.layers?.map(layer=>[layer.startMs,layer.deviceFrame?.device])).toEqual([[0,"watch"],[1000,"iphone"]]);
-  await page.getByRole("button",{name:"Undo",exact:true}).click();
-  await expect(page.locator(".timeline-clips > button")).toHaveCount(1);
+  const watch = state.project.timeline.layers![0], phone = state.project.timeline.layers![1];
+  await page.getByRole("region", { name: "Device layers", exact: true }).getByRole("list", { name: "Device stacking order", exact: true }).getByRole("button").last().click();
+  await page.getByLabel("Layer name", { exact: true }).fill("Watch introduction");
+  await page.getByLabel("Layer start time", { exact: true }).fill("200");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  expect(state.project.timeline.layers).toEqual([{ ...watch, name: "Watch introduction", startMs: 200 }, phone]);
+  await page.reload();
+  await page.getByRole("button", { name: /^Relay launch/ }).click();
+  await expect(page.getByRole("button", { name: "Layer track: Watch introduction", exact: true })).toBeVisible();
+  await playhead(page, "1500");
+  await expect(preview.locator('[data-device-preview="watch"]')).toHaveCount(1);
+  await expect(preview.locator('[data-device-preview="iphone"]')).toHaveCount(1);
   expect(errors).toEqual([]);
 });

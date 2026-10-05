@@ -1,16 +1,13 @@
-/* The editor has its own neutral, native-style workspace in either app theme. */
-/* Light is the website default; the saved website preference drives both palettes. */
+/* Editor chrome inherits Relay's shared palette; timeline colors identify tracks. */
 .unified-video-studio {
-  --ink:#20252a; --muted:#5e6872; --faint:#68737d; --line:#cfd4d8;
-  --surface:#f7f7f5; --surface-2:#eceeec; --surface-3:#e4e7e5;
-  --accent:#c45424; --accent-soft:#c4542412; --text:var(--ink);
-  --video-canvas:#f1f2ef; --video-panel:#fff; --video-ink:var(--ink);
+  --text:var(--ink);
+  --video-canvas:var(--surface-2); --video-panel:var(--surface); --video-ink:var(--ink);
   --video-muted:var(--muted); --video-line:var(--line);
-  --editor-bg:#f1f0eb; --editor-stage:#e5e7e5; --editor-panel:#fff;
-  --editor-field:#f3f4f1; --editor-button:#eceeeb; --editor-button-hover:#e2e5e1;
-  --editor-border:#c9cfd1; --editor-hover-border:#9ca6ac; --editor-soft-line:#0000000e;
-  --editor-hover:#00000008; --editor-active-text:#a3421b; --editor-timecode:#fff;
-  --editor-selection:#c55a29; --editor-track-bg:#00000003;
+  --editor-bg:var(--bg); --editor-stage:var(--surface-2); --editor-panel:var(--surface);
+  --editor-field:var(--surface-2); --editor-button:var(--surface); --editor-button-hover:var(--surface-3);
+  --editor-border:var(--line); --editor-hover-border:var(--muted); --editor-soft-line:var(--line);
+  --editor-hover:var(--surface-3); --editor-active-text:var(--accent); --editor-timecode:var(--surface);
+  --editor-selection:var(--accent); --editor-track-bg:var(--surface-2);
   --editor-video-bg:#f0d3bc; --editor-video-border:#c2936f; --editor-video-text:#553623;
   --editor-video-muted:#68432b; --editor-trim:#c5662d45;
   --editor-text-bg:#eee3c4; --editor-text-border:#b59a5d; --editor-text-ink:#57471f; --editor-text-selected:#8e6c2e;
@@ -20,15 +17,6 @@
   color:var(--ink); background:var(--editor-bg); color-scheme:light;
 }
 :root[data-theme="dark"] .unified-video-studio {
-  --ink:#edf0f2; --muted:#afb5bb; --faint:#929aa2; --line:#42474d;
-  --surface:#2b3035; --surface-2:#353b41; --surface-3:#3c4248;
-  --accent:#ee8c59; --accent-soft:#ee8c591a;
-  --video-canvas:#252a2f; --video-panel:#343a40;
-  --editor-bg:#24282d; --editor-stage:#1b1e22; --editor-panel:#32383e;
-  --editor-field:#272c31; --editor-button:#353b41; --editor-button-hover:#42494f;
-  --editor-border:#4a5056; --editor-hover-border:#666e76; --editor-soft-line:#ffffff0c;
-  --editor-hover:#ffffff0b; --editor-active-text:#f7b58f; --editor-timecode:#15181c;
-  --editor-selection:#f8b07e; --editor-track-bg:#ffffff04;
   --editor-video-bg:#805139; --editor-video-border:#aa7252; --editor-video-text:#fff2e8;
   --editor-video-muted:#f0c3a7; --editor-trim:#eea46e4d;
   --editor-text-bg:#685737; --editor-text-border:#9b834f; --editor-text-ink:#fff1ce; --editor-text-selected:#e8c276;
@@ -43,8 +31,7 @@
 .unified-video-studio .video-studio-head small { font-size:9px; color:var(--muted); }
 .unified-video-studio .secondary-button { background:var(--editor-button); color:var(--ink); border-color:var(--editor-border); border-radius:6px; }
 .unified-video-studio .secondary-button:hover:not(:disabled) { background:var(--editor-button-hover); border-color:var(--editor-hover-border); }
-.unified-video-studio .primary-button { background:#ee8c59; color:#201b18; border:1px solid #f2a376; border-radius:6px; font-weight:700; }
-.unified-video-studio .primary-button:hover:not(:disabled) { background:#f4a579; }
+.unified-video-studio .primary-button { border-radius:6px; font-weight:700; }
 .unified-video-studio .icon-button { color:var(--muted); border-radius:5px; }
 .unified-video-studio .icon-button:hover:not(:disabled) { color:var(--ink); background:var(--editor-hover); }
 .unified-video-studio .video-studio-head button { min-height:32px; font-size:11px; padding:7px 11px; }
@@ -75,18 +62,9 @@
 .unified-video-studio .video-inspector .source-quick-actions { gap:5px; }
 .unified-video-studio .video-inspector .source-quick-actions button { min-height:30px; font-size:9px; }
 .unified-video-studio .video-inspector :is(.video-camera-controls>p,.video-device-layers>p) { font-size:10px; line-height:1.5; margin:2px 0 5px; }
-.video-inspector-tools { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:2px; padding:8px 0; position:sticky; top:0; z-index:8; background:var(--surface); border-bottom:1px solid var(--line); }
+.video-inspector-tools { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:2px; padding:8px 0; position:sticky; top:0; z-index:8; background:var(--surface); border-bottom:1px solid var(--line); }
 .video-inspector-tools button { display:grid; justify-items:center; gap:5px; min-width:0; padding:6px 1px; color:var(--muted); background:transparent; border:0; border-radius:5px; cursor:pointer; font-size:8px; }
 .video-inspector-tools button:hover,.video-inspector-tools button:focus-visible { color:var(--editor-active-text); background:var(--editor-soft-line); }
-.unified-video-studio .video-inspector .video-composer { background:var(--editor-panel); border-color:var(--editor-soft-line); scroll-margin-top:66px; }
-.unified-video-studio .video-composer { color:var(--ink); }
-.unified-video-studio .video-composer :is(.video-composer-toggle small,.video-composer-meta,.video-composer-options summary span,.video-composer-fields small,legend,.video-composer-message,.video-composer-actions>small,.video-composer-scene-list>p,.video-composer-scene-list small,.video-composer-scene-list button span,.video-composer-scrubber) { color:var(--muted); }
-.unified-video-studio .video-composer :is(.video-composer-review,.video-composer-options) { border-color:var(--line); }
-.unified-video-studio .video-composer .video-composer-review-head .eyebrow { color:var(--editor-active-text); }
-.unified-video-studio .video-composer :is(.video-composer-message.error,.video-composer-warnings) { color:var(--editor-active-text); }
-.unified-video-studio .video-composer :is(.video-composer-scene-list button,.secondary-button) { background:var(--editor-button); border-color:var(--editor-border); color:var(--ink); }
-.unified-video-studio .video-composer textarea::placeholder { color:var(--muted); }
-.unified-video-studio .video-composer .video-composer-scene-list button:hover { background:var(--editor-button-hover); }
 .unified-video-studio .video-inspector .slideshow-handoff h3 { font-family:inherit; font-size:15px; letter-spacing:-.02em; }
 .unified-video-studio .video-inspector .slideshow-handoff p:not(.eyebrow) { font-size:10px; color:var(--muted); line-height:1.5; }
 .unified-video-studio .timeline-panel { background:var(--surface); border-color:var(--line); border-radius:8px; }

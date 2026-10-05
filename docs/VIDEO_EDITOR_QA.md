@@ -2,6 +2,14 @@
 
 Verified locally on 2026-10-02 against the production Next.js build.
 
+## Shared Relay palette and editor controls — 2026-10-05
+
+The editor inherits the website's background, surfaces, text, borders and accent tokens in both themes, including the standard primary-button colors. It no longer defines a separate blue-gray dark palette or an orange export button. Colored timeline tracks still identify footage, camera, devices, text and audio; saved video content keeps its own colors.
+
+The AI shortcut and Compose with AI panel have been removed from the editor. Six shortcuts remain: Camera, Device, Text, Canvas, Audio and Export. Composition services and MCP tools remain available, and agent-authored projects open as editable timelines. Browser coverage now opens backend-compiled project fixtures directly and checks editing, persistence, staggered devices and real MP4 rendering instead of the removed generation UI. Earlier sections below record verification of previous editor versions.
+
+**54 browser checks passed**, with eight intentional profile-specific skips, across desktop Chromium and the Pixel 7 mobile profile. These include exact inherited palette and primary-button comparisons, absence of the AI controls, theme switching/persistence, viewport layout, camera controls, text/device animations, transitions, multiple devices, bulk text variants and real production-rendered MP4 download/playback. The six agent-document cases passed on rerun after selecting the existing title explicitly when scrubbing beyond its visible interval. TypeScript and `git diff --check` passed. Checks use local persistence/storage adapters; deployed cloud rendering and social publishing were not exercised.
+
 ## Shared light/dark appearance — 2026-10-05
 
 The editor now follows the website's `relay-theme` preference instead of always using dark chrome. Its sun/moon control updates the existing website theme state, including Settings → Appearance and persistence across reloads. Light and dark palettes cover the inspector, fields, AI composer, dialogs, playback controls and colored timeline tracks. Media, device frames, titles, canvas backgrounds and exported content keep their saved colors.

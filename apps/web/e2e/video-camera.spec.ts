@@ -10,7 +10,7 @@ async function editor(page: Page, limit = false) {
     timeline: normalizeVideoTimeline({ version: 1, aspectRatio: "9:16", clips: [clip], layers: [{ ...clip, id: "watch", name: "Watch app", startMs: 0, deviceFrame: { ...clip.deviceFrame, device: "watch", x: .7, y: .6, scale: .3 } }],
       labels: [{ id: "title", text: "A closer look", x: .5, y: .18, width: .8, height: .1, fontSize: 64, font: "modern", textColor: "#FFFFFF", background: "dark", backgroundColor: "#000000", style: "dark", startMs: 0, endMs: 6000 }], music: { url: "", volume: .4, offsetMs: 0, fadeInMs: 0, fadeOutMs: 0 }, coverMs: 0,
       ...(limit ? { camera: { zoom: 1, x: .5, y: .5, keyframes: Array.from({ length: 100 }, (_, index) => ({ timeMs: index * 50 + (index === 50 ? .25 : 0), zoom: 1 + index / 100, x: .5, y: .5 })) } } : {}) }), };
-  const errors: string[] = [], compositions: any[] = [];
+  const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.route(sourceUrl, route => route.fulfill({ contentType: "image/svg+xml", body: artwork }));
   await page.route("**/api/v1/videos", route => {
@@ -22,16 +22,11 @@ async function editor(page: Page, limit = false) {
   });
   for (const path of ["videos/templates", "brands/kit", "videos/jobs*", "media/projects", "media?*"])
     await page.route(`**/api/v1/${path}`, route => route.fulfill({ json: { data: [] } }));
-  await page.route("**/api/v1/videos/compose", route => {
-    if (route.request().method() === "GET") return route.fulfill({ json: { data: { available: true } } });
-    const request = route.request().postDataJSON(); compositions.push(request);
-    return route.fulfill({ json: { data: { timeline: request.timeline, summary: "A cinematic focus move", warnings: [] } } });
-  });
   await page.goto("/demo?view=videos");
   await page.getByRole("button", { name: /^Camera demo/ }).click();
   await expect(page.getByRole("region", { name: "Camera & focus", exact: true })).toBeVisible();
   await page.locator(".unified-video-studio").evaluate(async element => { await Promise.all(element.getAnimations().map(animation => animation.finished)); });
-  return { project: () => project, errors, compositions };
+  return { project: () => project, errors };
 }
 async function range(input: Locator, value: number) {
   await input.evaluate((element, next) => {
@@ -85,7 +80,7 @@ test("camera zoom, focus picking, presets and keyframes persist while scene labe
   expect(state.errors).toEqual([]);
 });
 
-test("bulk and AI composition previews carry the same camera animation beneath labels", async ({ page }, testInfo) => {
+test("bulk text preview carries the saved camera animation beneath labels", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "Shared preview rendering");
   const state = await editor(page), controls = page.getByRole("region", { name: "Camera & focus", exact: true });
   await controls.getByRole("button", { name: "Zoom in", exact: true }).click();
@@ -96,17 +91,11 @@ test("bulk and AI composition previews carry the same camera animation beneath l
   await expect.poll(()=>variants.locator("[data-camera-preview]").evaluate(element=>new DOMMatrix(getComputedStyle(element).transform).a)).toBeCloseTo(2, 2);
   await expect(variants.locator(".timeline-label-preview")).toContainText("See the details");
   await variants.getByRole("button", { name: "Close text variants", exact: true }).click();
-  const composer = page.getByRole("region", { name: "AI video composer", exact: true });
-  await composer.getByRole("button", { name: /Compose with AI/ }).click();
-  await composer.getByLabel("Describe your video", { exact: true }).fill("Make a cinematic focus move to highlight my app.");
-  await composer.getByRole("button", { name: "Generate composition", exact: true }).click();
-  await expect(composer.locator('[aria-label="Review generated composition"]')).toBeVisible();
-  await range(composer.getByLabel("Composition preview playhead", { exact: true }), 5999);
-  await expect.poll(()=>composer.locator("[data-camera-preview]").evaluate(element=>new DOMMatrix(getComputedStyle(element).transform).a)).toBeCloseTo(2, 2);
-  expect(state.compositions[0].timeline.camera.keyframes.length).toBeGreaterThan(1);
-  await composer.getByRole("button", { name: "Apply composition", exact: true }).click();
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
-  expect(state.project().timeline.camera).toEqual(state.compositions[0].timeline.camera);
+  expect(state.project().timeline.camera.keyframes.length).toBeGreaterThan(1);
+  await range(page.getByLabel("Timeline playhead", { exact: true }), 5999);
+  await expect.poll(() => page.locator(".unified-video-canvas > [data-camera-preview]").evaluate(element => new DOMMatrix(getComputedStyle(element).transform).a)).toBeCloseTo(2, 2);
+  await expect(page.locator(".unified-video-canvas > .timeline-label-preview")).toContainText("A closer look");
   expect(state.errors).toEqual([]);
 });
 
