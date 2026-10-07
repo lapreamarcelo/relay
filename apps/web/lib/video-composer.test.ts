@@ -97,6 +97,29 @@ test("compose route authenticates read/write separately and does not save invali
   } finally { if (previousKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previousKey; }
 });
 
+test("compose validates library image backgrounds before sampling or generating a preview", async () => {
+  const previousFetch=globalThis.fetch,previousKey=process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  Object.assign(process.env,{R2_ACCOUNT_ID:"local",R2_ACCESS_KEY_ID:"local",R2_SECRET_ACCESS_KEY:"local",R2_BUCKET_NAME:"local",R2_PUBLIC_URL:"https://media.example.test"});
+  let calls=0;globalThis.fetch=async()=>{calls++;throw new Error("Must not fetch invalid backgrounds");};
+  const {POST}=await import("../app/api/v1/videos/compose/route.ts");
+  const make=(input:unknown,token="Bearer write")=>new Request("https://relay.test/api/v1/videos/compose",{method:"POST",headers:{Authorization:token},body:JSON.stringify(input)});
+  try {
+    for(const imageUrl of ["https://outside.example/background.png","https://media.example.test/background.png?redirect=https://outside.example","https://user:password@media.example.test/background.png","https://media.example.test/folder%2Fprivate.png"]) {
+      const input=request();input.timeline.background={color:"#112233",imageUrl,imageFit:"cover"};
+      const response=await POST(make(input));
+      assert.equal(response.status,400);assert.match((await response.json()).error,/Relay R2 library/);
+      assert.equal((await POST(make(input,"Bearer read-only"))).status,403);
+    }
+    const allowed=request();allowed.timeline.background={color:"#112233",imageUrl:"https://media.example.test/background.png",imageFit:"contain"};
+    assert.equal((await POST(make(allowed))).status,503,"valid image reaches provider availability validation");
+    assert.equal(calls,0);
+  } finally {
+    globalThis.fetch=previousFetch;
+    if(previousKey===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=previousKey;
+  }
+});
+
 test("authenticated compose route samples footage and returns the provider edit without persistence", async () => {
   const previousFetch = globalThis.fetch, previousKey = process.env.OPENAI_API_KEY;
   const fixture = await readFile(new URL("../e2e/fixtures/device-demo.mp4", import.meta.url));

@@ -349,7 +349,14 @@ export interface VideoCamera {
 export interface VideoTimeline {
   version: 1;
   aspectRatio: "9:16" | "4:5" | "1:1" | "16:9";
-  background?: { color: string; endColor?: string };
+  background?: {
+    color: string;
+    endColor?: string;
+    /** Static image from the Relay media library, above the color/gradient. */
+    imageUrl?: string;
+    /** Centered crop or letterbox; defaults to cover. */
+    imageFit?: "cover" | "contain";
+  };
   camera?: VideoCamera;
   clips: VideoClip[];
   /** Simultaneous overlays above the sequential clips and below timed labels. */

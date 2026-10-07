@@ -13,10 +13,14 @@ export interface DevicePanel {
   transform: string;
   /** Hide back-facing and near-edge-on screen surfaces. */
   visible: boolean;
+  /** Body sheets sit behind the front glass; these values also drive export. */
+  depth?: number;
+  shade?: number;
 }
 export interface DeviceScene {
   geometry: DeviceFrameGeometry;
   panels: DevicePanel[];
+  bodyPanels: DevicePanel[];
   background: string;
   opacity: number;
 }
@@ -55,13 +59,14 @@ function pose(frame: DeviceFrame, timeMs: Scalar, height: number, durationMs = f
   return { rx: degrees(rx), ry: degrees(ry), rz: degrees(rz), fold: degrees(frame.device === "iphone-duo" ? fold : 0), dy, animated };
 }
 
-function project(width: number, height: number, frame: DeviceFrame, geometry: DeviceFrameGeometry, timeMs: Scalar, point: DevicePoint, side: number, durationMs?: number): { x: Scalar; y: Scalar } {
+function project(width: number, height: number, frame: DeviceFrame, geometry: DeviceFrameGeometry, timeMs: Scalar, point: DevicePoint, side: number, durationMs?: number, bodyDepth = 0): { x: Scalar; y: Scalar } {
   const p = pose(frame, timeMs, height, durationMs), scale = p.animated.scale;
   const localX = mul(point.x - geometry.outer.x - geometry.outer.width / 2, scale);
   const localY = mul(point.y - geometry.outer.y - geometry.outer.height / 2, scale);
   // Each half rotates around the same center hinge; video remains on the two planes.
-  const foldedX = mul(localX, cos(mul(.5, p.fold)));
-  const foldedZ = mul(mul(localX,side), sin(mul(.5, p.fold)));
+  const localZ = mul(bodyDepth, scale);
+  const foldedX = add(mul(localX, cos(mul(.5, p.fold))), neg(mul(mul(localZ, side), sin(mul(.5, p.fold)))));
+  const foldedZ = add(mul(mul(localX,side), sin(mul(.5, p.fold))), mul(localZ, cos(mul(.5, p.fold))));
   const y = add(mul(localY, cos(p.rx)), neg(mul(foldedZ, sin(p.rx))));
   const z = add(mul(localY, sin(p.rx)), mul(foldedZ, cos(p.rx)));
   const x = add(mul(foldedX, cos(p.ry)), mul(z, sin(p.ry)));
@@ -99,6 +104,14 @@ export function devicePanelTransform(rect: Pick<DevicePanelRect, "width" | "heig
   return `matrix3d(${[a / rect.width, d / rect.width, 0, g / rect.width, b / rect.height, e / rect.height, 0, h / rect.height, 0, 0, 1, 0, p0.x, p0.y, 0, 1].join(",")})`;
 }
 
+/** Project directly in preview pixels. Scaling a full-resolution scene after
+ * its perspective warp makes browsers resample an already flattened texture. */
+export function devicePanelAtScale(panel: DevicePanel, scale: number): DevicePanel {
+  const rect = { x: panel.rect.x * scale, y: panel.rect.y * scale, width: panel.rect.width * scale, height: panel.rect.height * scale };
+  const corners = panel.corners.map(point => ({ x: point.x * scale, y: point.y * scale })) as DevicePanel["corners"];
+  return { ...panel, rect, corners, transform: devicePanelTransform(rect, corners) };
+}
+
 export function deviceScene(width: number, height: number, frame: DeviceFrame, timeMs = 0, durationMs = frame.motionDurationMs ?? 4000): DeviceScene {
   const geometry = deviceFrameGeometry(width, height, frame.device);
   const panels = devicePanelRects(geometry, frame).map(rect => {
@@ -106,25 +119,42 @@ export function deviceScene(width: number, height: number, frame: DeviceFrame, t
     const corners = rectCorners(rect).map(point => project(width, height, frame, geometry, Math.max(0, timeMs), point, side,durationMs)) as DevicePanel["corners"];
     return { rect, corners, transform: devicePanelTransform(rect, corners), visible: (facing(frame, Math.max(0, timeMs), height, side,durationMs) as number) > .015 };
   });
-  return { geometry, panels, background: deviceBackgroundCss(frame), opacity: pose(frame,Math.max(0,timeMs),height,durationMs).animated.opacity as number };
+  const bodyPanels = deviceBodySheets(geometry, frame).flatMap(sheet => panels.map(panel => {
+    const side = panel.rect.x + panel.rect.width / 2 < geometry.outer.x + geometry.outer.width / 2 ? -1 : 1;
+    const corners = rectCorners(panel.rect).map(point => project(width, height, frame, geometry, Math.max(0,timeMs), point, side, durationMs, sheet.depth)) as DevicePanel["corners"];
+    return { ...panel, corners, transform: devicePanelTransform(panel.rect, corners), ...sheet };
+  }));
+  return { geometry, panels, bodyPanels, background: deviceBackgroundCss(frame), opacity: pose(frame,Math.max(0,timeMs),height,durationMs).animated.opacity as number };
+}
+
+/** Overlapping rounded planes form a bounded extrusion. This is a perspective
+ * body, not a mesh model: rotations stay within the supported front-facing range. */
+function deviceBodySheets(geometry: DeviceFrameGeometry, frame: DeviceFrame): Array<{ depth: number; shade: number }> {
+  if (frame.device === "browser") return [];
+  const tilted = frame.rotateX || frame.rotateY || frame.foldAngle || ["orbit","fold","unfold","fold-cycle"].includes(frame.motion ?? "none") || frame.animation?.keyframes?.some(key => key.rotateX || key.rotateY || key.foldAngle);
+  // A face-on body's silhouette is completely covered by the glass. Avoid the
+  // extra preview layers and export warps for simple labels/static mockups.
+  if (!tilted) return [];
+  const thickness = geometry.outer.width * (frame.device === "watch" ? .085 : frame.device === "iphone-duo" ? .025 : .045);
+  return [{ depth: -thickness, shade: .64 }, { depth: -thickness * .42, shade: 1 }];
 }
 
 /** The panel input is stretched to the canvas before this warp. An alpha-zero
  * guard pixel around the panel prevents FFmpeg's edge extension filling the canvas.
  * FFmpeg's perspective on counter starts at one, after fps=30. Subtracting one
  * makes the first exported frame match preview local time zero. */
-export function devicePerspectiveFilter(width: number, height: number, frame: DeviceFrame, panel: DevicePanelRect, fps = 30, guard = 1, viewport: DevicePanelRect = { x: 0, y: 0, width, height }, durationMs = frame.motionDurationMs ?? 4000): string {
+export function devicePerspectiveFilter(width: number, height: number, frame: DeviceFrame, panel: DevicePanelRect, fps = 30, guard = 1, viewport: DevicePanelRect = { x: 0, y: 0, width, height }, durationMs = frame.motionDurationMs ?? 4000, bodyDepth = 0): string {
   const geometry = deviceFrameGeometry(width, height, frame.device);
   const expanded = { x: panel.x - guard, y: panel.y - guard, width: panel.width + guard * 2, height: panel.height + guard * 2 };
   const side = panel.x + panel.width / 2 < geometry.outer.x + geometry.outer.width / 2 ? -1 : 1;
-  const points = rectCorners(expanded).map(point => project(width, height, frame, geometry, `((on-1)/${fps}*1000)`, point, side,durationMs));
+  const points = rectCorners(expanded).map(point => project(width, height, frame, geometry, `((on-1)/${fps}*1000)`, point, side,durationMs,bodyDepth));
   return `perspective=${points.map((point, index) => `x${index}='${add(point.x, -viewport.x)}':y${index}='${add(point.y, -viewport.y)}'`).join(":")}:sense=destination:eval=frame:interpolation=linear`;
 }
 
 /** Conservative output bounds for a complete preset cycle. Perspective maps are
  * generated only for this region, avoiding two full-HD warps for small panels.
  * Fixed dense sampling plus a guard covers the smooth, bounded preset curves. */
-export function devicePanelViewport(width: number, height: number, frame: DeviceFrame, panel: DevicePanelRect, durationMs = frame.motionDurationMs ?? 4000): DevicePanelRect {
+export function devicePanelViewport(width: number, height: number, frame: DeviceFrame, panel: DevicePanelRect, durationMs = frame.motionDurationMs ?? 4000, bodyDepth = 0): DevicePanelRect {
   const geometry = deviceFrameGeometry(width, height, frame.device);
   const moving = (frame.motion && frame.motion !== "none") || !!frame.animation;
   const side = panel.x + panel.width / 2 < geometry.outer.x + geometry.outer.width / 2 ? -1 : 1;
@@ -139,7 +169,7 @@ export function devicePanelViewport(width: number, height: number, frame: Device
   if(moving && durationMs / (frame.motionDurationMs ?? 4000) > 32) return {x:0,y:0,width,height};
   for (const t of times) {
     for (const corner of rectCorners(panel)) {
-      const p = project(width, height, frame, geometry, t, corner, side,durationMs);
+      const p = project(width, height, frame, geometry, t, corner, side,durationMs,bodyDepth);
       minX = Math.min(minX, p.x as number); minY = Math.min(minY, p.y as number);
       maxX = Math.max(maxX, p.x as number); maxY = Math.max(maxY, p.y as number);
     }
@@ -153,9 +183,11 @@ export function devicePanelViewport(width: number, height: number, frame: Device
 /** Complete visual filter for one clip. Input 0 is the source; input 1 is the
  * transparent frame layer when framed; backgroundInput is a canvas PNG. The
  * transparent mode clears that canvas alpha and returns RGBA for layer export.
+ * Optional bodyInput is a deviceBodyLayerSvg PNG; its rear sheets use the same
+ * projection and animation as the glass. Existing callers can omit the body.
  * Source and frame are composited before splitting/warping, so screen media
  * follows exactly the same geometry as the bezel in both preview and export. */
-export function deviceVideoSceneFilter(width: number, height: number, clip: VideoClip, backgroundInput: number, durationMs = clip.outMs-clip.inMs, transparent = false): string {
+export function deviceVideoSceneFilter(width: number, height: number, clip: VideoClip, backgroundInput: number, durationMs = clip.outMs-clip.inMs, transparent = false, bodyInput?: number): string {
   const geometry = clip.deviceFrame ? deviceFrameGeometry(width, height, clip.deviceFrame.device) : undefined;
   const tw = geometry?.screen.width ?? width, th = geometry?.screen.height ?? height;
   const sw = Math.ceil(tw * clip.zoom / 2) * 2, sh = Math.ceil(th * clip.zoom / 2) * 2;
@@ -168,16 +200,44 @@ export function deviceVideoSceneFilter(width: number, height: number, clip: Vide
     return filters.join(";");
   }
   filters.push("[1:v]format=rgba,loop=loop=-1:size=1:start=0,settb=1/30,setpts=N,fps=30[bezel]", "[screen][bezel]overlay=0:0:format=auto[device]");
+  const opacity = animationExpressions(clip.deviceFrame.animation,"(T*1000)",durationMs,clip.deviceFrame,"device").opacity;
+  const fade = opacity !== 1;
+  // Fade the completed device once, matching preview group opacity. Fading each
+  // overlapping sheet both compounds alpha and repeats expensive RGB evaluation.
+  if (fade && !transparent) filters.push("[background]split=2[canvasBackground][deviceCanvas]", "[deviceCanvas]colorchannelmixer=aa=0[deviceBase]");
+  const base = fade && !transparent ? "deviceBase" : "background";
   const panels = devicePanelRects(geometry, clip.deviceFrame);
+  const viewports: DevicePanelRect[] = [];
+  const sheets = bodyInput === undefined ? [] : deviceBodySheets(geometry, clip.deviceFrame);
+  const bodyCount = sheets.length * panels.length;
+  if (bodyCount) {
+    filters.push(`[${bodyInput}:v]format=rgba,loop=loop=-1:size=1:start=0,settb=1/30,setpts=N,fps=30,split=${bodyCount}${Array.from({length:bodyCount},(_,i)=>`[body${i}]`).join("")}`);
+    sheets.forEach((sheet, sheetIndex) => panels.forEach((panel, panelIndex) => {
+      const index = sheetIndex * panels.length + panelIndex;
+      const viewport = devicePanelViewport(width,height,clip.deviceFrame!,panel,durationMs,sheet.depth);
+      viewports.push(viewport);
+      filters.push(`[body${index}]crop=${panel.width}:${panel.height}:${panel.x}:${panel.y},pad=${panel.width+2}:${panel.height+2}:1:1:color=black@0,colorchannelmixer=rr=${sheet.shade}:gg=${sheet.shade}:bb=${sheet.shade},scale=${viewport.width}:${viewport.height},${devicePerspectiveFilter(width,height,clip.deviceFrame!,panel,30,1,viewport,durationMs,sheet.depth)}[bodywarped${index}]`);
+      const side=panel.x+panel.width/2<geometry.outer.x+geometry.outer.width/2?-1:1;
+      const visibility=facing(clip.deviceFrame!,"(t*1000)",height,side,durationMs);
+      filters.push(`[${index===0?base:`bodycomposite${index-1}`}][bodywarped${index}]overlay=${viewport.x}:${viewport.y}:format=auto:enable='gt(${visibility},0.015)'[bodycomposite${index}]`);
+    }));
+  }
   if (panels.length > 1) filters.push(`[device]split=${panels.length}${panels.map((_, i) => `[panel${i}]`).join("")}`);
   panels.forEach((panel, i) => {
     const source = panels.length === 1 ? "device" : `panel${i}`;
     const viewport = devicePanelViewport(width, height, clip.deviceFrame!, panel,durationMs);
-    filters.push(`[${source}]crop=${panel.width}:${panel.height}:${panel.x}:${panel.y},pad=${panel.width + 2}:${panel.height + 2}:1:1:color=black@0,scale=${viewport.width}:${viewport.height},${devicePerspectiveFilter(width, height, clip.deviceFrame!, panel, 30, 1, viewport,durationMs)}${clip.deviceFrame!.animation ? `,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*${animationExpressions(clip.deviceFrame!.animation,"(T*1000)",durationMs,clip.deviceFrame!,"device").opacity}'` : ""}[warped${i}]`);
+    viewports.push(viewport);
+    filters.push(`[${source}]crop=${panel.width}:${panel.height}:${panel.x}:${panel.y},pad=${panel.width + 2}:${panel.height + 2}:1:1:color=black@0,scale=${viewport.width}:${viewport.height},${devicePerspectiveFilter(width, height, clip.deviceFrame!, panel, 30, 1, viewport,durationMs)}[warped${i}]`);
     const side = panel.x + panel.width / 2 < geometry.outer.x + geometry.outer.width / 2 ? -1 : 1;
     const visibility = facing(clip.deviceFrame!, "(t*1000)", height, side,durationMs);
-    filters.push(`[${i === 0 ? "background" : `composite${i - 1}`}][warped${i}]overlay=${viewport.x}:${viewport.y}:format=auto:enable='gt(${visibility},0.015)'[composite${i}]`);
+    filters.push(`[${i === 0 ? bodyCount ? `bodycomposite${bodyCount-1}` : base : `composite${i - 1}`}][warped${i}]overlay=${viewport.x}:${viewport.y}:format=auto:enable='gt(${visibility},0.015)'[composite${i}]`);
   });
-  filters.push(`[composite${panels.length - 1}]format=${transparent ? "rgba" : "yuv420p"}[framed]`);
+  const composite = `composite${panels.length - 1}`;
+  if (fade) {
+    const x=Math.min(...viewports.map(v=>v.x)),y=Math.min(...viewports.map(v=>v.y));
+    const w=Math.max(...viewports.map(v=>v.x+v.width))-x,h=Math.max(...viewports.map(v=>v.y+v.height))-y;
+    filters.push(`[${composite}]crop=${w}:${h}:${x}:${y},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*${opacity}',pad=${width}:${height}:${x}:${y}:color=black@0[fadedDevice]`);
+    filters.push(transparent ? "[fadedDevice]format=rgba[framed]" : "[canvasBackground][fadedDevice]overlay=0:0:format=auto,format=yuv420p[framed]");
+  } else filters.push(`[${composite}]format=${transparent ? "rgba" : "yuv420p"}[framed]`);
   return filters.join(";");
 }

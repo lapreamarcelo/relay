@@ -1,8 +1,9 @@
+import { videoBackgroundCss } from "../lib/video-background";
 import { cloneElement, isValidElement, useEffect, useRef, useState } from "react";
 import type { DeviceFrame, VideoTimeline } from "@relay/core";
-import { AppWindow, Smartphone, Tablet, Monitor, Watch } from "lucide-react";
-import { defaultDeviceFrame, deviceFrameGeometry, deviceFrameSvg, deviceFrameLayerSvg, deviceBackgroundSvg } from "../lib/device-frames";
-import { deviceScene } from "../lib/device-motion";
+import { AppWindow, Smartphone, Tablet, Monitor, Watch, Rotate3d } from "lucide-react";
+import { defaultDeviceFrame, deviceFrameGeometry, deviceFrameSvg, deviceFrameLayerSvg, deviceBodyLayerSvg } from "../lib/device-frames";
+import { deviceScene, devicePanelAtScale } from "../lib/device-motion";
 import { LayerAnimationControls, easingOptions } from "./video-animation-controls";
 import "./app-demo-editor.css";
 
@@ -28,6 +29,7 @@ export function DeviceFrameControls({ value, disabled = false, advanced = false,
   durationMs?: number;
   onChange: (value: DeviceFrame | undefined) => void;
 }) {
+  const placement = useRef<HTMLDetailsElement>(null);
   const update = (changes: Partial<DeviceFrame>) => value && onChange({ ...value, ...changes });
   const select = (device: DeviceChoice) => {
     if (device === "none") return onChange(undefined);
@@ -76,9 +78,11 @@ export function DeviceFrameControls({ value, disabled = false, advanced = false,
           {value.motion && value.motion !== "none" && <label>Duration (seconds)<input aria-label="Device animation duration" type="number" min=".5" max="60" step=".5" disabled={disabled} value={(value.motionDurationMs ?? 4000) / 1000} onChange={event => { if (event.target.value) update({ motionDurationMs: Math.min(60000, Math.max(500, Number(event.target.value) * 1000)) }); }}/></label>}
           {value.motion && value.motion !== "none" && <label>Motion easing<select aria-label="Device motion easing" value={value.motionEasing ?? "linear"} disabled={disabled} onChange={event => update({ motionEasing: event.target.value as DeviceFrame["motionEasing"] })}>{easingOptions.map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>}
           {value.device === "iphone-duo" && <label className="device-demo-slider">Fold angle<input aria-label="Duo fold angle" type="range" min="0" max="165" step="1" value={value.foldAngle ?? 0} disabled={disabled} onChange={event => update({ foldAngle: Number(event.target.value) })}/><output>{value.foldAngle ?? 0}°</output></label>}
+          <button type="button" className="secondary-button" disabled={disabled} onClick={() => { if (placement.current) { placement.current.open = true; placement.current.scrollIntoView({ block: "nearest" }); } }}><Rotate3d/>3D rotation</button>
           <small>Scrub or play the timeline to preview the animation.</small>
         </div>
-        <details className="device-demo-transform"><summary>Position, scale & rotation</summary>
+        <details ref={placement} className="device-demo-transform"><summary>Position, scale & rotation</summary>
+          <small>Tilt the device on X/Y or rotate it on Z. Orbit animates the tilt over time.</small>
           {transformFields.map(field => <label className="device-demo-slider" key={field.key}>{field.label}<input aria-label={field.name} type="range" min={field.min} max={field.max} step={field.step} value={Math.round((value[field.key] ?? field.fallback) * field.factor)} disabled={disabled} onChange={event => update({ [field.key]: Number(event.target.value) / field.factor })}/><output>{Math.round((value[field.key] ?? field.fallback) * field.factor)}{field.unit}</output></label>)}
           <button type="button" className="secondary-button" disabled={disabled} onClick={() => update({ x: .5, y: .5, scale: 1, rotateX: 0, rotateY: 0, rotateZ: 0 })}>Reset placement</button>
         </details>
@@ -111,7 +115,7 @@ export function DeviceFramePreview({ value, width, height, children, timeMs = 0,
   const overlay = value ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(advanced ? deviceFrameLayerSvg(width, height, value) : deviceFrameSvg(width, height, value))}` : undefined;
   const backgroundColor = background?.color ?? value?.background ?? "#000000";
   const backgroundEnd = background?.endColor ?? (background ? undefined : value?.backgroundEnd);
-  const backgroundStyle = backgroundEnd ? `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(deviceBackgroundSvg(width, height, backgroundColor, backgroundEnd))}") center / 100% 100% no-repeat` : backgroundColor;
+  const backgroundStyle = videoBackgroundCss(width,height,background ?? {color:backgroundColor,endColor:backgroundEnd});
   useEffect(() => {
     const element = root.current;
     if (!element) return;
@@ -137,14 +141,21 @@ export function DeviceFramePreview({ value, width, height, children, timeMs = 0,
     videos.forEach(video => video.addEventListener("loadedmetadata", sync));
     return () => videos.forEach(video => video.removeEventListener("loadedmetadata", sync));
   }, [sourceTimeMs, playing, value?.device, scene?.panels.length, source, sourceVolume]);
+  const previewScale = previewWidth > 0 ? previewWidth / width : 1;
+  const previewHeight = height * previewScale;
   const screenStyle = geometry ? {
-    left: geometry.screen.x, top: geometry.screen.y, width: geometry.screen.width, height: geometry.screen.height,
-    borderRadius: geometry.screen.radius, background: "#000000",
+    left: geometry.screen.x * previewScale, top: geometry.screen.y * previewScale, width: geometry.screen.width * previewScale, height: geometry.screen.height * previewScale,
+    borderRadius: geometry.screen.radius * previewScale, background: "#000000",
   } : undefined;
   return <div ref={root} className={`device-frame-preview ${value?.device ?? "none"}`} style={{ background: transparent ? "transparent" : backgroundStyle }} data-device-preview={value?.device ?? "none"} data-device-time={Math.round(timeMs)}>
-    {scene ? <div className="device-demo-scene" style={{ width, height, transform: `scale(${previewWidth / width})`, opacity: scene.opacity }}>
-      {scene.panels.map((panel, index) => <div key={index} className="device-demo-panel" data-device-panel={index} data-device-panel-transform={panel.transform} style={{ width: panel.rect.width, height: panel.rect.height, transform: panel.transform, visibility: panel.visible ? "visible" : "hidden" }}>
-        <div className="device-demo-panel-content" style={{ width, height, left: -panel.rect.x, top: -panel.rect.y }}>
+    {scene ? <div className="device-demo-scene" style={{ width: previewWidth, height: previewHeight, opacity: scene.opacity }}>
+      {scene.bodyPanels.map(panel => devicePanelAtScale(panel, previewScale)).map((panel, index) => <div key={`body-${index}`} className="device-demo-panel device-demo-body-panel" data-device-body={index} style={{ width: panel.rect.width, height: panel.rect.height, transform: panel.transform, visibility: panel.visible ? "visible" : "hidden", pointerEvents: "none" }}>
+        <div className="device-demo-panel-content" style={{ width: previewWidth, height: previewHeight, left: -panel.rect.x, top: -panel.rect.y }}>
+          <img className="device-frame-overlay" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(deviceBodyLayerSvg(width,height,value!,panel.shade))}`} alt="" aria-hidden="true"/>
+        </div>
+      </div>)}
+      {scene.panels.map(panel => devicePanelAtScale(panel, previewScale)).map((panel, index) => <div key={index} className="device-demo-panel" data-device-panel={index} data-device-panel-transform={panel.transform} style={{ width: panel.rect.width, height: panel.rect.height, transform: panel.transform, visibility: panel.visible ? "visible" : "hidden" }}>
+        <div className="device-demo-panel-content" style={{ width: previewWidth, height: previewHeight, left: -panel.rect.x, top: -panel.rect.y }}>
           <div className="device-frame-screen" style={screenStyle}>{isValidElement<{ref?:React.Ref<HTMLVideoElement>}>(children) ? cloneElement(children, {ref:index===scene.panels.length-1?children.props.ref:undefined}) : children}</div>
           <img className="device-frame-overlay" src={overlay} alt="" aria-hidden="true"/>
         </div>

@@ -1,5 +1,6 @@
 // Run the production renderer with local storage adapters. No cloud credentials,
 // database, or network requests are used; FFmpeg and SVG composition are real.
+import sharp from "sharp";
 import { registerHooks } from "node:module";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -16,7 +17,9 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 const [documentPath, outputDirectory] = process.argv.slice(2);
 Object.assign(process.env, { R2_ACCOUNT_ID: "local-test", R2_ACCESS_KEY_ID: "local-test", R2_SECRET_ACCESS_KEY: "local-test", R2_BUCKET_NAME: "local-test", R2_PUBLIC_URL: "https://media.example.test" });
 const fixture = await readFile(new URL("./device-demo.mp4", import.meta.url));
+const background = await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#224488"/><rect x="40" width="40" height="40" fill="#A4D6C3"/></svg>')).png().toBuffer();
 globalThis.fetch = async url => {
+  if (String(url) === "https://media.example.test/backdrop.png") return new Response(background,{headers:{"content-length":String(background.length)}});
   if (String(url) !== "https://media.example.test/demo.mp4") throw new Error(`Unexpected asset: ${url}`);
   return new Response(fixture, { headers: { "content-length": String(fixture.length) } });
 };

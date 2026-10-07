@@ -285,6 +285,7 @@ export const postTarget = pgTable(
     error: text("error"),
     publishAttempts: integer("publish_attempts").notNull().default(0),
     publishAfter: timestamp("publish_after", { withTimezone: true }).notNull().defaultNow(),
+    processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
     publishLeaseOwner: text("publish_lease_owner"),
     publishLeaseExpiresAt: timestamp("publish_lease_expires_at", { withTimezone: true }),
     analyticsAfter: timestamp("analytics_after", { withTimezone: true }),

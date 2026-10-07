@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { expect, test } from "@playwright/test";
+import sharp from "sharp";
 import { normalizeVideoTimeline } from "../lib/video-timeline";
 
 const run = promisify(execFile);
@@ -21,9 +22,13 @@ test.afterEach(async ({ page }) => expect(runtimeErrors.get(page)).toEqual([]));
 const screen = "https://media.example.test/demo-screen.png";
 const artwork = '<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844"><rect width="390" height="844" fill="#dce8e0"/><rect x="30" y="120" width="330" height="140" rx="20" fill="#376456"/><text x="35" y="90" font-size="34">Your app</text></svg>';
 
-async function editor(page: import("@playwright/test").Page, realVideo = false) {
+const backdropUrl = "https://media.example.test/backdrop.png";
+const backdropArtwork = '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#224488"/><rect x="40" width="40" height="40" fill="#A4D6C3"/></svg>';
+
+async function editor(page: import("@playwright/test").Page, realVideo = false, backgroundLibrary = false) {
   let project: any = { id: "motion-demo", name: "Animated app demo", caption: "", brandId: "", labels: [], revision: 1, createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-02T00:00:00Z", timeline: { version: 1, aspectRatio: "9:16", clips: [{ id: "screen", name: "Screen recording", sourceUrl: realVideo ? "https://media.example.test/demo.mp4" : screen, kind: realVideo ? "video" : "image", inMs: realVideo ? 1000 : 0, outMs: realVideo ? 4000 : 5000, fit: "contain", x: .5, y: .5, zoom: 1, volume: realVideo ? .35 : 1 }], labels: [], music: { url: "", volume: 1, offsetMs: 0, fadeInMs: 0, fadeOutMs: 0 }, coverMs: 0 } };
   await page.route("https://media.example.test/**", r => {
+    if (r.request().url() === backdropUrl) return r.fulfill({contentType:"image/svg+xml",body:backdropArtwork});
     if (!r.request().url().endsWith(".mp4")) return r.fulfill({ contentType: "image/svg+xml", body: artwork });
     const file = readFileSync(new URL("./fixtures/device-demo.mp4",import.meta.url));
     const requested = /^bytes=(\d+)-(\d*)$/.exec(r.request().headers().range ?? "");
@@ -39,7 +44,7 @@ async function editor(page: import("@playwright/test").Page, realVideo = false) 
     }
     return r.fulfill({ json: { data: [project] } });
   });
-  for (const path of ["videos/templates", "brands/kit", "videos/jobs*", "media/projects", "media?*"]) await page.route(`**/api/v1/${path}`, r => r.fulfill({ json: { data: [] } }));
+  for (const path of ["videos/templates", "brands/kit", "videos/jobs*", "media/projects", "media?*"]) await page.route(`**/api/v1/${path}`, r => r.fulfill({ json: { data: backgroundLibrary && r.request().url().includes("media?kind=media") ? [{key:"backdrop",name:"Backdrop.png",url:backdropUrl},{key:"recording",name:"Recording.mp4",url:"https://media.example.test/demo.mp4"}] : [] } }));
   await page.goto("/demo?view=videos");
   await page.getByRole("button", { name: /^Animated app demo/ }).click();
   return () => project;
@@ -53,6 +58,96 @@ async function range(page: import("@playwright/test").Page, name: string, value:
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }, value);
 }
+
+test("image backgrounds combine with dimensional iPhone rotation and survive save/reload", async ({ page }, testInfo) => {
+  const project = await editor(page, false, true);
+  await page.getByRole("group", {name:"Device frame",exact:true}).getByRole("button",{name:"iPhone",exact:true}).click();
+  await page.getByLabel("Canvas background style",{exact:true}).selectOption("image");
+  const library = page.getByRole("dialog",{name:"Video assets",exact:true});
+  await expect(library.getByRole("button",{name:"Add Recording.mp4",exact:true})).toHaveCount(0);
+  await library.getByRole("button",{name:"Add Backdrop.png",exact:true}).click();
+  await expect(library).not.toBeVisible();
+  const canvas = page.locator(".unified-video-canvas");
+  await expect(canvas).toHaveCSS("background-image", /backdrop\.png/);
+  await expect(canvas.locator('[data-device-preview="iphone"]')).toHaveCSS("background-image", /backdrop\.png/);
+  await page.getByLabel("Background image fit",{exact:true}).selectOption("contain");
+  await expect(canvas).toHaveCSS("background-size", /^contain/);
+  await page.getByRole("button",{name:"3D rotation",exact:true}).click();
+  await range(page,"Device rotation X","-18");
+  await range(page,"Device rotation Y","32");
+  await range(page,"Device rotation Z","-8");
+  const front = canvas.locator("[data-device-panel]").first();
+  const posed = await front.getAttribute("data-device-panel-transform");
+  await expect(canvas.locator("[data-device-body]").first()).toBeVisible();
+  await page.getByLabel("Device animation",{exact:true}).selectOption("orbit");
+  await range(page,"Timeline playhead","1000");
+  await expect.poll(()=>front.getAttribute("data-device-panel-transform")).not.toBe(posed);
+  await page.getByRole("button",{name:"Save draft",exact:true}).click();
+  expect(project().timeline.background).toMatchObject({imageUrl:backdropUrl,imageFit:"contain"});
+  expect(project().timeline.clips).toHaveLength(1);
+  expect(project().timeline.clips[0].deviceFrame).toMatchObject({device:"iphone",rotateX:-18,rotateY:32,rotateZ:-8,motion:"orbit"});
+  await page.reload();
+  await page.getByRole("button",{name:/^Animated app demo/}).click();
+  await expect(page.getByLabel("Canvas background style",{exact:true})).toHaveValue("image");
+  await expect(page.getByLabel("Background image fit",{exact:true})).toHaveValue("contain");
+  await expect(canvas.locator("[data-device-body]").first()).toBeVisible();
+  await page.getByLabel("Background image fit",{exact:true}).selectOption("cover");
+  await page.getByRole("navigation",{name:"Video settings shortcuts"}).getByRole("button",{name:"Canvas settings",exact:true}).click();
+  // Inspect actual rendered diagonal edges, rather than only comparing CSS
+  // transforms. The previous double-scaled preview had no intermediate pixels
+  // here and looked like a staircase, despite its geometry tests passing.
+  const edgeCapture=await canvas.screenshot({path:`/tmp/relay-device-edge-${testInfo.project.name}.png`});
+  const {data,info}=await sharp(edgeCapture).removeAlpha().raw().toBuffer({resolveWithObject:true});
+  let smoothRows=0;
+  const firstRow=Math.ceil(info.height*.25),lastRow=Math.floor(info.height*.78);
+  for(let y=firstRow;y<lastRow;y++) {
+    let antialiased=false;
+    for(let x=0;x<info.width*.44;x++) {
+      const [r,g,b]=data.subarray((y*info.width+x)*3,(y*info.width+x)*3+3);
+      if(r<130&&b-g>5&&b-g<61&&Math.abs(r-g)<20) antialiased=true;
+    }
+    if(antialiased) smoothRows++;
+  }
+  expect(smoothRows/(lastRow-firstRow)).toBeGreaterThan(.25);
+  await page.screenshot({path:`/tmp/relay-image-background-${testInfo.project.name}.png`,fullPage:true,animations:"disabled"});
+  await page.getByRole("button",{name:"Remove background image",exact:true}).click();
+  await expect(canvas).not.toHaveCSS("background-image",/backdrop\.png/);
+  await page.getByRole("button",{name:"Undo",exact:true}).click();
+  await expect(canvas).toHaveCSS("background-image",/backdrop\.png/);
+  await page.getByRole("button",{name:"Add audio",exact:true}).click();
+  await expect(library.getByRole("heading",{name:"Add to your video",exact:true})).toBeVisible();
+  await expect(library.getByRole("button",{name:"audio",exact:true})).toHaveAttribute("aria-pressed","true");
+  await expect(library.getByRole("button",{name:"text",exact:true})).toBeVisible();
+  await library.getByRole("button",{name:"Close video assets",exact:true}).click();
+  if(testInfo.project.name==="chromium") {
+    const beforeResize=(await canvas.boundingBox())!.width;
+    await page.setViewportSize({width:1920,height:1080});
+    await expect.poll(async()=>(await canvas.boundingBox())!.width).toBeGreaterThan(beforeResize*1.4);
+    await page.getByLabel("Safe area guide",{exact:true}).uncheck();
+    await canvas.screenshot({path:"/tmp/relay-device-quality-canvas.png"});
+    await page.screenshot({path:"/tmp/relay-device-quality-editor.png",fullPage:true});
+  }
+});
+
+test("uploading a background image leaves footage unchanged and validates file types", async ({page}) => {
+  const project = await editor(page);
+  const clips = structuredClone(project().timeline.clips);
+  let uploads = 0;
+  await page.route("**/api/v1/media",route=>{uploads++;return route.fulfill({json:{key:"new-backdrop",url:backdropUrl,uploadUrl:"https://upload.example.test/background"}});});
+  await page.route("https://upload.example.test/background",route=>route.fulfill({status:200}));
+  // The editor uses a shared media input whose accept filter follows its destination.
+  await page.getByRole("button",{name:"Upload image",exact:true}).click();
+  const imageInput = page.locator('input[type="file"][accept^="image/png"]');
+  await imageInput.setInputFiles({name:"Not an image.mp4",mimeType:"video/mp4",buffer:Buffer.from("invalid")});
+  await expect(page.locator(".unified-video-studio").getByRole("alert")).toContainText("Choose a PNG, JPEG");
+  expect(uploads).toBe(0);
+  await page.getByRole("button",{name:"Dismiss",exact:true}).click();
+  await imageInput.setInputFiles({name:"Backdrop.png",mimeType:"image/png",buffer:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jH1sAAAAASUVORK5CYII=","base64")});
+  await page.getByRole("button",{name:"Save draft",exact:true}).click();
+  expect(uploads).toBe(1);
+  expect(project().timeline.clips).toEqual(clips);
+  expect(project().timeline.background).toMatchObject({imageUrl:backdropUrl,imageFit:"cover"});
+});
 
 test("Duo demo motion, placement and backgrounds persist and follow the playhead", async ({ page }) => {
   const project = await editor(page);
@@ -123,13 +218,15 @@ test("every device and animation preset works across promotion aspect ratios", a
 
 test("an edited promotion exports a real playable MP4 with its device, background and timed label", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
-  const project = await editor(page, true);
+  const project = await editor(page, true, true);
   await page.getByLabel("Aspect ratio", { exact: true }).selectOption("1:1");
   await page.getByRole("group", { name: "Device frame", exact: true }).getByRole("button", { name: "iPhone Duo", exact: true }).click();
   await page.getByLabel("Device animation", { exact: true }).selectOption("fold-cycle");
   await page.getByLabel("Device animation duration", { exact: true }).fill("2");
   await page.getByLabel("Canvas background style", { exact: true }).selectOption("solid");
   await page.getByLabel("Canvas background color", { exact: true }).fill("#112233");
+  await page.getByLabel("Canvas background style", { exact: true }).selectOption("image");
+  await page.getByRole("button", {name:"Add Backdrop.png",exact:true}).click();
   await page.getByLabel("Device entrance animation", { exact: true }).selectOption("fade");
   await page.getByLabel("Device entrance duration", { exact: true }).fill("500");
   await page.getByLabel("Device exit animation", { exact: true }).selectOption("fade");
@@ -182,7 +279,7 @@ test("an edited promotion exports a real playable MP4 with its device, backgroun
       const image = join(dir, `frame-${time}.rgb`);
       await run("ffmpeg", ["-v", "error", "-y", "-ss", time, "-i", output, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", image]);
       const pixels = await readFile(image);
-      [17, 34, 51].forEach((value, channel) => expect(Math.abs(pixels[channel] - value)).toBeLessThan(8));
+      [34, 68, 136].forEach((value, channel) => expect(Math.abs(pixels[channel] - value)).toBeLessThan(8));
       let count = 0;
       // The label sits above the device. Limit the check to that region so
       // magenta in the source recording cannot be mistaken for label pixels.

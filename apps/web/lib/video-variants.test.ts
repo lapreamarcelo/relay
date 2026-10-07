@@ -14,6 +14,7 @@ let failRenderAt = -1;
 const variants = new Map<string, VideoProjectRow>();
 const jobs = new Map<string, { id: string; projectId: string }>();
 const enqueued: string[] = [];
+Object.assign(process.env,{R2_ACCOUNT_ID:"local",R2_ACCESS_KEY_ID:"local",R2_SECRET_ACCESS_KEY:"local",R2_BUCKET_NAME:"local",R2_PUBLIC_URL:"https://media.example.test"});
 Object.assign(globalThis, { __relayVideoVariantsAdapter: {
   sql: async (strings: TemplateStringsArray, ...values: unknown[]) => {
     queries++;
@@ -35,7 +36,8 @@ Object.assign(globalThis, { __relayVideoVariantsAdapter: {
 } });
 registerHooks({ resolve(specifier, context, nextResolve) {
   let code: string | undefined;
-  if (specifier === "@relay/database") code = "export const sql=globalThis.__relayVideoVariantsAdapter.sql";
+  if (specifier === "server-only") code = "export{}";
+  else if (specifier === "@relay/database") code = "export const sql=globalThis.__relayVideoVariantsAdapter.sql";
   else if (specifier.endsWith("/render-jobs")) code = "export const enqueueRender=globalThis.__relayVideoVariantsAdapter.enqueueRender";
   else if (specifier.endsWith("/api-session")) code = `export async function requireApiSession(request,options){const token=request.headers.get('authorization');if(!token)return{response:Response.json({error:'Unauthorized'},{status:401})};if(token!=='Bearer write'||options.apiKeyScope!=='videos:write')return{response:Response.json({error:'Missing write scope'},{status:403})};return{session:{user:{id:'owner'}}}}`;
   if (code) return { url: `data:text/javascript,${encodeURIComponent(code)}`, shortCircuit: true };
@@ -43,7 +45,7 @@ registerHooks({ resolve(specifier, context, nextResolve) {
   catch (error) { if (specifier.startsWith(".") && !/\.[a-z]+$/i.test(specifier)) return nextResolve(`${specifier}.ts`, context); throw error; }
 } });
 const { POST } = await import("../app/api/v1/videos/variants/route.ts");
-const fixture = (): VideoTimeline => ({ ...emptyTimeline(), background: { color: "#112233", endColor: "#445566" }, clips: [{ id: "clip", name: "Phone recording", sourceUrl: "https://media.example.test/phone.mp4", kind: "video", inMs: 1000, outMs: 6000, fit: "contain", x: .5, y: .5, zoom: 1, volume: .4, deviceFrame: { device: "iphone", background: "#112233", color: "#171717", motion: "orbit", animation: { entrance: { preset: "pop", durationMs: 300 }, keyframes: [{ timeMs: 0, rotateY: -20 }, { timeMs: 2500, rotateY: 20 }] } } }], layers: [{ id: "watch", name: "Watch recording", sourceUrl: "https://media.example.test/watch.mp4", kind: "video", inMs: 0, outMs: 6000, startMs: 2000, fit: "contain", x: .3, y: .5, zoom: 1, volume: 0, deviceFrame: { device: "watch", background: "#112233", color: "#171717", motion: "float" } }], labels: ["brand", "hook"].map((id, index) => ({ id, text: index ? "Original hook" : "Brand stays", startMs: 500, endMs: 7500, x: .5, y: .2 + index * .2, width: .7, height: .12, fontSize: 64, font: "modern", textColor: "#FFFFFF", background: "dark", backgroundColor: "#000000", style: "dark", animation: { entrance: { preset: "typewriter", durationMs: 400 }, keyframes: [{ timeMs: 0, scale: .8 }, { timeMs: 1000, scale: 1.1 }] } })), music: { url: "https://media.example.test/music.wav", name: "Launch track", volume: .35, offsetMs: 200, startMs: 1000, endMs: 8000, fadeInMs: 400, fadeOutMs: 500 }, coverMs: 3000 });
+const fixture = (): VideoTimeline => ({ ...emptyTimeline(), background: { color: "#112233", endColor: "#445566", imageUrl:"https://media.example.test/background.png", imageFit:"contain" }, clips: [{ id: "clip", name: "Phone recording", sourceUrl: "https://media.example.test/phone.mp4", kind: "video", inMs: 1000, outMs: 6000, fit: "contain", x: .5, y: .5, zoom: 1, volume: .4, deviceFrame: { device: "iphone", background: "#112233", color: "#171717", motion: "orbit", animation: { entrance: { preset: "pop", durationMs: 300 }, keyframes: [{ timeMs: 0, rotateY: -20 }, { timeMs: 2500, rotateY: 20 }] } } }], layers: [{ id: "watch", name: "Watch recording", sourceUrl: "https://media.example.test/watch.mp4", kind: "video", inMs: 0, outMs: 6000, startMs: 2000, fit: "contain", x: .3, y: .5, zoom: 1, volume: 0, deviceFrame: { device: "watch", background: "#112233", color: "#171717", motion: "float" } }], labels: ["brand", "hook"].map((id, index) => ({ id, text: index ? "Original hook" : "Brand stays", startMs: 500, endMs: 7500, x: .5, y: .2 + index * .2, width: .7, height: .12, fontSize: 64, font: "modern", textColor: "#FFFFFF", background: "dark", backgroundColor: "#000000", style: "dark", animation: { entrance: { preset: "typewriter", durationMs: 400 }, keyframes: [{ timeMs: 0, scale: .8 }, { timeMs: 1000, scale: 1.1 }] } })), music: { url: "https://media.example.test/music.wav", name: "Launch track", volume: .35, offsetMs: 200, startMs: 1000, endMs: 8000, fadeInMs: 400, fadeOutMs: 500 }, coverMs: 3000 });
 function reset(timeline = fixture()) {
   source = { id: "source", brand_id: "brand", name: "App launch", caption: "Try {hook}: {hook}", source_url: "", source_folder_id: null, music_url: null, music_folder_id: null, labels: [], timeline, template_id: "saved-template", revision: 2, rendered_url: null, created_at: new Date(0), updated_at: new Date(0) };
   variants.clear(); jobs.clear(); enqueued.length = 0; inserts = 0; queries = 0; failRenderAt = -1;
@@ -107,4 +109,15 @@ test("legacy first-label and label-free layer-only variants remain compatible", 
 test("variants route requires authenticated video write access before database reads", async () => {
   reset(); assert.equal((await request(input(), "")).status, 401); assert.equal((await request(input(), "read-only")).status, 403);
   assert.equal(queries, 0); assert.equal(inserts, 0);
+});
+
+test("variants reject a saved third-party background before cloning, inserting or enqueueing", async () => {
+  for (const imageUrl of ["https://outside.example/background.png","https://media.example.test/background.png?redirect=https://outside.example","https://user:password@media.example.test/background.png","https://media.example.test/folder%2Fprivate.png"]) {
+    const timeline=fixture();timeline.background!.imageUrl=imageUrl;reset(timeline);
+    const response=await request(input({render:true}));
+    assert.equal(response.status,400);
+    assert.match((await response.json()).error,/Relay R2 library/);
+    assert.equal(queries,1,"only the owned source project is read");
+    assert.equal(inserts,0);assert.equal(variants.size,0);assert.equal(enqueued.length,0);
+  }
 });

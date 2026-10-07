@@ -1,10 +1,10 @@
 "use client";
 
+import ModalLayer from "./modal-layer";
 import { GrowthCat, type GrowthCatSponsorData, type SponsorCreative } from "@growthcat/web";
 import { useSponsor } from "@growthcat/web/react";
 import { ArrowUpRight, CalendarDays, Crown, Medal, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 import { useModalAccessibility } from "../lib/use-modal-accessibility";
 
@@ -182,7 +182,7 @@ export function SponsorMarketplace() {
 
   return <>
     <button className="sponsor-trigger" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Sponsor Relay"><Crown /><span>Sponsor Relay</span></button>
-    {open && typeof document !== "undefined" && createPortal(<div className="modal-layer sponsor-market-layer">
+    {open && <ModalLayer className="modal-layer sponsor-market-layer">
       <button className="modal-scrim" onClick={() => setOpen(false)} aria-label="Close sponsorship options" />
       <section className="sponsor-market" role="dialog" aria-modal="true" aria-labelledby="sponsor-market-title" tabIndex={-1}>
         <header>
@@ -197,6 +197,6 @@ export function SponsorMarketplace() {
         </div>
         <footer><span><Sparkles /> Prices and availability come live from GrowthCat.</span><small>Bookings open in a secure new tab.</small></footer>
       </section>
-    </div>, document.body)}
+    </ModalLayer>}
   </>;
 }

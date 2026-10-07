@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { lockPageScroll } from "./page-scroll-lock";
 
 const selector = "a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
 
@@ -8,20 +9,23 @@ export function useModalAccessibility(): void {
   useEffect(() => {
     let activeDialog: HTMLElement | null = null;
     let restoreTarget: HTMLElement | null = null;
+    let releaseScroll: (() => void) | null = null;
     const sync = () => {
-      const next = [...document.querySelectorAll<HTMLElement>("[aria-modal='true']")].at(-1) ?? null;
+      const nativeDialog = [...document.querySelectorAll<HTMLElement>("dialog:modal")].at(-1);
+      const next = nativeDialog ?? [...document.querySelectorAll<HTMLElement>("[aria-modal='true']")].at(-1) ?? null;
       if (next === activeDialog) return;
-      if (!next && restoreTarget?.isConnected) restoreTarget.focus();
+      if (!next) { releaseScroll?.(); releaseScroll = null; if (restoreTarget?.isConnected) restoreTarget.focus({ preventScroll: true }); }
       if (next) {
+        releaseScroll ??= lockPageScroll();
         if (!activeDialog) restoreTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        queueMicrotask(() => (next.querySelector<HTMLElement>("[autofocus],input,textarea,select,button,a[href]") ?? next).focus());
+        queueMicrotask(() => { if (next.isConnected) (next.querySelector<HTMLElement>("[autofocus],input,textarea,select,button,a[href]") ?? next).focus({ preventScroll: true }); });
       }
       activeDialog = next;
     };
     const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true }); sync();
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["open"] }); sync();
     const keydown = (event: KeyboardEvent) => {
-      if (!activeDialog) return;
+      if (!activeDialog || event.defaultPrevented) return;
       if (event.key === "Escape") {
         const scrim = activeDialog.closest(".modal-layer,.composer-layer,.notification-layer")?.querySelector<HTMLButtonElement>(".modal-scrim,.notification-scrim");
         if (scrim && !scrim.disabled) { event.preventDefault(); scrim.click(); }
@@ -35,6 +39,6 @@ export function useModalAccessibility(): void {
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
     document.addEventListener("keydown", keydown);
-    return () => { observer.disconnect(); document.removeEventListener("keydown", keydown); };
+    return () => { observer.disconnect(); document.removeEventListener("keydown", keydown); releaseScroll?.(); };
   }, []);
 }

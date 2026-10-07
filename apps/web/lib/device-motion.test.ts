@@ -7,8 +7,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import sharp from "sharp";
 import type { DeviceFrame, VideoClip } from "@relay/core";
-import { deviceBackgroundSvg, deviceFrameLayerSvg } from "./device-frames.ts";
-import { devicePanelViewport, deviceScene, deviceVideoSceneFilter, type DevicePanel } from "./device-motion.ts";
+import { deviceBackgroundSvg, deviceBodyLayerSvg, deviceFrameLayerSvg } from "./device-frames.ts";
+import { devicePanelAtScale, devicePanelViewport, deviceScene, deviceVideoSceneFilter, type DevicePanel } from "./device-motion.ts";
 
 const frame: DeviceFrame = { device: "iphone-duo", color: "#171717", background: "#00FF00" };
 const clip = (deviceFrame?: DeviceFrame): VideoClip => ({ id: "test", name: "test", sourceUrl: "https://example.com/test.mp4", kind: "video", inMs: 0, outMs: 1000, fit: "cover", x: .5, y: .5, zoom: 1, volume: 1, deviceFrame });
@@ -18,6 +18,19 @@ function map(panel: DevicePanel, x: number, y: number) {
   return { x: (m[0] * x + m[4] * y + m[12]) / w, y: (m[1] * x + m[5] * y + m[13]) / w };
 }
 const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
+
+test("preview pixel projection preserves output geometry across viewport sizes without a parent scale", () => {
+  const original = deviceScene(1080,1920,{...frame,rotateX:-18,rotateY:32,rotateZ:-8,foldAngle:85});
+  for(const scale of [.1,.333,1,2]) for(const panel of [...original.panels,...original.bodyPanels]) {
+    const preview=devicePanelAtScale(panel,scale);
+    for(const [i,[x,y]] of [[0,0],[preview.rect.width,0],[0,preview.rect.height],[preview.rect.width,preview.rect.height]].entries()) {
+      const projected=map(preview,x,y);
+      close(projected.x,panel.corners[i].x*scale);close(projected.y,panel.corners[i].y*scale);
+    }
+    assert.equal(preview.visible,panel.visible);
+    assert.equal(preview.shade,panel.shade);
+  }
+});
 
 test("panel homographies map the complete device and source screen through the same projection", () => {
   for (const settings of [frame, { ...frame, x: .2, y: .75, scale: .8, rotateX: 30, rotateY: -25, rotateZ: 42, foldAngle: 125 }]) {
@@ -58,6 +71,29 @@ test("edge-on and back-facing Duo panels are hidden consistently", () => {
   assert.equal(back.panels[1].visible, true);
 });
 
+test("rotated device bodies have physical thickness and share front homographies and visibility", () => {
+  for(const device of ["iphone","watch","iphone-duo"] as const) {
+    const settings:DeviceFrame={...frame,device,rotateX:20,rotateY:45,foldAngle:device==="iphone-duo"?80:0};
+    const scene=deviceScene(360,480,settings);
+    assert.equal(scene.bodyPanels.length,scene.panels.length*2);
+    scene.bodyPanels.forEach((panel,index)=>{
+      assert.ok(panel.depth!<0);
+      assert.equal(panel.visible,scene.panels[index%scene.panels.length].visible);
+      for(const [i,[x,y]] of [[0,0],[panel.rect.width,0],[0,panel.rect.height],[panel.rect.width,panel.rect.height]].entries()) {
+        const actual=map(panel,x,y);close(actual.x,panel.corners[i].x);close(actual.y,panel.corners[i].y);
+      }
+      assert.notDeepEqual(panel.corners,scene.panels[index%scene.panels.length].corners);
+      const viewport=devicePanelViewport(360,480,settings,panel.rect,4000,panel.depth);
+      for(const corner of panel.corners) {
+        if(corner.x>=0&&corner.x<=360) assert.ok(corner.x>=viewport.x&&corner.x<=viewport.x+viewport.width);
+        if(corner.y>=0&&corner.y<=480) assert.ok(corner.y>=viewport.y&&corner.y<=viewport.y+viewport.height);
+      }
+    });
+  }
+  assert.deepEqual(deviceScene(360,480,{...frame,device:"browser"}).bodyPanels,[]);
+  assert.deepEqual(deviceScene(360,480,{...frame,device:"iphone"}).bodyPanels,[],"face-on devices skip invisible body warps");
+});
+
 test("bounded export viewports cover projected preset corners throughout a cycle", () => {
   for (const motion of ["none", "float", "orbit", "fold", "unfold", "fold-cycle"] as const) {
     const settings: DeviceFrame = { ...frame, motion, scale: 1.5, rotateX: 60, rotateY: -55, rotateZ: 160, x: .25, y: .8 };
@@ -72,6 +108,37 @@ test("bounded export viewports cover projected preset corners throughout a cycle
 
 const run = promisify(execFile);
 const ffmpegAvailable = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0;
+test("FFmpeg exports the same projected metal side behind the iPhone screen", {skip:!ffmpegAvailable,timeout:15000}, async()=>{
+  const dir=await mkdtemp(join(tmpdir(),"relay-device-depth-"));
+  const width=360,height=480,settings:DeviceFrame={...frame,device:"iphone",rotateY:50};
+  try {
+    await writeFile(join(dir,"frame.png"),await sharp(Buffer.from(deviceFrameLayerSvg(width,height,settings))).png().toBuffer());
+    await writeFile(join(dir,"body.png"),await sharp(Buffer.from(deviceBodyLayerSvg(width,height,settings))).png().toBuffer());
+    await writeFile(join(dir,"bg.png"),await sharp(Buffer.from(deviceBackgroundSvg(width,height,frame.background))).png().toBuffer());
+    await run("ffmpeg",["-v","error","-y","-f","lavfi","-i","color=blue:size=80x100:rate=30","-i",join(dir,"frame.png"),"-i",join(dir,"body.png"),"-i",join(dir,"bg.png"),"-filter_complex_threads","1","-filter_complex",deviceVideoSceneFilter(width,height,clip(settings),3,1000,true,2),"-map","[framed]","-frames:v","1",join(dir,"still.png")]);
+    const {data,info}=await sharp(join(dir,"still.png")).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+    const scene=deviceScene(width,height,settings);
+    const front=map(scene.panels[0],0,scene.panels[0].rect.height/2);
+    const rear=map(scene.bodyPanels[0],0,scene.bodyPanels[0].rect.height/2);
+    const offset=(Math.round((front.y+rear.y)/2)*info.width+Math.round((front.x+rear.x)/2))*4;
+    assert.ok(data[offset+3]>200,"metal body is visible in the gap behind the front edge");
+    assert.ok(data[offset+2]<150,"the side contains body material rather than recording pixels");
+    const center=(height/2*info.width+width/2)*4;
+    assert.ok(data[center+2]>200&&data[center+3]===255,"screen stays opaque over the body");
+    assert.equal(data[3],0,"outside device stays transparent");
+    const faded:DeviceFrame={...settings,animation:{keyframes:[{timeMs:0,opacity:.5}]}};
+    for(const transparent of [true,false]) {
+      const output=join(dir,`fade-${transparent}.png`);
+      await run("ffmpeg",["-v","error","-y","-f","lavfi","-i","color=blue:size=80x100:rate=30","-i",join(dir,"frame.png"),"-i",join(dir,"body.png"),"-i",join(dir,"bg.png"),"-filter_complex_threads","1","-filter_complex",deviceVideoSceneFilter(width,height,clip(faded),3,1000,transparent,2),"-map","[framed]","-frames:v","1",output]);
+      const pixels=await sharp(output).ensureAlpha().raw().toBuffer();
+      if(transparent) assert.ok(pixels[center+3]>=125&&pixels[center+3]<=130,"body and glass fade as a single group instead of accumulating alpha");
+      else {
+        assert.ok(pixels[center+1]>110&&pixels[center+2]>110,"faded glass reveals the opaque canvas background");
+        assert.equal(pixels[3],255,"group fade leaves background opaque");
+      }
+    }
+  } finally {await rm(dir,{recursive:true,force:true});}
+});
 test("transparent Watch and iPhone scenes keep opaque screens and alpha-zero outside edges", { skip: !ffmpegAvailable, timeout: 15000 }, async () => {
   const dir=await mkdtemp(join(tmpdir(),"relay-layer-alpha-"));
   const width=160,height=200;
@@ -170,14 +237,15 @@ test("keyframes move the projected frame and fade alpha consistently in real FFm
   } finally {await rm(dir,{recursive:true,force:true});}
 });
 
-test("the maximum keyframe track exports without FFmpeg parser nesting failures", { skip: !ffmpegAvailable, timeout: 30000 }, async () => {
+test("the maximum keyframe track exports without FFmpeg parser nesting failures", { skip: !ffmpegAvailable, timeout: 60000 }, async () => {
   const dir=await mkdtemp(join(tmpdir(),"relay-keyframe-limit-"));
   const animated:DeviceFrame={...frame,animation:{keyframes:Array.from({length:100},(_,i)=>({timeMs:i*100,x:.1+i*.008,y:.1+i*.008,scale:.5+i*.008,rotateX:i*.3,rotateY:i*.3,rotateZ:i,foldAngle:i,opacity:.5+i*.005}))}};
   try {
     await writeFile(join(dir,"frame.png"),await sharp(Buffer.from(deviceFrameLayerSvg(160,200,animated))).png().toBuffer());
+    await writeFile(join(dir,"body.png"),await sharp(Buffer.from(deviceBodyLayerSvg(160,200,animated))).png().toBuffer());
     await writeFile(join(dir,"background.png"),await sharp(Buffer.from(deviceBackgroundSvg(160,200,frame.background))).png().toBuffer());
-    await writeFile(join(dir,"filter.txt"),deviceVideoSceneFilter(160,200,{...clip(animated),outMs:10000},2));
-    await run("ffmpeg",["-v","error","-y","-f","lavfi","-i","color=red:size=80x100:rate=30","-i",join(dir,"frame.png"),"-i",join(dir,"background.png"),"-filter_complex_threads","1","-filter_complex_script",join(dir,"filter.txt"),"-map","[framed]","-frames:v","1","-f","null","-"],{maxBuffer:1024*1024});
+    await writeFile(join(dir,"filter.txt"),deviceVideoSceneFilter(160,200,{...clip(animated),outMs:10000},3,10000,false,2));
+    await run("ffmpeg",["-v","error","-y","-f","lavfi","-i","color=red:size=80x100:rate=30","-i",join(dir,"frame.png"),"-i",join(dir,"body.png"),"-i",join(dir,"background.png"),"-filter_complex_threads","1","-filter_complex_script",join(dir,"filter.txt"),"-map","[framed]","-frames:v","1","-f","null","-"],{maxBuffer:1024*1024});
   } finally {await rm(dir,{recursive:true,force:true});}
 });
 

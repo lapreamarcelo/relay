@@ -77,7 +77,8 @@ export function normalizeVideoTimeline(value: unknown): VideoTimeline {
   if (v.background !== undefined) {
     const b = object(v.background);
     const color = (value: unknown) => { if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error("Background colors must be six-digit hex colors."); return value.toUpperCase(); };
-    background = { color: color(b.color), ...(b.endColor === undefined ? {} : { endColor: color(b.endColor) }) };
+    if (b.imageFit !== undefined && b.imageFit !== "cover" && b.imageFit !== "contain") throw new Error("Background image fit must be cover or contain.");
+    background = { color: color(b.color), ...(b.endColor === undefined ? {} : { endColor: color(b.endColor) }), ...(b.imageUrl === undefined ? {} : {imageUrl: url(b.imageUrl)}), ...(b.imageFit === undefined ? {} : {imageFit: b.imageFit}) };
   }
   const camera = normalizeVideoCamera(v.camera);
   return { version: 1, aspectRatio: v.aspectRatio as VideoTimeline["aspectRatio"], ...(background ? { background } : {}), ...(camera ? {camera} : {}), clips, ...(layers === undefined ? {} : {layers}), labels, music: { url: url(music.url,true), ...(musicName ? { name: musicName } : {}), volume: number(music.volume,0,1,.8), offsetMs: number(music.offsetMs,0,3_600_000,0), fadeInMs: number(music.fadeInMs,0,900_000,0), fadeOutMs: number(music.fadeOutMs,0,900_000,0), ...(hasMusicRange ? { startMs: musicStartMs, endMs: musicEndMs } : {}) }, coverMs: number(v.coverMs,0,Math.max(0,duration-1),0) };

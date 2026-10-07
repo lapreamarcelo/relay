@@ -7,7 +7,7 @@ import { ProviderPublishError } from "@relay/providers/publish";
  * handed to a provider publish call.
  */
 export async function withFreshAccountToken<T>(
-  lifecycle: TokenLifecycleService,
+  lifecycle: Pick<TokenLifecycleService, "getValidAccessToken" | "markAuthorizationRejected">,
   accountId: string,
   publish: (accessToken: string) => Promise<T>,
 ): Promise<T> {

@@ -4,7 +4,7 @@ import { videoSizes } from "./video-timeline.ts";
 /** Agent-facing design information derived from the same geometry as preview/export. */
 export function deviceFrameCatalog() {
   return {
-    version: 3,
+    version: 4,
     requiresAi: false,
     appliesTo: ["timeline.clips[].deviceFrame", "slides[].deviceFrame"],
     fields: {
@@ -24,6 +24,14 @@ export function deviceFrameCatalog() {
       motionEasing: { required: false, values: ["linear", "ease-in", "ease-out", "ease-in-out"], videoOnly: true },
       animation: { required: false, videoOnly: true, description: "Entrance/exit presets and sparse keyframes. Call MCP list_video_animations or capabilities?section=video-animation for the full contract." },
     },
+    canvasBackground: {
+      field: "timeline.background", videoOnly: true,
+      color: { required: true, format: "#RRGGBB", description: "Backdrop beneath the image, or the solid canvas when there is no image." },
+      endColor: { required: false, format: "#RRGGBB", description: "Diagonal gradient endpoint." },
+      imageUrl: { required: false, protocol: "https", source: "Relay R2 media library", maximumBytes: 30 * 1024 * 1024, maximumPixels: 40_000_000, description: "Static image behind all device layers and text; upload/select from Media." },
+      imageFit: { required: false, values: ["cover", "contain"], default: "cover", description: "Centered crop or letterbox. Transparent image areas and letterboxes show the color/gradient." },
+      example: { color: "#112233", imageUrl: "https://your_r2_library/background.jpg", imageFit: "cover" },
+    },
     parallelLayers: {
       field: "timeline.layers", maximum: 12, order: "Back-to-front above sequential clips; text labels are topmost.",
       timing: "Each layer has startMs on the shared timeline and inMs/outMs source trims. End is startMs+outMs-inMs. Animation time zero is startMs. Layers may share a source or use separate recordings; each has independent pose, motion/keyframes and volume. No incoming clip transitions on layers.",
@@ -42,7 +50,7 @@ export function deviceFrameCatalog() {
       { device: "phone", name: "Generic phone", useFor: "Portrait mobile app screenshots and screen recordings." },
       { device: "tablet", name: "Generic tablet", useFor: "Tablet app screenshots and screen recordings." },
       { device: "browser", name: "Generic browser", useFor: "Desktop web app screenshots and screen recordings." },
-      { device: "iphone", name: "iPhone", useFor: "Stylized mobile app demo with a pill camera cutout." },
+      { device: "iphone", name: "iPhone", useFor: "Mobile app demo with a slim metal rim, side buttons, glass bezel and Dynamic Island." },
       { device: "iphone-duo", name: "iPhone Duo", useFor: "Stylized folding demo; source content is split across the two hinged panels." },
       { device: "mac", name: "Mac", useFor: "Stylized desktop display for Mac app demos." },
       { device: "watch", name: "Watch", useFor: "Rounded square wearable app demos." },
@@ -62,13 +70,13 @@ export function deviceFrameCatalog() {
       labels: "Labels are placed above the frame on the full output canvas. Use the layout rectangles to avoid covering important UI.",
       images: "Slideshows export 1080×1920 JPEGs. Use the 9:16 layout for slides, including single-image posts.",
       videos: "Video timelines support all listed aspect ratios and both video and image clips. Device pose and motion are saved in the project. Source video and audio keep playing while the device moves. timeline.layers adds up to 12 independently timed devices over the clips (or on a shared background with clips:[]).",
-      canvasBackground: "Optional timeline.background {color:#RRGGBB,endColor?:#RRGGBB} overrides per-frame backgrounds. Without a frame it is visible around contain-fit clips. Cover fills the canvas.",
+      canvasBackground: "Optional timeline.background {color:#RRGGBB,endColor?:#RRGGBB,imageUrl?:HTTPS_R2_LIBRARY_URL,imageFit?:cover|contain} overrides per-frame backgrounds. A static image is center-cropped (cover, default) or center-letterboxed (contain) above the color/gradient. It appears behind framed media/layers, around contain-fit media and after sequential clips end while remaining layers play. Unframed cover-fit footage fills the canvas.",
       motion: "Motion is evaluated from local clip time (assembled playhead minus clip start), at 30fps on export. orbit and float repeat; fold/unfold hold their final pose; fold-cycle folds and opens repeatedly. Fold presets require iphone-duo. foldAngle sets their maximum fold; 0 or omission uses 150 degrees. Set motion:none to pose manually.",
       duo: "A stylized two-panel hinge, using the left and right halves of one source recording. It does not capture a Simulator or attach a separate outer-screen recording.",
-      geometry: "Layouts describe the default unposed device. Position/scale/rotation/motion/keyframes change its screen location; use modest tilt and scale and leave margin for motion. Labels use full-canvas positions and may have their own animation.",
+      geometry: "Layouts describe the default unposed device. Position/scale/rotation/motion/keyframes change its screen location; use modest tilt and scale and leave margin for motion. Projected metal body depth follows X/Y tilt, orbit and Duo folding in preview and export. Rotate X/Y within -60–60 degrees and Z within -180–180 degrees; this is perspective depth, not a full 360-degree mesh with modeled rear cameras. Labels use full-canvas positions and may have their own animation.",
       remove: "Omit deviceFrame from the updated clip/slide in the full project document to disable it. Preserve other clips/slides; video updates require the retrieved revision.",
       rerender: "After editing, render again before creating a post. Remove stale renderedUrl from edited slideshow slides. Existing published outputs do not change.",
-      limits: "Built-in stylized bezels with perspective panels, not photorealistic 3D meshes. No custom frame uploads, image/video backgrounds, separate camera tracks, lighting or depth of field. Slideshow frames support static device shapes/colors/gradients; pose, motion and keyframes require video timeline clips.",
+      limits: "Built-in detailed bezels with projected body depth, not full photorealistic 3D meshes or 360-degree spins with modeled rear cameras. Static PNG/JPEG/WebP/AVIF image backgrounds support Relay library images up to 30 MB and 40 megapixels; animated images and SVG backgrounds are rejected. No custom frame uploads, video backgrounds, lighting or depth of field. Slideshow frames support static device shapes/colors/gradients; image canvas backgrounds, pose, motion and keyframes require video timelines.",
     },
     motionExample: {
       device: "iphone-duo", background: "#182422", backgroundEnd: "#537C68", color: "#171717",

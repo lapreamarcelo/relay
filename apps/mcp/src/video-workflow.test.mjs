@@ -29,7 +29,7 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
     calls.push({ path: url.pathname, method: request.method, body });
     try {
       if (url.pathname === "/api/v1/capabilities") return reply(200, { data: url.searchParams.get("section") === "device-frames" ? deviceFrameCatalog() : url.searchParams.get("section") === "video-animation" ? videoAnimationCatalog() : { scopes: ["videos:read", "videos:write", "media:write"], deviceFrames: deviceFrameCatalog(), videoAnimations: videoAnimationCatalog() } });
-      if (url.pathname === "/api/v1/media") return reply(201, { key: "screen.mp4", url: "https://media.example.test/screen.mp4", uploadUrl: "https://upload.example.test/screen.mp4" });
+      if (url.pathname === "/api/v1/media") return reply(201, { key: body.fileName, url: `https://media.example.test/${body.fileName}`, uploadUrl: `https://upload.example.test/${body.fileName}` });
       if (url.pathname === "/api/v1/videos/compose") {
         if (request.method === "GET") return reply(200, { data: { available: true, provider: "openai" } });
         assert.equal(body.prompt, "Make a cinematic launch for My app");
@@ -103,15 +103,22 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
     const catalog = (await call("list_device_frames")).data;
     assert.equal(catalog.frames.length, 8);
     assert.equal(catalog.parallelLayers.maximum, 12);
+    assert.equal(catalog.canvasBackground.field,"timeline.background");
+    assert.deepEqual(catalog.canvasBackground.imageFit.values,["cover","contain"]);
+    assert.equal(catalog.canvasBackground.imageUrl.maximumBytes,30*1024*1024);
     const animations = (await call("list_video_animations")).data;
     assert.ok(animations.textPresets.includes("typewriter")); assert.ok(animations.transitionKinds.includes("crossfade"));
     assert.deepEqual(animations.camera.presets, ["zoom-in", "zoom-out", "focus-return"]);
     assert.deepEqual(animations.camera.zoom, [1, 4]);
     assert.equal(animations.examples.camera.keyframes.at(-1).zoom, 1);
     assert.ok(tools.find(tool => tool.name === "save_video").inputSchema.properties.timeline.properties.camera);
+    const backgroundSchema=tools.find(tool=>tool.name==="save_video").inputSchema.properties.timeline.properties.background.properties;
+    assert.ok(backgroundSchema.imageUrl);
+    assert.deepEqual(backgroundSchema.imageFit.enum,["cover","contain"]);
     await call("get_capabilities");
     const upload = await call("prepare_media_upload", { fileName: "screen.mp4", contentType: "video/mp4" });
     assert.equal(upload.url, "https://media.example.test/screen.mp4");
+    const backgroundUpload=await call("prepare_media_upload",{fileName:"backdrop.png",contentType:"image/png"});
     const timeline = { version: 1, aspectRatio: "9:16", background: { color: "#112233", endColor: "#445566" }, clips: [{ id: "recording", name: "My app", sourceUrl: upload.url, kind: "video", inMs: 1000, outMs: 6000, sourceDurationMs: 8000, fit: "contain", x: .4, y: .6, zoom: 1.2, volume: .35, deviceFrame: { device: "iphone-duo", color: "#171717", background: "#223344", x: .55, y: .45, scale: .85, rotateX: -8, rotateY: 15, rotateZ: -6, foldAngle: 150, motion: "fold-cycle", motionDurationMs: 2000 } }], labels: [{ id: "hook", text: "Meet my app", x: .4, y: .2, width: .7, height: .15, fontSize: 64, font: "editorial", textColor: "#FFFFFF", background: "dark", backgroundColor: "#332211", style: "dark", startMs: 500, endMs: 3500 }], music: { url: "https://media.example.test/music.wav", name: "Launch music", startMs: 1000, endMs: 4000, offsetMs: 250, volume: .45, fadeInMs: 500, fadeOutMs: 600 }, coverMs: 1500 };
     timeline.camera = { zoom: 1, x: .5, y: .5, keyframes: [
       {timeMs:0,zoom:1,x:.5,y:.5,easing:"ease-in-out"},
@@ -119,6 +126,8 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
       {timeMs:3000,x:.3,y:.7,easing:"ease-out"},
       {timeMs:4000,zoom:1,x:.5,y:.5},
     ] };
+    timeline.background.imageUrl=backgroundUpload.url;
+    timeline.background.imageFit="contain";
     timeline.clips[0].deviceFrame.motionEasing = "ease-in-out";
     timeline.clips[0].deviceFrame.animation = { entrance: { preset: "slide-up", durationMs: 500 }, exit: { preset: "fade", durationMs: 400 }, keyframes: [{ timeMs: 0, x: .4, foldAngle: 0, easing: "ease-in-out" }, { timeMs: 2000, x: .6, foldAngle: 150, opacity: .8 }] };
     timeline.labels[0].animation = { entrance: { preset: "typewriter", durationMs: 800, easing: "linear" }, exit: { preset: "pop", durationMs: 400 }, keyframes: [{ timeMs: 0, scale: .8 }, { timeMs: 1500, scale: 1.2, rotateZ: 12 }] };
@@ -160,6 +169,12 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
       assert.equal(invalidCamera.isError,true);
     }
     assert.equal(calls.filter(call => call.path === "/api/v1/videos").length,beforeInvalidCamera,"invalid cameras are rejected before API writes");
+    const beforeInvalidBackground=calls.filter(call=>call.path==="/api/v1/videos").length;
+    for(const change of [{imageUrl:"http://media.example.test/a.png"},{imageUrl:"file:///tmp/a.png"},{imageUrl:"data:image/png;base64,a"},{imageUrl:""},{imageFit:"stretch"}]) {
+      const invalidBackground=await client.callTool({name:"save_video",arguments:{...project,timeline:{...project.timeline,background:{...project.timeline.background,...change}}}});
+      assert.equal(invalidBackground.isError,true);
+    }
+    assert.equal(calls.filter(call=>call.path==="/api/v1/videos").length,beforeInvalidBackground,"invalid background input is rejected before API writes");
     const beforeInvalidLayer = calls.filter(call=>call.path==="/api/v1/videos").length;
     const invalidLayer = await client.callTool({name:"save_video",arguments:{name:"Unsafe layer",timeline:{...project.timeline,layers:[{...project.timeline.layers[0],transition:{kind:"crossfade",durationMs:500}}]}}});
     assert.equal(invalidLayer.isError,true);

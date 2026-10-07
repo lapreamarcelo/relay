@@ -2,6 +2,22 @@
 
 Verified locally on 2026-10-02 against the production Next.js build.
 
+## Device preview edge quality — 2026-10-05
+
+Compared the device examples at [Matte](https://matte.app/help/style-clips/) and [Framous](https://framous.app/) after the first tilted iPhone preview showed visible stair-stepping. Matte documents separate Flat, Photo and real 3D styles; the current Relay frame remains a dimensional vector mockup, with the 3D-model limitations recorded below.
+
+The browser now projects front and body panels directly in display pixels, instead of projecting a full-resolution scene and shrinking the flattened result. The same output corners are scaled without recomputing or rounding device geometry. Single-device panels allow SVG edge coverage outside the enclosing rectangle; media stays clipped to its rounded screen. Duo halves retain clipping at the hinge. Browser checks inspect actual diagonal-edge pixels at desktop and Pixel 7 pixel densities; a regression check also resizes the desktop preview. Homography tests cover front/body corner mapping at four scale factors, and existing checks cover source trims, synchronized Duo playback, grouped opacity and camera transforms.
+
+**50 browser checks passed**, with eight intentional profile-specific skips, against the final production build. Both diagonal-edge pixel checks passed, including the high-density mobile case; real MP4 download/playback, multiple devices, folding, animation, camera zoom/dragging, layout and themes passed. All **20 device frame/motion tests** passed, including real FFmpeg checks. TypeScript and `git diff --check` passed. The larger desktop preview and full editor screenshots were inspected. These are local checks using the persistence/storage adapters described below, not deployed-service verification.
+
+## Image backgrounds and dimensional devices — 2026-10-05
+
+Canvas settings now select a still background image from Media or upload one, choose centered fill/fit, change the color behind transparent areas, and remove or undo the image. Background images are saved with the timeline, shared by simultaneous devices, and preserved in templates, bulk variants, MCP and MP4 export. The renderer accepts bounded still raster images from the configured Relay library.
+
+The iPhone frame has revised proportions, a slim glass bezel, a metal rim, hardware buttons and a Dynamic Island over the screen. X/Y tilt, orbit and folding show a projected metal body behind the front. A visible 3D rotation button opens the placement controls. Preview and export use shared depth geometry; opacity applies once to the complete device. X/Y tilt remains limited to ±60°, and Z rotation to ±180°. These are dimensional projected devices; detailed rear cameras, full mesh models and 360° spins are not implemented.
+
+**62 browser checks passed**, with eight intentional profile-specific skips, against a fresh production build on desktop Chromium and the Pixel 7 mobile profile. Four image selection/upload checks passed again after the final audio-picker reset fix. Coverage includes image selection and file validation, fill/fit, save/reload, removal/undo, rotation/orbit, bulk previews, light/dark appearance, and real playable MP4 exports with decoded background pixels and animated Duo opacity. FFmpeg checks cover body depth, grouped fades over opaque and transparent canvases, and the 100-keyframe limit. Background normalization, library URL restrictions, raster decoding, templates and bulk preservation also passed targeted tests. All four MCP workflow tests, web/MCP TypeScript checks and `git diff --check` passed. Authentication, persistence, R2 and queue adapters are local test fixtures; deployed cloud configuration and social publishing were not exercised.
+
 ## Shared Relay palette and editor controls — 2026-10-05
 
 The editor inherits the website's background, surfaces, text, borders and accent tokens in both themes, including the standard primary-button colors. It no longer defines a separate blue-gray dark palette or an orange export button. Colored timeline tracks still identify footage, camera, devices, text and audio; saved video content keeps its own colors.

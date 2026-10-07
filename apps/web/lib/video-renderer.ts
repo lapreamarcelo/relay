@@ -10,15 +10,37 @@ import sharp from "sharp";
 
 import { clipSchedule, effectiveMusicRange, layerSchedule, timelineDuration, videoSizes } from "./video-timeline";
 import { creativeLabelsSvg } from "./creative-label-svg";
-import { deviceBackgroundSvg, deviceFrameLayerSvg } from "./device-frames";
+import { deviceBackgroundSvg, deviceBodyLayerSvg, deviceFrameLayerSvg } from "./device-frames";
 import { deviceVideoSceneFilter } from "./device-motion";
 import { animatedLabelsMarkup } from "./animated-label-markup";
 import { timelineJoinFilter } from "./video-transition";
 import { videoCameraFilter } from "./video-camera";
 import { getR2Client, getR2Config, publicObjectUrl } from "./r2";
+import { assertVideoBackgroundLibraryUrl } from "./library-video-timeline";
 
 function allowedAssetUrl(value: string): boolean {
   try { const base = new URL(`${getR2Config().publicUrl}/`); const url = new URL(value); return url.protocol === "https:" && url.origin === base.origin && url.pathname.startsWith(base.pathname); } catch { return false; }
+}
+
+/** Match the preview's centered object-fit, with the gradient showing through
+ * letterboxing or transparency. Decode once, bounded independently of bytes. */
+async function canvasBackground(width: number, height: number, background: VideoTimeline["background"], image?: Buffer): Promise<Buffer> {
+  const backdrop = sharp(Buffer.from(deviceBackgroundSvg(width, height, background?.color ?? "#000000", background?.endColor)));
+  if (!image) return backdrop.png().toBuffer();
+  try {
+    const source = sharp(image, { limitInputPixels: 40_000_000 });
+    const metadata = await source.metadata();
+    if ((metadata.pages ?? 1) > 1 || (metadata.delay?.length ?? 0) > 1) throw new Error("Use a still image for the canvas background; animated images are not supported.");
+    if (!metadata.width || !metadata.height || metadata.width * metadata.height > 40_000_000) throw new Error("Background image exceeds the pixel limit.");
+    if (!metadata.format || !["jpeg", "png", "webp", "heif", "avif", "gif"].includes(metadata.format)) throw new Error("Choose a PNG, JPEG, WebP or AVIF background image from Media.");
+    const pixels = await source
+      .rotate().resize(width, height, { fit: background?.imageFit ?? "cover", position: "centre", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png().toBuffer();
+    return await backdrop.composite([{ input: pixels }]).png().toBuffer();
+  } catch (error) {
+    if (error instanceof Error && (error.message.startsWith("Use a still image") || error.message.startsWith("Choose a PNG"))) throw error;
+    throw new Error("Choose a valid background image from Media (up to 30 MB and 40 megapixels).");
+  }
 }
 
 export async function download(url: string, maximum: number, signal?: AbortSignal): Promise<Buffer> {
@@ -118,6 +140,11 @@ async function renderTimeline(input: { projectId: string; timeline: VideoTimelin
   // still terminates the child immediately.
   const run = (args: string[], seconds = 0) => command("ffmpeg",["-y","-threads","2",...args],input.signal,Math.max(900_000,Math.ceil(seconds*12_000+60_000)));
   try {
+    // A project image is fetched and decoded once; each segment and the tail
+    // reuse identical pixels. Independent device layers stay transparent.
+    assertVideoBackgroundLibraryUrl(timeline);
+    const backgroundImage = timeline.background?.imageUrl ? await download(timeline.background.imageUrl, 30 * 1024 * 1024, input.signal) : undefined;
+    const sharedBackground = await canvasBackground(width, height, timeline.background, backgroundImage);
     const layers = layerSchedule(timeline);
     const totalSegments = timeline.clips.length + layers.length;
     let renderedSegments = 0;
@@ -136,19 +163,22 @@ async function renderTimeline(input: { projectId: string; timeline: VideoTimelin
         const frame=join(dir,`frame-${key}.png`);
         await writeFile(frame,await sharp(Buffer.from(deviceFrameLayerSvg(width,height,c.deviceFrame))).png().toBuffer());
         args.push("-i",frame);
+        const body=join(dir,`body-${key}.png`);
+        await writeFile(body,await sharp(Buffer.from(deviceBodyLayerSvg(width,height,c.deviceFrame))).png().toBuffer());
+        args.push("-i",body);
       }
-      const backgroundIndex=c.deviceFrame ? 2 : 1;
+      const backgroundIndex=c.deviceFrame ? 3 : 1;
       const background=join(dir,`background-${key}.png`);
       const color=timeline.background?.color ?? c.deviceFrame?.background ?? "#000000";
       const endColor=timeline.background ? timeline.background.endColor : c.deviceFrame?.backgroundEnd;
       await writeFile(background,transparent
         ? await sharp({create:{width,height,channels:4,background:{r:0,g:0,b:0,alpha:0}}}).png().toBuffer()
-        : await sharp(Buffer.from(deviceBackgroundSvg(width,height,color,endColor))).png().toBuffer());
+        : timeline.background ? sharedBackground : await canvasBackground(width,height,{color,endColor}));
       args.push("-i",background);
       const silentAudioIndex=backgroundIndex+1;
       if (!audio) args.push("-f","lavfi","-i","anullsrc=r=48000:cl=stereo");
       const sceneScript=join(dir,`scene-${key}.fffilter`);
-      await writeFile(sceneScript,deviceVideoSceneFilter(width,height,c,backgroundIndex,c.outMs-c.inMs,transparent));
+      await writeFile(sceneScript,deviceVideoSceneFilter(width,height,c,backgroundIndex,c.outMs-c.inMs,transparent,c.deviceFrame ? 2 : undefined));
       args.push("-filter_complex_threads","1","-filter_complex_script",sceneScript);
       args.push("-t",String(seconds),"-af",`volume=${c.volume},aresample=48000,apad,atrim=duration=${seconds},asetpts=PTS-STARTPTS`,"-map","[framed]","-map",audio?"0:a:0":`${silentAudioIndex}:a:0`,
         ...(transparent ? ["-c:v","ffv1","-level","3","-pix_fmt","bgra"] : ["-c:v","libx264","-preset","veryfast","-crf","21"]),"-c:a","aac","-ac","2",dest);
@@ -163,7 +193,7 @@ async function renderTimeline(input: { projectId: string; timeline: VideoTimelin
     const baseDurationMs=clipSchedule(timeline).at(-1)?.endMs ?? 0;
     if (!segments.length) {
       const background=join(dir,"canvas.png");
-      await writeFile(background,await sharp(Buffer.from(deviceBackgroundSvg(width,height,timeline.background?.color ?? "#000000",timeline.background?.endColor))).png().toBuffer());
+      await writeFile(background,sharedBackground);
       await run(["-loop","1","-framerate","30","-i",background,"-f","lavfi","-i","anullsrc=r=48000:cl=stereo","-t",String(durationMs/1000),"-c:v","libx264","-preset","veryfast","-crf","21","-pix_fmt","yuv420p","-c:a","aac",base],durationMs/1000);
     } else if (timeline.clips.some((clip, i) => i > 0 && clip.transition)) {
       const transitionScript=join(dir,"transitions.fffilter"); await writeFile(transitionScript,timelineJoinFilter(timeline.clips));
@@ -177,7 +207,7 @@ async function renderTimeline(input: { projectId: string; timeline: VideoTimelin
     let preparedBase=base;
     if (segments.length && durationMs>baseDurationMs) {
       const background=join(dir,"padding.png");
-      await writeFile(background,await sharp(Buffer.from(deviceBackgroundSvg(width,height,timeline.background?.color ?? "#000000",timeline.background?.endColor))).png().toBuffer());
+      await writeFile(background,sharedBackground);
       preparedBase=join(dir,"padded-base.mp4");
       await run(["-i",base,"-loop","1","-framerate","30","-i",background,"-filter_complex_threads","1","-filter_complex",`[1:v][0:v]overlay=0:0:enable='lt(t,${baseDurationMs/1000})'[video];[0:a]apad,atrim=duration=${durationMs/1000}[audio]`,"-map","[video]","-map","[audio]","-t",String(durationMs/1000),"-c:v","libx264","-preset","veryfast","-crf","21","-c:a","aac",preparedBase],durationMs/1000);
     }

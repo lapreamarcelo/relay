@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-transform-types --test src/*.test.ts"
+    "test": "node --experimental-transform-types --test src/*.test.ts",
+    "test:publishing": "node --import tsx --test src/post-publishing.integration.test.ts"
   },
   "dependencies": {
     "@relay/core": "workspace:*",

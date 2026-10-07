@@ -88,9 +88,10 @@ export function deviceFrameGeometry(width: number, height: number, device: Devic
   let outerRadius: number;
 
   if (device === "phone" || device === "iphone" || device === "android") {
-    outerWidth = Math.min(width * .68, height * .84 * 9 / 19.5);
-    outerHeight = outerWidth * 19.5 / 9;
-    border = Math.max(4, outerWidth * .035);
+    const aspect = device === "iphone" ? .475 : 9 / 19.5;
+    outerWidth = Math.min(width * .68, height * .84 * aspect);
+    outerHeight = outerWidth / aspect;
+    border = Math.max(4, outerWidth * (device === "iphone" ? .028 : .035));
     outerRadius = outerWidth * .13;
   } else if (device === "tablet") {
     outerWidth = Math.min(width * .78, height * .82 * 3 / 4);
@@ -150,10 +151,37 @@ export function deviceFrameSvg(width: number, height: number, frame: DeviceFrame
   return frameSvg(width, height, frame, true);
 }
 
+/** Rounded metal body, projected behind the glass to give rotation physical depth. */
+export function deviceBodyLayerSvg(width: number, height: number, frame: DeviceFrame, shade = 1): string {
+  const { canvas, outer } = deviceFrameGeometry(width, height, frame.device);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}"><defs>${metalGradient(frame.color, shade)}</defs><rect x="${outer.x}" y="${outer.y}" width="${outer.width}" height="${outer.height}" rx="${outer.radius}" fill="url(#metal)"/></svg>`;
+}
+
+function metalGradient(color: string, shade = 1): string {
+  const base = hex(color);
+  const tint = (light: number) => `#${[1, 3, 5].map(offset => Math.round(Math.min(255, (parseInt(base.slice(offset, offset + 2), 16) * (1 - light) + 255 * light) * shade)).toString(16).padStart(2, "0")).join("")}`;
+  return `<linearGradient id="metal" x1="0" y1="0" x2="1" y2=".35"><stop stop-color="${tint(.55)}"/><stop offset=".13" stop-color="${tint(.12)}"/><stop offset=".48" stop-color="${tint(.26)}"/><stop offset=".84" stop-color="${tint(.07)}"/><stop offset="1" stop-color="${tint(.4)}"/></linearGradient>`;
+}
+
+function iphoneHardware(geometry: DeviceFrameGeometry): string {
+  const { outer: o, screen: s, border: b } = geometry;
+  const edge = Math.max(.65, o.width * .004);
+  const button = (right: boolean, position: number, length: number) => `<rect x="${right ? o.x + o.width - edge * 1.6 : o.x + edge * .6}" y="${o.y + o.height * position}" width="${edge}" height="${o.height * length}" rx="${edge / 2}" fill="#B0B0AF" opacity=".8"/>`;
+  const islandWidth = s.width * .29, islandHeight = Math.max(5, s.width * .075);
+  const islandX = s.x + (s.width - islandWidth) / 2, islandY = s.y + s.width * .028;
+  return `<g data-device-hardware="iphone">
+    ${button(false, .16, .027)}${button(false, .23, .063)}${button(false, .32, .063)}${button(true, .25, .10)}
+    <rect x="${o.x + b * .52}" y="${o.y + b * .52}" width="${o.width - b * 1.04}" height="${o.height - b * 1.04}" rx="${o.radius - b * .52}" fill="none" stroke="#FFFFFF" stroke-opacity=".18" stroke-width="${edge * .6}"/>
+    <rect data-dynamic-island="true" x="${islandX}" y="${islandY}" width="${islandWidth}" height="${islandHeight}" rx="${islandHeight / 2}" fill="#070708"/>
+    <circle cx="${islandX + islandWidth - islandHeight * .6}" cy="${islandY + islandHeight / 2}" r="${islandHeight * .2}" fill="#152333"/>
+    <circle cx="${islandX + islandWidth - islandHeight * .64}" cy="${islandY + islandHeight * .45}" r="${islandHeight * .07}" fill="#395267"/>
+  </g>`;
+}
+
 function frameSvg(width: number, height: number, frame: DeviceFrame, includeBackground: boolean): string {
   const geometry = deviceFrameGeometry(width, height, frame.device);
   const { outer, screen, shadow } = geometry;
-  const decoration = frame.device === "phone" || frame.device === "iphone"
+  const decoration = frame.device === "iphone" ? iphoneHardware(geometry) : frame.device === "phone"
     ? `<rect x="${outer.x + outer.width * .38}" y="${outer.y + geometry.border * .7}" width="${outer.width * .24}" height="${Math.max(4, geometry.border * .38)}" rx="${Math.max(2, geometry.border * .2)}" fill="#050505"/>`
     : frame.device === "iphone-duo"
       ? `<rect x="${outer.x + outer.width / 2 - 1}" y="${outer.y + geometry.border}" width="2" height="${outer.height - geometry.border * 2}" fill="${frame.color}" opacity=".35"/>`
@@ -164,11 +192,13 @@ function frameSvg(width: number, height: number, frame: DeviceFrame, includeBack
     <defs>
       <filter id="shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="${shadow.y}" stdDeviation="${shadow.blur}" flood-color="#000000" flood-opacity="${shadow.opacity}"/></filter>
       ${backgroundGradient(width, height, frame.background, frame.backgroundEnd ?? frame.background)}
+      ${frame.device === "iphone" ? metalGradient(frame.color) : ""}
       <mask id="screen-cutout"><rect width="100%" height="100%" fill="#fff"/><rect x="${screen.x}" y="${screen.y}" width="${screen.width}" height="${screen.height}" rx="${screen.radius}" fill="#000"/></mask>
     </defs>
     <g mask="url(#screen-cutout)">
       ${includeBackground ? `<rect width="100%" height="100%" fill="url(#background)"/><rect x="${outer.x}" y="${outer.y}" width="${outer.width}" height="${outer.height}" rx="${outer.radius}" fill="${frame.color}" filter="url(#shadow)"/>` : ""}
       <rect x="${outer.x}" y="${outer.y}" width="${outer.width}" height="${outer.height}" rx="${outer.radius}" fill="${frame.color}"/>
+      ${frame.device === "iphone" ? `<rect x="${outer.x}" y="${outer.y}" width="${outer.width}" height="${outer.height}" rx="${outer.radius}" fill="url(#metal)"/><rect x="${outer.x + geometry.border * .3}" y="${outer.y + geometry.border * .3}" width="${outer.width - geometry.border * .6}" height="${outer.height - geometry.border * .6}" rx="${outer.radius - geometry.border * .3}" fill="#09090B"/>` : ""}
     </g>
     ${decoration}
   </svg>`;

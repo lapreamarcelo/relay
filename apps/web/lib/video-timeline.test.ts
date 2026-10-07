@@ -49,6 +49,14 @@ test("persists video device motion and optional solid or gradient canvas backgro
  assert.deepEqual(normalizeVideoTimeline({...emptyTimeline(),background:{color:"#aabbcc"},clips:[clip]}).background,{color:"#AABBCC"});
  for(const background of ["#abcdef",{color:"red"},{color:"#abcdef",endColor:"transparent"}]) assert.throws(()=>normalizeVideoTimeline({...emptyTimeline(),background,clips:[clip]}));
 });
+test("canvas images survive normalization and template replacement without changing legacy backgrounds",()=>{
+ const background={color:"#112233",endColor:"#445566",imageUrl:"https://media.example/background.png",imageFit:"contain" as const};
+ const timeline=normalizeVideoTimeline({...emptyTimeline(),background,clips:[clip]});
+ assert.deepEqual(timeline.background,background);
+ assert.deepEqual(normalizeVideoTimeline({...emptyTimeline(),background:{color:"#112233",imageUrl:background.imageUrl}}).background,{color:"#112233",imageUrl:background.imageUrl});
+ assert.deepEqual(applySavedVideoTemplate(timeline,{...emptyTimeline(),clips:[{...clip,outMs:3000}]}).background,background);
+ for(const change of [{imageUrl:"http://media.example/a.png"},{imageUrl:"file:///tmp/a.png"},{imageUrl:"data:image/png;base64,a"},{imageUrl:""},{imageUrl:123},{imageFit:"stretch"},{imageFit:null}]) assert.throws(()=>normalizeVideoTimeline({...emptyTimeline(),background:{...background,...change}}));
+});
 test("old music settings still cover the full timeline",()=>{
  const timeline=normalizeVideoTimeline({...emptyTimeline(),clips:[clip],music:{url:"https://media.example/music.mp3",volume:.7,offsetMs:1200,fadeInMs:200,fadeOutMs:300}});
  assert.deepEqual(timeline.music,{url:"https://media.example/music.mp3",volume:.7,offsetMs:1200,fadeInMs:200,fadeOutMs:300});

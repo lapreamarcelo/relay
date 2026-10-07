@@ -252,8 +252,21 @@ export async function PATCH(request: Request) {
       `;
       if (targets.length !== targetIds.length) return false;
       if (targets.some((target) => target.status !== "failed")) return false;
-      await transaction`UPDATE "post_target" SET status = 'publishing', publish_attempts = 0, publish_after = NOW(), error = NULL, publish_lease_owner = NULL, publish_lease_expires_at = NULL, updated_at = NOW() WHERE id = ANY(${targetIds})`;
-      await transaction`UPDATE "post" SET status = 'publishing', updated_at = NOW() WHERE id = ${id} AND owner_id = ${ownerId}`;
+      // A timeout does not prove that the provider rejected the upload. Poll its
+      // existing session first instead of creating a duplicate upload on retry.
+      await transaction`
+        UPDATE "post_target" SET
+          status = CASE WHEN error = 'The provider did not finish processing this post within 24 hours.' AND provider_post_id IS NOT NULL THEN 'processing' ELSE 'publishing' END,
+          processing_started_at = CASE WHEN error = 'The provider did not finish processing this post within 24 hours.' AND provider_post_id IS NOT NULL THEN NOW() ELSE NULL END,
+          provider_post_id = CASE WHEN error = 'The provider did not finish processing this post within 24 hours.' THEN provider_post_id ELSE NULL END,
+          publish_attempts = 0, publish_after = NOW(), error = NULL, publish_lease_owner = NULL, publish_lease_expires_at = NULL, updated_at = NOW()
+        WHERE id = ANY(${targetIds})
+      `;
+      await transaction`DELETE FROM "notification" WHERE owner_id = ${ownerId} AND target_id = ANY(${targetIds}) AND kind = 'error'`;
+      await transaction`
+        UPDATE "post" SET status = CASE WHEN EXISTS (SELECT 1 FROM "post_target" t WHERE t.post_id = ${id} AND t.status = 'publishing') THEN 'publishing' ELSE 'processing' END,
+          updated_at = NOW() WHERE id = ${id} AND owner_id = ${ownerId}
+      `;
       return true;
     });
     if (!retried) return Response.json({ error: "Only failed destinations belonging to this post can be retried." }, { status: 409 });

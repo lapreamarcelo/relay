@@ -1,4 +1,5 @@
 "use client";
+import { videoBackgroundCss } from "../lib/video-background";
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -36,8 +37,9 @@ export function CompositionPreview({ timeline, timeMs, label = "Generated compos
   const layers = layerSchedule(timeline).filter(entry => timeMs >= entry.startMs && timeMs < entry.endMs);
   const color = timeline.background?.color ?? active.at(-1)?.clip.deviceFrame?.background ?? "#000000";
   const endColor = timeline.background ? timeline.background.endColor : active.at(-1)?.clip.deviceFrame?.backgroundEnd;
-  return <div className="video-composer-canvas" style={{ background: endColor ? `linear-gradient(135deg,${color},${endColor})` : color, aspectRatio: `${width}/${height}`, width: `min(100%, ${300 * width / height}px)` }} aria-label={label}>
-    <div className="video-camera-scene" data-camera-preview style={{transform:videoCameraTransform(timeline.camera,timeMs),background:endColor ? `linear-gradient(135deg,${color},${endColor})` : color}}>{[...active,...layers].map((entry, index) => {
+  const background = videoBackgroundCss(width,height,timeline.background ?? {color,endColor});
+  return <div className="video-composer-canvas" style={{ background: background, aspectRatio: `${width}/${height}`, width: `min(100%, ${300 * width / height}px)` }} aria-label={label}>
+    <div className="video-camera-scene" data-camera-preview style={{transform:videoCameraTransform(timeline.camera,timeMs),background:background}}>{[...active,...layers].map((entry, index) => {
       const clip = entry.clip, local = timeMs - entry.startMs, kind = incoming?.clip.transition?.kind;
       const style: CSSProperties = {};
       const overlay = index >= active.length;

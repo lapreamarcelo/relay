@@ -495,7 +495,7 @@ To update, retrieve the full project first. Preserve its other fields and clips/
 
 ### Device pose, backgrounds and motion
 
-Video timeline clips accept optional `deviceFrame.x`/`y` (whole-canvas center, 0–1), `scale` (.25–1.5), `rotateX`/`rotateY` (-60–60 degrees), `rotateZ` (-180–180 degrees), and `foldAngle` (0–165 degrees, Duo only; 0 is open). These differ from the clip's crop `x`/`y`/`zoom`. The recording plays on the moving device while timed labels remain on the whole canvas.
+Video timeline clips accept optional `deviceFrame.x`/`y` (whole-canvas center, 0–1), `scale` (.25–1.5), `rotateX`/`rotateY` (-60–60 degrees), `rotateZ` (-180–180 degrees), and `foldAngle` (0–165 degrees, Duo only; 0 is open). These differ from the clip's crop `x`/`y`/`zoom`. The recording plays on the moving device while timed labels remain on the whole canvas. The iPhone frame has a slim metal rim, side buttons, glass bezel and Dynamic Island. Projected metal body depth follows X/Y tilt, orbit and Duo folding in preview and export. Use modest angles for a dimensional product demo; full 360-degree spins, mesh models and rear camera geometry are not implemented.
 
 `motion` accepts `none`, `orbit`, `float`, `fold`, `unfold`, or `fold-cycle`. Folding presets require `iphone-duo`. `motionDurationMs` is 500–60000ms (default 4000); optional `motionEasing` uses the easing choices below. Motion follows local clip time, starting at the clip's assembled timeline start. Orbit/float/fold-cycle repeat; fold/unfold hold the final pose. For folding presets, a positive `foldAngle` sets the maximum fold; 0 or omission uses 150 degrees. Authored `foldAngle` keyframes override the folding preset; orbit/float still compose with the authored pose. Trimming or splitting starts animation again at local time zero; splitting does not preserve continuous motion from the original clip.
 
@@ -516,11 +516,21 @@ Video timeline clips accept optional `deviceFrame.x`/`y` (whole-canvas center, 0
 }
 ```
 
-Duo divides **one recording** across the left and right hinged panels. It does not record simulator pose changes or accept a separate outer-screen recording. Preview and MP4 export evaluate the same perspective/motion model; device presets are stylized panels rather than a full 3D mesh/camera/lighting system.
+Duo divides **one recording** across the left and right hinged panels. It does not record simulator pose changes or accept a separate outer-screen recording. Preview and MP4 export evaluate the same perspective/motion model, including body depth; device presets use projected panels rather than a full 3D mesh/camera/lighting system.
 
 Optional `timeline.background: {"color":"#182422","endColor":"#537C68"}` applies a solid or diagonal gradient to the whole video, overriding each frame's background. For unframed media choose `contain` to expose the background; `cover` fills the output. Per-frame `backgroundEnd` adds a gradient when no timeline background is set.
 
-Slideshow frames support static devices/colors/gradients. Device pose and animation require a video timeline; still-image clips inside video timelines support them. Unsupported slideshow animation is rejected. Custom frame assets, image/video backgrounds, custom Bezier curves, lighting and depth of field are not implemented. Settings survive saved templates and hook variants; saved-template footage replacement rescales frame keyframe times to clip lifetime, label keyframe times to the remapped label lifetime, and global camera keyframe times to the new scene lifetime. Legacy single-source recipes and `videos batch` do not apply frames. Use timeline projects and `videos variants` for framed variants.
+To put an image behind the devices, upload/select a static image in Relay Media and set the optional `imageUrl` and `imageFit` fields:
+
+```json
+{"background":{"color":"#182422","endColor":"#537C68","imageUrl":"https://YOUR_R2_LIBRARY/background.jpg","imageFit":"cover"}}
+```
+
+Saving a project or template rejects background URLs outside the configured Relay library before a database write, including neighboring path prefixes, embedded credentials, query strings and encoded path separators. The browser normalizer stays independent of storage configuration; the authenticated server enforces this library boundary.
+
+`imageFit` is `cover` (default, centered crop) or `contain` (centered letterbox). Color/gradient remains beneath transparent areas and letterboxes. Export auto-orients the image from EXIF metadata and decodes it once per render. Use a still PNG/JPEG/WebP/AVIF image: animated images and SVG backgrounds are rejected. Only HTTPS URLs within the configured Relay R2 library are downloaded; external websites, redirects, invalid image bytes, images over 30 MB or 40 megapixels are rejected. This shared background also works with `clips: []` and independent Watch/iPhone layers, and continues after sequential footage ends while remaining layers play. Unframed cover-fit footage hides the canvas image. `list_device_frames` exposes the contract under `canvasBackground`, and both MCP transports accept it through `save_video`, composition, templates and variants. Use `prepare_media_upload` with an image content type, upload the bytes with HTTP PUT, then use its returned `url` as `imageUrl`.
+
+Slideshow frames support static devices/colors/gradients. Device pose and animation require a video timeline; still-image clips inside video timelines support them. Unsupported slideshow animation is rejected. Custom frame assets, video backgrounds, custom Bezier curves, lighting and depth of field are not implemented. Settings survive saved templates and hook variants; saved-template footage replacement rescales frame keyframe times to clip lifetime, label keyframe times to the remapped label lifetime, and global camera keyframe times to the new scene lifetime. Legacy single-source recipes and `videos batch` do not apply frames. Use timeline projects and `videos variants` for framed variants.
 
 ### Camera zoom, focus and pans
 

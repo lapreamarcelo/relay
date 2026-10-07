@@ -4,7 +4,7 @@ import { requireApiSession } from "../../../../lib/api-session";
 import { normalizeCreativeLabels } from "../../../../lib/creative-labels";
 import { safeWebUrl, serializeVideoProject, type VideoProjectRow } from "../../../../lib/videos";
 
-import { normalizeVideoTimeline } from "../../../../lib/video-timeline";
+import { normalizeLibraryVideoTimeline } from "../../../../lib/library-video-timeline";
 
 export const runtime = "nodejs";
 
@@ -25,7 +25,7 @@ async function parse(ownerId: string, body: VideoInput | null) {
   if (!name || labels === null) return { error: "A video project needs a name and up to 12 valid labels." } as const;
   if (brandId === false) return { error: "The selected brand was not found." } as const;
   let timeline = null;
-  try { if (body?.timeline != null) timeline = normalizeVideoTimeline(body.timeline); }
+  try { if (body?.timeline != null) timeline = normalizeLibraryVideoTimeline(body.timeline); }
   catch (error) { return { error: error instanceof Error ? error.message : "Invalid timeline." } as const; }
   return { timeline, templateId: clean(body?.templateId, 240) || null, name, caption, sourceUrl, musicUrl: musicUrl || null, sourceFolderId: clean(body?.sourceFolderId, 240) || null, musicFolderId: clean(body?.musicFolderId, 240) || null, labels, brandId };
 }

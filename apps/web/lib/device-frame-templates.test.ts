@@ -6,11 +6,15 @@ import { applySavedVideoTemplate } from "./video-templates.ts";
 test("saved device layout wraps replacement footage without sharing mutable frame settings", () => {
   const clip = {id:"original",name:"Screen",sourceUrl:"https://media.example/original.png",kind:"image" as const,inMs:0,outMs:1000,fit:"contain" as const,x:.5,y:.5,zoom:1,volume:1};
   const frame = {device:"phone" as const,background:"#E8E4DF",color:"#20242A"};
-  const template = {...emptyTimeline(),clips:[{...clip,deviceFrame:frame}]};
+  const background = {color:"#112233",imageUrl:"https://media.example/background.jpg",imageFit:"cover" as const};
+  const template = {...emptyTimeline(),background,clips:[{...clip,deviceFrame:frame}]};
   const result = applySavedVideoTemplate(template,{...emptyTimeline(),clips:[{...clip,id:"replacement",sourceUrl:"https://media.example/new.mp4",kind:"video",outMs:2000}]});
   assert.equal(result.clips[0].sourceUrl,"https://media.example/new.mp4");
   assert.equal(result.clips[0].kind,"video");
   assert.deepEqual(result.clips[0].deviceFrame,frame);
+  assert.deepEqual(result.background,background);
+  result.background!.color="#000000";
+  assert.equal(background.color,"#112233");
   result.clips[0].deviceFrame!.color="#FFFFFF";
   assert.equal(frame.color,"#20242A");
 });

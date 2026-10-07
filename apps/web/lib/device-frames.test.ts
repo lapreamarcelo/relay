@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import sharp from "sharp";
 
-import { deviceFrameGeometry, deviceFrameSvg, normalizeDeviceFrame } from "./device-frames.ts";
+import { deviceBodyLayerSvg, deviceFrameGeometry, deviceFrameLayerSvg, deviceFrameSvg, normalizeDeviceFrame } from "./device-frames.ts";
 
 test("normalizes supported device frames and rejects incomplete settings", () => {
   assert.deepEqual(normalizeDeviceFrame({ device: "phone", background: "#aabbcc", color: "#123456" }), { device: "phone", background: "#AABBCC", color: "#123456" });
@@ -54,4 +54,25 @@ test("video frame animation persists while stills reject animated settings", () 
   assert.equal(normalizeDeviceFrame(frame,{allowMotion:true})?.animation?.keyframes?.[1].foldAngle,150);
   assert.throws(()=>normalizeDeviceFrame(frame),/video/);
   assert.throws(()=>normalizeDeviceFrame({...frame,device:"iphone"},{allowMotion:true}),/Duo/);
+});
+
+test("iPhone glass has a transparent screen with a correctly positioned Dynamic Island and metal rim", async () => {
+  const width=360,height=640,frame={device:"iphone",color:"#171717",background:"#FFFFFF"} as const;
+  const {outer,screen}=deviceFrameGeometry(width,height,frame.device);
+  assert.ok(Math.abs(outer.width/outer.height-.475)<.002);
+  const svg=deviceFrameLayerSvg(width,height,frame);
+  assert.match(svg,/data-dynamic-island="true"/);
+  const {data,info}=await sharp(Buffer.from(svg)).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  const pixel=(x:number,y:number)=>[...data.subarray((Math.round(y)*info.width+Math.round(x))*4,(Math.round(y)*info.width+Math.round(x))*4+4)];
+  assert.equal(pixel(screen.x+screen.width/2,screen.y+screen.width*.065)[3],255,"island sits over recording pixels inside the screen");
+  assert.equal(pixel(screen.x+screen.width/2,screen.y+screen.height/2)[3],0,"recording remains visible through the screen opening");
+  assert.equal(pixel(0,0)[3],0,"frame layer has no opaque canvas");
+  assert.ok(pixel(outer.x+1,outer.y+outer.height/2)[0]>23,"metal edge catches light");
+});
+
+test("body texture fills the rounded rear silhouette while keeping outside transparent", async () => {
+  const width=240,height=320,frame={device:"iphone",color:"#171717",background:"#FFFFFF"} as const;
+  const {data,info}=await sharp(Buffer.from(deviceBodyLayerSvg(width,height,frame))).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  assert.equal(data[3],0);
+  assert.equal(data[((height/2)*info.width+width/2)*4+3],255);
 });
