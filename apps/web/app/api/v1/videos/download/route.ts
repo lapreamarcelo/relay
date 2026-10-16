@@ -42,8 +42,8 @@ export async function GET(request: Request) {
 
     const headers = new Headers({
       "Cache-Control": "private, no-store",
-      "Content-Disposition": videoDownloadContentDisposition(job.snapshot?.name),
-      "Content-Type": "video/mp4",
+      "Content-Disposition": videoDownloadContentDisposition(job.snapshot?.name,key.split(".").at(-1)),
+      "Content-Type": object.ContentType ?? ({webm:"video/webm",gif:"image/gif",png:"image/png",jpg:"image/jpeg"} as Record<string,string>)[key.split(".").at(-1)!] ?? "video/mp4",
     });
     if (object.ContentLength !== undefined) headers.set("Content-Length", String(object.ContentLength));
 

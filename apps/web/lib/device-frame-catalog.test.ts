@@ -43,3 +43,8 @@ test("background catalog exposes an image contract accepted by the timeline norm
   const background=normalizeVideoTimeline({...emptyTimeline(),background:canvas.example}).background;
   assert.deepEqual(background,canvas.example);
 });
+
+test('GPU catalog advertises licensed and generic models with valid static examples',()=>{
+ const catalog=deviceFrameCatalog();assert.equal(catalog.version,5);assert.deepEqual(catalog.renderModes.values,['vector','mesh','gpu']);assert.equal(catalog.renderModes.defaultMotion,'none');assert.ok(catalog.models.some(model=>model.id==='watch-ultra-2'&&model.geometry==='licensed-glb'&&model.license==='CC BY 4.0'));assert.ok(catalog.models.some(model=>model.id==='relay-tablet'&&model.geometry==='original'));assert.match(catalog.design.duo,/generic|Generic/);
+ for(const frame of catalog.frames){const normalized=normalizeDeviceFrame(frame.gpuExample,{allowMotion:true});assert.deepEqual(normalized,frame.gpuExample);assert.equal(normalized?.motion,'none');assert.equal(normalizeSlides([{mediaUrl:'https://media.test/a.png',deviceFrame:frame.gpuExample}]),null);}
+});

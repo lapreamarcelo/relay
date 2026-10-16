@@ -11,9 +11,16 @@ export class AccountReconnectRequiredError extends Error {
   }
 }
 
-export class TokenRefreshInProgressError extends Error {
+export class TokenRefreshTransientError extends Error {
+  constructor(readonly accountId: string, message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "TokenRefreshTransientError";
+  }
+}
+
+export class TokenRefreshInProgressError extends TokenRefreshTransientError {
   constructor(readonly accountId: string) {
-    super(`Token refresh already in progress for account ${accountId}`);
+    super(accountId, `Token refresh already in progress for account ${accountId}`);
     this.name = "TokenRefreshInProgressError";
   }
 }
@@ -127,7 +134,7 @@ export class TokenLifecycleService {
         throw new AccountReconnectRequiredError(accountId, error.message);
       }
       await this.repository.markRefreshWarning(accountId, leaseOwner, now);
-      throw error;
+      throw new TokenRefreshTransientError(accountId, error instanceof Error ? error.message : "The provider could not refresh this account. Try again shortly.", { cause: error });
     }
   }
 

@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "aspectRatio": "9:16",
+  "background": {
+    "color": "#E8EEE0",
+    "endColor": "#F6F0E5"
+  },
+  "clips": [
+    {
+      "id": "ritual",
+      "name": "Daily rituals",
+      "sourceUrl": "https://media.example.test/editor-screen.svg",
+      "kind": "image",
+      "inMs": 0,
+      "outMs": 8000,
+      "fit": "cover",
+      "x": 0.5,
+      "y": 0.5,
+      "zoom": 1,
+      "volume": 0,
+      "deviceFrame": {
+        "device": "iphone",
+        "color": "#2A3C30",
+        "background": "#E8EEE0",
+        "renderMode": "mesh",
+        "scale": 0.63,
+        "y": 0.58,
+        "animation": {
+          "scaleMode": "perceptual",
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "rotateY": -22,
+              "rotateZ": -5,
+              "x": 0.48,
+              "y": 0.61,
+              "easing": "spring",
+              "curve": {
+                "stiffness": 180,
+                "damping": 18
+              }
+            },
+            {
+              "timeMs": 1800,
+              "rotateY": 12,
+              "rotateZ": 2,
+              "x": 0.5,
+              "y": 0.56
+            },
+            {
+              "timeMs": 5500,
+              "rotateY": -12,
+              "rotateZ": -2,
+              "x": 0.5,
+              "y": 0.56,
+              "easing": "cubic-bezier",
+              "curve": {
+                "controlPoints": [
+                  0.2,
+                  0,
+                  0.3,
+                  1
+                ]
+              }
+            },
+            {
+              "timeMs": 8000,
+              "rotateY": 8,
+              "rotateZ": 0,
+              "x": 0.5,
+              "y": 0.58
+            }
+          ]
+        }
+      },
+      "pointer": {
+        "style": "touch",
+        "display": "continuous",
+        "color": "#CC855B",
+        "size": 25,
+        "smoothing": 120,
+        "idleMs": 1500,
+        "fadeMs": 400,
+        "events": [
+          {
+            "timeMs": 0,
+            "x": 0.7,
+            "y": 0.6,
+            "kind": "move"
+          },
+          {
+            "timeMs": 1800,
+            "x": 0.5,
+            "y": 0.48,
+            "kind": "down"
+          },
+          {
+            "timeMs": 2100,
+            "x": 0.5,
+            "y": 0.48,
+            "kind": "up"
+          },
+          {
+            "timeMs": 3800,
+            "x": 0.5,
+            "y": 0.84,
+            "kind": "down"
+          },
+          {
+            "timeMs": 4200,
+            "x": 0.5,
+            "y": 0.84,
+            "kind": "up"
+          }
+        ]
+      }
+    }
+  ],
+  "labels": [
+    {
+      "id": "headline",
+      "text": "Every move,\nyour rhythm.",
+      "x": 0.5,
+      "y": 0.12,
+      "width": 0.85,
+      "fontSize": 70,
+      "font": "modern",
+      "textColor": "#264335",
+      "background": "none",
+      "startMs": 0,
+      "endMs": 8000,
+      "animation": {
+        "entrance": {
+          "preset": "word-spring",
+          "durationMs": 800,
+          "easing": "spring",
+          "staggerMs": 60,
+          "curve": {
+            "stiffness": 160,
+            "damping": 16
+          }
+        }
+      }
+    }
+  ],
+  "music": {
+    "url": "",
+    "volume": 0.4,
+    "offsetMs": 0,
+    "fadeInMs": 0,
+    "fadeOutMs": 0
+  },
+  "coverMs": 1800,
+  "camera": {
+    "zoom": 1,
+    "x": 0.5,
+    "y": 0.5,
+    "keyframes": [
+      {
+        "timeMs": 0,
+        "zoom": 1,
+        "easing": "spring",
+        "curve": {
+          "stiffness": 180,
+          "damping": 18
+        }
+      },
+      {
+        "timeMs": 3000,
+        "zoom": 1.05
+      },
+      {
+        "timeMs": 8000,
+        "zoom": 1
+      }
+    ]
+  },
+  "scene": {
+    "version": 1,
+    "environment": "softbox",
+    "exposure": 1.05,
+    "roughness": 0.35,
+    "metallic": 0.7,
+    "shadow": 0.2,
+    "lightAngle": -35,
+    "focusDepth": 0,
+    "aperture": 0.05,
+    "motionBlur": 0.2,
+    "camera": {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "rotateX": 0,
+      "rotateY": 0,
+      "rotateZ": 0,
+      "focalLength": 50,
+      "keyframes": [
+        {
+          "timeMs": 0,
+          "z": 0,
+          "focalLength": 50
+        },
+        {
+          "timeMs": 8000,
+          "z": 0.05,
+          "focalLength": 52
+        }
+      ]
+    }
+  },
+  "exportSettings": {
+    "format": "mp4",
+    "fps": 24,
+    "resolution": "720p",
+    "quality": "standard"
+  }
+}

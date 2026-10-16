@@ -20,7 +20,10 @@ async function brandFor(ownerId: string, value: unknown): Promise<string | null 
 async function parse(ownerId: string, body: VideoInput | null) {
   if (body?.revision !== undefined && (!Number.isInteger(body.revision) || Number(body.revision) < 1)) return { error: "Revision must be a positive integer." } as const;
   const name = clean(body?.name, 120); const caption = typeof body?.caption === "string" ? body.caption.trim().slice(0, 2_200) : "";
-  const sourceUrl = safeWebUrl(body?.sourceUrl); const musicUrl = safeWebUrl(body?.musicUrl); const labels = normalizeCreativeLabels(body?.labels ?? []);
+  const sourceUrl = safeWebUrl(body?.sourceUrl); const musicUrl = safeWebUrl(body?.musicUrl);
+  let labels: ReturnType<typeof normalizeCreativeLabels>;
+  try { labels = normalizeCreativeLabels(body?.labels ?? []); }
+  catch(error) { return {error:error instanceof Error?error.message:"Invalid label typography."} as const; }
   const brandId = await brandFor(ownerId, body?.brandId);
   if (!name || labels === null) return { error: "A video project needs a name and up to 12 valid labels." } as const;
   if (brandId === false) return { error: "The selected brand was not found." } as const;

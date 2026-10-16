@@ -13,7 +13,7 @@ async function inViewport(page: Page, dialog: Locator, centered = true) {
 }
 
 for (const studio of ["videos", "slideshows"] as const) {
-  test(`${studio} deletion stays centered on a long scrolled page and locks background scrolling`, async ({ page }) => {
+  test(`${studio} deletion stays centered on a long scrolled page and locks background scrolling`, async ({ page, browserName, isMobile }) => {
     const projects = Array.from({ length: 36 }, (_, index) => ({
       ...(studio === "videos" ? demoVideoProjects[0] : demoSlideshowProjects[0]),
       id: `layout-${index}`, name: `Layout project ${index}`, sourceUrl: "", renderedUrl: undefined,
@@ -31,12 +31,20 @@ for (const studio of ["videos", "slideshows"] as const) {
     const scrollBefore = await page.evaluate(() => window.scrollY);
     expect(scrollBefore).toBeGreaterThan(0);
     expect(await dialog.evaluate(element => element.closest(".modal-layer")?.parentElement === document.body)).toBe(true);
-    await page.mouse.wheel(0, 600);
+    // Mobile WebKit does not expose wheel input. PageDown exercises keyboard
+    // scrolling while preserving the same background scroll-lock assertion.
+    if (browserName === "webkit" && isMobile) await page.keyboard.press("PageDown");
+    else await page.mouse.wheel(0, 600);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollBefore);
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect.poll(() => page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
     expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+    if (browserName === "webkit" && isMobile) {
+      // Prove the alternative input can actually scroll the page once unlocked.
+      await page.keyboard.press("PageDown");
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollBefore);
+    }
   });
 }
 

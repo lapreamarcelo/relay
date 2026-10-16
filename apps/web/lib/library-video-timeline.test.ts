@@ -63,3 +63,13 @@ test("image validation preserves write authorization before database access or r
   assert.equal(response.status,status,endpoint.name);assert.equal(writes,0);assert.equal(queries,0);
  }
 });
+
+test('project and template reject third-party cached analysis before database writes',async()=>{
+ const {analyzeAudioPcm}=await import('./video-audio-analysis.ts');const analysis=analyzeAudioPcm([new Float32Array(8000)],8000);
+ for(const endpoint of endpoints){writes=0;queries=0;const document={...emptyTimeline(),audioAnalysis:[{sourceUrl:'https://outside.example/song.wav',startMs:0,offsetMs:0,volume:1,analysis}]};const response=await endpoint.handle(request(endpoint.method,document));assert.equal(response.status,400);assert.match((await response.json()).error,/Analyzed audio.*Relay R2 library/);assert.equal(writes,0);assert.equal(queries,0);}
+});
+test('saved analysis and drawing controls retain their data and invalid typography returns400',async()=>{
+ const {analyzeAudioPcm}=await import('./video-audio-analysis.ts');const {defaultCodeClip}=await import('./video-code-clips.ts');const sourceUrl='https://media.example.test/library/music.wav',analysis=analyzeAudioPcm([new Float32Array(8000)],8000),document={...emptyTimeline(),audioAnalysis:[{sourceUrl,startMs:0,offsetMs:0,volume:1,analysis}],graphics:[{id:'code',kind:'code',startMs:0,endMs:1000,color:'#FFFFFF',code:defaultCodeClip,audioReactive:{sourceUrl,signal:'envelope',amount:1}}]};
+ for(const endpoint of endpoints){writes=0;const response=await endpoint.handle(request(endpoint.method,document));assert.equal(response.status,endpoint.method==='POST'?201:200);const saved=(await response.json()).data.timeline;assert.deepEqual(saved.audioAnalysis,document.audioAnalysis);assert.deepEqual(saved.graphics[0].code,defaultCodeClip);assert.equal(writes,1);}
+ for(const endpoint of endpoints.filter(e=>e.name.startsWith('project'))){writes=0;queries=0;const response=await endpoint.handle(new Request('https://relay.test/api/v1/videos',{method:endpoint.method,headers:{authorization:'Bearer write'},body:JSON.stringify({id:'project',revision:1,name:'Demo',labels:[{text:'Bad',fontWeight:123}]})}));assert.equal(response.status,400);assert.equal(writes,0);assert.equal(queries,0);}
+});

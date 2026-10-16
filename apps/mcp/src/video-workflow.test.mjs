@@ -11,6 +11,8 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 
 register();
 const { normalizeVideoTimeline } = await import("../../web/lib/video-timeline.ts");
+const { analyzeAudioPcm } = await import("../../web/lib/video-audio-analysis.ts");
+const { defaultCodeClip } = await import("../../web/lib/video-code-clips.ts");
 const { serializeVideoProject } = await import("../../web/lib/videos.ts");
 const { deviceFrameCatalog } = await import("../../web/lib/device-frame-catalog.ts");
 const { videoAnimationCatalog } = await import("../../web/lib/video-animation-catalog.ts");
@@ -102,6 +104,7 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
     for (const name of ["list_device_frames", "list_video_animations", "get_capabilities", "prepare_media_upload", "list_videos", "save_video", "render_video", "get_video_render_job", "update_video_render_job", "save_video_template", "generate_video_captions", "create_video_variants"]) assert.ok(tools.some(tool => tool.name === name), name);
     const catalog = (await call("list_device_frames")).data;
     assert.equal(catalog.frames.length, 8);
+    assert.equal(catalog.version,5);assert.ok(catalog.models.some(model=>model.id==='watch-ultra-2'));assert.equal(catalog.renderModes.defaultMotion,'none');
     assert.equal(catalog.parallelLayers.maximum, 12);
     assert.equal(catalog.canvasBackground.field,"timeline.background");
     assert.deepEqual(catalog.canvasBackground.imageFit.values,["cover","contain"]);
@@ -137,6 +140,22 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
       {...source, id:"watch-layer", name:"Watch", startMs:0, volume:0, deviceFrame:{device:"watch",background:"#112233",color:"#171717",x:.3,y:.5,scale:.6,motion:"orbit",motionDurationMs:2500}},
       {...source, id:"phone-layer", name:"iPhone", startMs:1000, volume:.4, deviceFrame:{device:"iphone",background:"#112233",color:"#171717",x:.7,y:.5,scale:.5,animation:{entrance:{preset:"pop",durationMs:500},keyframes:[{timeMs:0,rotateY:-20},{timeMs:2000,rotateY:20}]}}},
     ];
+    timeline.camera.scaleMode = "perceptual"; timeline.camera.returnMs = 500;
+    timeline.camera.keyframes[0].easing = "cubic-bezier"; timeline.camera.keyframes[0].curve = { controlPoints: [.3, 1.2, .4, 1] };
+    timeline.labels[0].animation.entrance = { preset: "word-spring", durationMs: 800, easing: "spring", curve: { stiffness: 230, damping: 18, mass: 1.2, velocity: .5 }, staggerMs: 60 };
+    timeline.labels[0].animation.scaleMode = "perceptual"; timeline.labels[0].animation.returnMs = 300;
+    timeline.clips[0].speed = 1.25; timeline.clips[0].freezeMs = 3500; timeline.clips[0].groupId = "linked-screen"; timeline.clips[0].motionOffsetMs = 400;
+    timeline.clips[0].pointer = { events: [{ timeMs: 1200, x: .2, y: .4, kind: "move" }, { timeMs: 1500, x: .6, y: .5, kind: "down", screen: "inner" }], style: "touch", color: "#FFFFFF", size: 28, smoothing: 120, display: "tap-only", idleMs: 800, fadeMs: 200 };
+    timeline.layers[0].deviceFrame.renderMode = "mesh"; timeline.layers[0].deviceFrame.rotateY = 360; timeline.layers[0].deviceFrame.depth = .4;
+    timeline.scene = { version: 1, environment: "softbox", exposure: 1.1, roughness: .4, metallic: .7, shadow: .2, lightAngle: -20, focusDepth: .3, aperture: .2, motionBlur: .1, camera: { x: .1, y: 0, z: .2, rotateX: 3, rotateY: -5, rotateZ: 0, focalLength: 60, keyframes: [{ timeMs: 0, z: -.2, focalLength: 50, rotateY: -10, easing: "spring", curve: {stiffness: 220, damping: 18} }, { timeMs: 2000, z:.2, focalLength:70, rotateY: 10 }] } };
+    timeline.graphics = [{ id: "accent", kind: "particles", startMs: 500, endMs: 3000, x: .5, y: .2, width: .5, height: .3, color: "#D69A64", seed: 19, count: 16, speed: .6, animation: { entrance: { preset: "fade", durationMs: 300 }, returnMs: 200 } }];
+    timeline.audioTracks = [{ id: "cue", url: "https://media.example.test/cue.wav", name: "Cue", startMs: 1200, endMs: 2000, offsetMs: 100, volume: .3, fadeInMs: 100, fadeOutMs: 200 }];
+    timeline.clips[0].deviceFrame.renderMode='gpu';timeline.clips[0].deviceFrame.modelId='relay-duo';timeline.clips[0].deviceFrame.finish='natural';
+    Object.assign(timeline.labels[0],{fontWeight:700,italic:true,kerning:true,letterSpacing:1.5,lineHeight:1.2,textAlign:'left',strokeColor:'#AABBCC',strokeWidth:2,shadowColor:'#001122',shadowBlur:4,shadowX:1,shadowY:2,backgroundOpacity:.6,backgroundRadius:20,padding:24,sceneLayer:'scene',sceneDepth:.1});
+    timeline.labels[0].animation.keyframes[0].rotateY=30;timeline.labels[0].animation.keyframes[0].depth=.1;
+    timeline.audioAnalysis=[{sourceUrl:timeline.music.url,startMs:1000,endMs:4000,offsetMs:250,volume:.45,analysis:analyzeAudioPcm([new Float32Array(8000).fill(.5)],8000)}];
+    timeline.graphics.push({...timeline.graphics[0],id:'drawing',kind:'code',code:defaultCodeClip,audioReactive:{sourceUrl:timeline.music.url,signal:'bass',amount:2}});
+    timeline.beatGrid = { bpm: 112, offsetMs: 180 }; timeline.exportSettings = { format: "webm", fps: 60, resolution: "2160p", quality: "high" };
     assert.equal((await call("get_video_composer")).data.available, true);
     const generated = (await call("generate_video_composition", { prompt: "Make a cinematic launch for My app", productName: "My app", durationMs: 15000, timeline })).data;
     assert.deepEqual(generated.timeline, normalizeVideoTimeline(timeline));
@@ -169,6 +188,26 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
       assert.equal(invalidCamera.isError,true);
     }
     assert.equal(calls.filter(call => call.path === "/api/v1/videos").length,beforeInvalidCamera,"invalid cameras are rejected before API writes");
+    const beforeInvalidMotion = calls.filter(call => call.path === "/api/v1/videos").length;
+    for (const patch of [
+      { exportSettings: { ...timeline.exportSettings, fps: 29 } },
+      { labels:[{...timeline.labels[0],fontWeight:900}] },
+      { labels:[{...timeline.labels[0],sceneLayer:'overlay'}] },
+      { audioAnalysis:[{...timeline.audioAnalysis[0],analysis:{...timeline.audioAnalysis[0].analysis,frames:[]}}] },
+      { graphics:[{...timeline.graphics[1],code:{source:JSON.stringify({draw:[{shape:'circle',x:'process.exit(0)'}]}),parameters:[]}}] },
+      { clips:[{...timeline.clips[0],deviceFrame:{...timeline.clips[0].deviceFrame,modelId:'watch-ultra-2'}}] },
+      { clips:[{...timeline.clips[0],deviceFrame:{device:'watch',color:'#171717',background:'#223344',renderMode:'gpu',band:'sport'}}] },
+
+      { beatGrid: { bpm: 0, offsetMs: 0 } },
+      { graphics: [{ ...timeline.graphics[0], count: 101 }] },
+      { audioTracks: [{ ...timeline.audioTracks[0], endMs: 1100 }] },
+      { clips: [{ ...timeline.clips[0], speed: 5 }] },
+      { clips: [{ ...timeline.clips[0], pointer: { ...timeline.clips[0].pointer, events: [{ timeMs: 1, x: 2, y: .5, kind: "move" }] } }] },
+      { clips: [{ ...timeline.clips[0], deviceFrame: { ...timeline.clips[0].deviceFrame, animation: { entrance: { preset: "letter-rise", durationMs: 300 } } } }] },
+      { labels: [{ ...timeline.labels[0], animation: { keyframes: [{ timeMs: 2, scale: 1 }, { timeMs: 2, x: .5 }] } }] },
+      { camera: { ...timeline.camera, keyframes: [{ timeMs: 0, zoom: 1, curve: { controlPoints: [2, 0, .2, 1] } }] } },
+    ]) assert.equal((await client.callTool({ name: "save_video", arguments: { ...project, timeline: { ...project.timeline, ...patch } } })).isError, true);
+    assert.equal(calls.filter(call => call.path === "/api/v1/videos").length, beforeInvalidMotion, "invalid motion features never reach the project API");
     const beforeInvalidBackground=calls.filter(call=>call.path==="/api/v1/videos").length;
     for(const change of [{imageUrl:"http://media.example.test/a.png"},{imageUrl:"file:///tmp/a.png"},{imageUrl:"data:image/png;base64,a"},{imageUrl:""},{imageFit:"stretch"}]) {
       const invalidBackground=await client.callTool({name:"save_video",arguments:{...project,timeline:{...project.timeline,background:{...project.timeline.background,...change}}}});
@@ -182,6 +221,8 @@ for (const transportName of ["stdio", "http"]) test(`${transportName} MCP contro
     const layerOnly = (await call("save_video_template",{name:"Two Watches",timeline:{...project.timeline,clips:[],layers:project.timeline.layers.map((layer,i)=>({...layer,deviceFrame:{...layer.deviceFrame,device:"watch"},startMs:i*500}))}})).data;
     assert.equal(layerOnly.timeline.clips.length,0);
     assert.deepEqual(layerOnly.timeline.layers.map(layer=>layer.deviceFrame.device),["watch","watch"]);
+    const watchDocument=structuredClone(project.timeline);watchDocument.clips[0].deviceFrame={device:'watch',color:'#171717',background:'#223344',renderMode:'gpu',modelId:'watch-ultra-2',band:'woven',finish:'natural',motion:'none',rotateY:360};
+    const watchTemplate=(await call('save_video_template',{name:'Real Watch static pose',timeline:watchDocument})).data;assert.deepEqual(watchTemplate.timeline.clips[0].deviceFrame,watchDocument.clips[0].deviceFrame);
     const template = await call("save_video_template", { name: "Reusable launch", timeline: project.timeline });
     assert.deepEqual(template.data.timeline, project.timeline);
     for (const device of ["phone", "tablet", "browser", "iphone", "iphone-duo", "mac", "watch", "android"]) {

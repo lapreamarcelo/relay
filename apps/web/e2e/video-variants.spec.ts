@@ -52,7 +52,11 @@ test("ten label texts preview independently and create editable scenes preservin
   const modal=panel(page);await modal.getByLabel("Label to vary",{exact:true}).selectOption("headline");
   await modal.getByLabel("Variant texts",{exact:true}).fill(`\n${headlines.join("\n")}\n`);
   await modal.getByRole("button",{name:"Preview variant 10",exact:true}).click();
-  await expect.poll(()=>modal.locator('[aria-label="Variant canvas preview"] svg').last().locator("text").last().locator("tspan").allTextContents()).toEqual(["Your day, beautifully", "connected"]);
+  const headline = modal.locator('[aria-label="Variant canvas preview"] > .timeline-label-preview:last-child svg > g').last();
+  await expect(headline.locator("title")).toHaveText(headlines[9]);
+  // Text is now drawn with portable glyph outlines. Keep the two-line wrapping
+  // assertion by checking the two rendered lines and their non-space glyphs.
+  await expect.poll(()=>headline.locator("g[clip-path] > g").evaluateAll(lines=>lines.map(line=>line.querySelectorAll("path").length))).toEqual([19, 9]);
   await expect(modal.locator('[aria-label="Variant canvas preview"]')).toContainText("Brand intact");
   await expect(modal.locator('[aria-label="Variant canvas preview"] [data-device-preview="watch"]')).toHaveCount(1);
   await expect(modal.locator('[aria-label="Variant canvas preview"] [data-device-preview="iphone"]')).toHaveCount(1);

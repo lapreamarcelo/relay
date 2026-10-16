@@ -1,13 +1,22 @@
 import { defaultDeviceFrame, deviceFrameGeometry } from "./device-frames.ts";
+import { deviceModels } from "./device-model-catalog.ts";
 import { videoSizes } from "./video-timeline.ts";
 
 /** Agent-facing design information derived from the same geometry as preview/export. */
 export function deviceFrameCatalog() {
   return {
-    version: 4,
+    version: 5,
+    renderModes: { values: ["vector", "mesh", "gpu"], default: "vector", recommended: "gpu", defaultMotion: "none", description: "GPU loads bundled 3D models or Relay geometry. Static pose is the default; rotations and motion are optional." },
+    models: deviceModels.map(model=>({...model, geometry: "file" in model ? "licensed-glb" : "original", ...( "file" in model ? {assetPath:`/devices/${model.file}`} : {})})),
     requiresAi: false,
-    appliesTo: ["timeline.clips[].deviceFrame", "slides[].deviceFrame"],
+    appliesTo: ["timeline.clips[].deviceFrame", "timeline.layers[].deviceFrame", "slides[].deviceFrame"],
     fields: {
+      renderMode: { required: false, values: ["vector","mesh","gpu"], default: "vector", videoOnly: true },
+      modelId: { required: false, values: deviceModels.map(model=>model.id), description: "Choose an id whose device matches this frame; omitted selects that device's default model. Bundled assets only; no remote model URLs." },
+      finish: { required: false, values: ["graphite","silver","gold","natural"], videoOnly: true },
+      band: { required: false, values: ["woven","none"], device: "watch", videoOnly: true },
+      depth: { required: false, min: -2, max: 2, default: 0, videoOnly: true },
+      scene: { required: false, videoOnly: true, description: "Standalone scene lighting/material/camera settings. timeline.scene shares these across devices." },
       device: { required: true, values: ["phone", "tablet", "browser", "iphone", "iphone-duo", "mac", "watch", "android"] },
       background: { required: true, format: "#RRGGBB", description: "Solid color outside the device." },
       color: { required: true, format: "#RRGGBB", description: "Device frame color." },
@@ -15,13 +24,13 @@ export function deviceFrameCatalog() {
       x: { required: false, min: 0, max: 1, default: .5, description: "Whole-canvas device center; video timelines only." },
       y: { required: false, min: 0, max: 1, default: .5, description: "Whole-canvas device center; video timelines only." },
       scale: { required: false, min: .25, max: 1.5, default: 1, videoOnly: true },
-      rotateX: { required: false, min: -60, max: 60, default: 0, units: "degrees", videoOnly: true },
-      rotateY: { required: false, min: -60, max: 60, default: 0, units: "degrees", videoOnly: true },
-      rotateZ: { required: false, min: -180, max: 180, default: 0, units: "degrees", videoOnly: true },
+      rotateX: { required: false, min: -1080, max: 1080, vectorLimits: [-60,60], default: 0, units: "degrees", videoOnly: true },
+      rotateY: { required: false, min: -1080, max: 1080, vectorLimits: [-60,60], default: 0, units: "degrees", videoOnly: true },
+      rotateZ: { required: false, min: -1080, max: 1080, vectorLimits: [-180,180], default: 0, units: "degrees", videoOnly: true },
       foldAngle: { required: false, min: 0, max: 165, default: 0, units: "degrees", device: "iphone-duo", description: "0 is open; symmetric inward hinge. Video timelines only." },
       motion: { required: false, values: ["none", "orbit", "float", "fold", "unfold", "fold-cycle"], default: "none", videoOnly: true },
       motionDurationMs: { required: false, min: 500, max: 60000, default: 4000, videoOnly: true },
-      motionEasing: { required: false, values: ["linear", "ease-in", "ease-out", "ease-in-out"], videoOnly: true },
+      motionEasing: { required: false, values: ["linear", "ease-in", "ease-out", "ease-in-out", "spring", "bouncy", "cubic-bezier"], videoOnly: true },
       animation: { required: false, videoOnly: true, description: "Entrance/exit presets and sparse keyframes. Call MCP list_video_animations or capabilities?section=video-animation for the full contract." },
     },
     canvasBackground: {
@@ -33,8 +42,8 @@ export function deviceFrameCatalog() {
       example: { color: "#112233", imageUrl: "https://your_r2_library/background.jpg", imageFit: "cover" },
     },
     parallelLayers: {
-      field: "timeline.layers", maximum: 12, order: "Back-to-front above sequential clips; text labels are topmost.",
-      timing: "Each layer has startMs on the shared timeline and inMs/outMs source trims. End is startMs+outMs-inMs. Animation time zero is startMs. Layers may share a source or use separate recordings; each has independent pose, motion/keyframes and volume. No incoming clip transitions on layers.",
+      field: "timeline.layers", maximum: 12, order: "Vector layers use array order. GPU devices share depth testing. Text uses sceneLayer to choose overlay, scene or back.",
+      timing: "Each layer has startMs on the shared timeline and inMs/outMs source trims. End is startMs+(outMs-inMs)/speed (speed defaults to 1). Animation time zero is startMs. Layers may share a source or use separate recordings; each has independent pose, motion/keyframes and volume. No incoming clip transitions on layers.",
       background: "Device layers have transparent backgrounds outside their bezels. Set timeline.background once for the whole scene. Empty clips supports a layers-only scene.",
       interaction: "Synchronize app recordings and device/text animations to demonstrate a handoff. This does not connect to or drive live apps.",
       example: {
@@ -58,6 +67,7 @@ export function deviceFrameCatalog() {
     ] as const).map(frame => ({
       ...frame,
       example: { ...defaultDeviceFrame, device: frame.device },
+      gpuExample: { ...defaultDeviceFrame, device: frame.device, renderMode: "gpu", modelId: deviceModels.find(model=>model.device===frame.device)!.id, motion: "none" },
       layouts: Object.entries(videoSizes).map(([aspectRatio, [width, height]]) => ({
         aspectRatio,
         ...deviceFrameGeometry(width, height, frame.device),
@@ -67,16 +77,16 @@ export function deviceFrameCatalog() {
       units: "Layout canvas, outer and screen rectangles are output pixels. Convert label positions to 0–1 full-canvas fractions.",
       media: "Use your Relay media URL as the clip sourceUrl or slide mediaUrl. The frame is drawn automatically; no frame image upload is needed.",
       fit: "contain preserves the entire screenshot/recording and may letterbox; cover fills the screen and can crop UI. Video x/y/zoom apply inside the screen; zoom applies only to cover.",
-      labels: "Labels are placed above the frame on the full output canvas. Use the layout rectangles to avoid covering important UI.",
+      labels: "Labels use full-canvas positions. sceneLayer overlay stays above devices, back stays below them, and scene participates in 3D placement. Use layout rectangles and depth to avoid covering important UI.",
       images: "Slideshows export 1080×1920 JPEGs. Use the 9:16 layout for slides, including single-image posts.",
       videos: "Video timelines support all listed aspect ratios and both video and image clips. Device pose and motion are saved in the project. Source video and audio keep playing while the device moves. timeline.layers adds up to 12 independently timed devices over the clips (or on a shared background with clips:[]).",
       canvasBackground: "Optional timeline.background {color:#RRGGBB,endColor?:#RRGGBB,imageUrl?:HTTPS_R2_LIBRARY_URL,imageFit?:cover|contain} overrides per-frame backgrounds. A static image is center-cropped (cover, default) or center-letterboxed (contain) above the color/gradient. It appears behind framed media/layers, around contain-fit media and after sequential clips end while remaining layers play. Unframed cover-fit footage fills the canvas.",
-      motion: "Motion is evaluated from local clip time (assembled playhead minus clip start), at 30fps on export. orbit and float repeat; fold/unfold hold their final pose; fold-cycle folds and opens repeatedly. Fold presets require iphone-duo. foldAngle sets their maximum fold; 0 or omission uses 150 degrees. Set motion:none to pose manually.",
-      duo: "A stylized two-panel hinge, using the left and right halves of one source recording. It does not capture a Simulator or attach a separate outer-screen recording.",
-      geometry: "Layouts describe the default unposed device. Position/scale/rotation/motion/keyframes change its screen location; use modest tilt and scale and leave margin for motion. Projected metal body depth follows X/Y tilt, orbit and Duo folding in preview and export. Rotate X/Y within -60–60 degrees and Z within -180–180 degrees; this is perspective depth, not a full 360-degree mesh with modeled rear cameras. Labels use full-canvas positions and may have their own animation.",
+      motion: "Motion is evaluated from local clip time (assembled playhead minus clip start), at the selected export frame rate. orbit and float repeat; fold/unfold hold their final pose; fold-cycle folds and opens repeatedly. Fold presets require iphone-duo. foldAngle sets their maximum fold; 0 or omission uses 150 degrees. Set motion:none to pose manually.",
+      duo: "Relay original folding-phone geometry with a two-panel hinge, using the left and right halves of one source recording. This is a generic folding demonstration, not an official iPhone Duo model. Tablet likewise uses generic geometry, not a complete catalog of iPad models.",
+      geometry: "Layouts describe unposed vector screen rectangles. GPU devices use bundled GLB assets for Watch Ultra 2, iPhone 15 Pro Max and Galaxy S25 Ultra, and original Relay geometry for other devices. GPU/mesh poses allow full rotations up to 1080 degrees; vector X/Y remains within 60 degrees and Z within 180. Static motion:none is supported for every model.",
       remove: "Omit deviceFrame from the updated clip/slide in the full project document to disable it. Preserve other clips/slides; video updates require the retrieved revision.",
       rerender: "After editing, render again before creating a post. Remove stale renderedUrl from edited slideshow slides. Existing published outputs do not change.",
-      limits: "Built-in detailed bezels with projected body depth, not full photorealistic 3D meshes or 360-degree spins with modeled rear cameras. Static PNG/JPEG/WebP/AVIF image backgrounds support Relay library images up to 30 MB and 40 megapixels; animated images and SVG backgrounds are rejected. No custom frame uploads, video backgrounds, lighting or depth of field. Slideshow frames support static device shapes/colors/gradients; image canvas backgrounds, pose, motion and keyframes require video timelines.",
+      limits: "GPU requires browser WebGL and uses the same bundled scene for preview/export. Licensed model credits are listed in models. Generic tablet, folding phone, laptop and browser geometry do not represent all Apple hardware variants. Arbitrary remote models and custom frame uploads are unsupported. Vector/mesh modes preserve older projects. Image backgrounds support static Relay PNG/JPEG/WebP/AVIF up to 30 MB / 40 megapixels; SVG and animation backgrounds are rejected. Slideshows use static vector devices only.",
     },
     motionExample: {
       device: "iphone-duo", background: "#182422", backgroundEnd: "#537C68", color: "#171717",

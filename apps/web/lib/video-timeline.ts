@@ -4,6 +4,11 @@ import { normalizeClipTransition, normalizeLayerAnimation } from "./video-animat
 import { normalizeDeviceFrame } from "./device-frames.ts";
 import { normalizeVideoCamera } from "./video-camera.ts";
 
+import {normalizePointer} from './video-pointer.ts';
+import {normalizeAudioAnalysisTracks} from './video-audio-analysis.ts';
+import {normalizeGraphics} from './video-graphics.ts';
+import {normalizeExportSettings} from './video-export-settings.ts';
+import {normalizeVideoScene} from './video-scene.ts';
 export const videoSizes = { "9:16": [1080, 1920], "4:5": [1080, 1350], "1:1": [1080, 1080], "16:9": [1920, 1080] } as const;
 /** Incoming transitions overlap the preceding clip. Half-duration caps keep
  * each clip's incoming and outgoing regions from overlapping each other. */
@@ -11,18 +16,35 @@ export function clipSchedule(value: VideoTimeline | VideoClip[]) {
   const clips = Array.isArray(value) ? value : value.clips;
   let endMs = 0;
   return clips.map((clip,index) => {
-    const duration = clip.outMs-clip.inMs;
+    const duration = clipDuration(clip);
     const previous = clips[index-1];
-    const transitionMs = previous && clip.transition ? Math.min(clip.transition.durationMs, (previous.outMs-previous.inMs)/2, duration/2) : 0;
+    const transitionMs = previous && clip.transition ? Math.min(clip.transition.durationMs, clipDuration(previous)/2, duration/2) : 0;
     const startMs = endMs-transitionMs;
     endMs = startMs+duration;
     return {clip,index,startMs,endMs,transitionMs};
   });
 }
 export function layerSchedule(timeline: VideoTimeline) {
-  return (timeline.layers ?? []).map((clip,index) => ({clip,index,startMs:clip.startMs,endMs:clip.startMs+clip.outMs-clip.inMs,transitionMs:0}));
+  return (timeline.layers ?? []).map((clip,index) => ({clip,index,startMs:clip.startMs,endMs:clip.startMs+clipDuration(clip),transitionMs:0}));
 }
-export const timelineDuration = (timeline: VideoTimeline) => Math.max(clipSchedule(timeline).at(-1)?.endMs ?? 0, ...layerSchedule(timeline).map(layer => layer.endMs));
+/** Authored duration uses playback speed; a frozen source still occupies its full range. */
+export const clipDuration = (clip: VideoClip) => (clip.outMs - clip.inMs) / (clip.speed ?? 1);
+export function clipSourceTime(clip: VideoClip, localMs: number): number {
+  return clip.freezeMs ?? Math.max(clip.inMs, Math.min(clip.outMs, clip.inMs + Math.max(0, localMs) * (clip.speed ?? 1)));
+}
+export const clipMotionTime = (clip: VideoClip, localMs: number) => Math.max(0, localMs) + (clip.motionOffsetMs ?? 0);
+/** Only touching cuts share a motion span. Gaps and transitions begin a new span. */
+export function clipMotionDuration(timeline: VideoTimeline, clip: VideoClip): number {
+  if (!clip.groupId) return clipDuration(clip);
+  const schedule = clipSchedule(timeline);
+  const index = schedule.findIndex(row => row.clip.id === clip.id);
+  if (index < 0) return clipDuration(clip) + (clip.motionOffsetMs ?? 0);
+  let first = index, last = index;
+  while (first > 0 && schedule[first - 1].clip.groupId === clip.groupId && Math.abs(schedule[first - 1].endMs - schedule[first].startMs) < .01) first--;
+  while (last + 1 < schedule.length && schedule[last + 1].clip.groupId === clip.groupId && Math.abs(schedule[last].endMs - schedule[last + 1].startMs) < .01) last++;
+  return Math.max(...schedule.slice(first, last + 1).map(row => (row.clip.motionOffsetMs ?? 0) + clipDuration(row.clip)));
+}
+export const timelineDuration = (timeline: VideoTimeline) => Math.max(0, clipSchedule(timeline).at(-1)?.endMs ?? 0, ...layerSchedule(timeline).map(layer => layer.endMs), ...(timeline.labels ?? []).map(label => label.endMs), ...(timeline.graphics ?? []).map(graphic => graphic.endMs), ...(timeline.audioTracks ?? []).map(audio => audio.endMs));
 export function effectiveMusicRange(music: VideoTimeline["music"], durationMs: number): { startMs: number; endMs: number; durationMs: number } | null {
   const duration = Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0;
   const startMs = Math.max(0, Math.min(duration, music.startMs ?? 0));
@@ -50,7 +72,14 @@ export function normalizeVideoTimeline(value: unknown): VideoTimeline {
     if (c.fit !== undefined && c.fit !== "cover" && c.fit !== "contain") throw new Error("Clip fit must be cover or contain.");
     const deviceFrame = normalizeDeviceFrame(c.deviceFrame, { allowMotion: true });
     const transition = normalizeClipTransition(c.transition);
-    return { id, sourceUrl: url(c.sourceUrl), name: typeof c.name === "string" ? c.name.slice(0,120) : "Clip", kind: c.kind, inMs, outMs, ...(sourceDurationMs === undefined ? {} : {sourceDurationMs}), fit: c.fit === "contain" ? "contain" : "cover", x: number(c.x,0,1,.5), y: number(c.y,0,1,.5), zoom: number(c.zoom,1,3,1), volume: number(c.volume,0,1,1), ...(deviceFrame ? { deviceFrame } : {}), ...(transition ? {transition} : {}) };
+    const speed = c.speed === undefined ? undefined : number(c.speed,.25,4,1);
+    if ((outMs-inMs)/(speed ?? 1) < 100) throw new Error("Each clip must play for at least 100ms.");
+    const freezeMs = c.freezeMs === undefined ? undefined : number(c.freezeMs,0,sourceDurationMs ?? 3_600_000,0);
+    const groupId = c.groupId === undefined ? undefined : c.groupId;
+    if (groupId !== undefined && (typeof groupId !== "string" || !/^[\w-]{1,120}$/.test(groupId))) throw new Error("Use a valid linked clip id.");
+    const motionOffsetMs = c.motionOffsetMs === undefined ? undefined : number(c.motionOffsetMs,0,900_000,0);
+    const pointer=normalizePointer(c.pointer);
+    return { id, ...(pointer?{pointer}:{}), ...(speed === undefined ? {} : {speed}), ...(freezeMs === undefined ? {} : {freezeMs}), ...(groupId === undefined ? {} : {groupId: groupId as string}), ...(motionOffsetMs === undefined ? {} : {motionOffsetMs}), sourceUrl: url(c.sourceUrl), name: typeof c.name === "string" ? c.name.slice(0,120) : "Clip", kind: c.kind, inMs, outMs, ...(sourceDurationMs === undefined ? {} : {sourceDurationMs}), fit: c.fit === "contain" ? "contain" : "cover", x: number(c.x,0,1,.5), y: number(c.y,0,1,.5), zoom: number(c.zoom,1,3,1), volume: number(c.volume,0,1,1), ...(deviceFrame ? { deviceFrame } : {}), ...(transition ? {transition} : {}) };
   };
   const clips = v.clips.map(normalizeClip);
   let layers: VideoLayer[] | undefined;
@@ -62,11 +91,33 @@ export function normalizeVideoTimeline(value: unknown): VideoTimeline {
       return {...normalizeClip(layer),startMs:number(layer.startMs,0,900_000,0)};
     });
   }
-  const duration = timelineDuration({ clips, layers } as VideoTimeline);
+  let duration = timelineDuration({ clips, layers } as VideoTimeline);
   if (duration > 900_000) throw new Error("A timeline may be at most 15 minutes.");
   if (!Array.isArray(v.labels) || v.labels.length > 200) throw new Error("Use up to 200 timed labels.");
-  const labels = v.labels.map(entry => { const l = object(entry); const normalized = normalizeCreativeLabels([l]); if (!normalized?.length) throw new Error("Labels need text."); const startMs = number(l.startMs,0,900_000,0); const endMs = number(l.endMs,100,900_000,duration || 5000); if (endMs <= startMs) throw new Error("Label end must follow its start."); return { ...normalized[0], startMs, endMs, ...(l.animation === undefined ? {} : { animation: normalizeLayerAnimation(l.animation) }) }; });
+  const labels = v.labels.map(entry => { const l = object(entry); const normalized = normalizeCreativeLabels([l]); if (!normalized?.length) throw new Error("Labels need text."); const startMs = number(l.startMs,0,900_000,0); const endMs = number(l.endMs,100,900_000,duration || 5000); if (endMs <= startMs) throw new Error("Label end must follow its start."); return { ...normalized[0], startMs, endMs, ...(l.animation === undefined ? {} : { animation: normalizeLayerAnimation(l.animation,"label",false,normalized[0].sceneLayer === "scene") }) }; });
   if (new Set(labels.map(l => l.id)).size !== labels.length) throw new Error("Label ids must be unique.");
+  let audioTracks: VideoTimeline["audioTracks"];
+  if (v.audioTracks !== undefined) {
+    if (!Array.isArray(v.audioTracks) || v.audioTracks.length > 12) throw new Error("Use up to 12 sound tracks.");
+    audioTracks = v.audioTracks.map(entry => {
+      const a = object(entry);
+      if (typeof a.id !== "string" || !/^[\w-]{1,120}$/.test(a.id) || ids.has(a.id)) throw new Error("Sound track ids must be valid and unique.");
+      ids.add(a.id);
+      const startMs = number(a.startMs,0,900_000,0), endMs = number(a.endMs,100,900_000,duration || 5000);
+      if (endMs-startMs < 100) throw new Error("Sound tracks must last at least 100ms.");
+      return {id:a.id,url:url(a.url),name:typeof a.name === "string" ? a.name.trim().slice(0,120) : "Sound",startMs,endMs,offsetMs:number(a.offsetMs,0,3_600_000,0),volume:number(a.volume,0,1,1),fadeInMs:number(a.fadeInMs,0,endMs-startMs,0),fadeOutMs:number(a.fadeOutMs,0,endMs-startMs,0)};
+    });
+  }
+  let beatGrid: VideoTimeline["beatGrid"];
+  if (v.beatGrid !== undefined) { const b = object(v.beatGrid); beatGrid = {bpm:number(b.bpm,20,300,120),offsetMs:number(b.offsetMs,0,900_000,0)}; }
+  const audioAnalysis=normalizeAudioAnalysisTracks(v.audioAnalysis)?.map(track=>({...track,sourceUrl:url(track.sourceUrl)}));
+  const graphics=normalizeGraphics(v.graphics)?.map(graphic=>({...graphic,...(graphic.audioReactive?{audioReactive:{...graphic.audioReactive,sourceUrl:url(graphic.audioReactive.sourceUrl)}}:{})}));
+  const analyzedSources=new Set(audioAnalysis?.map(track=>track.sourceUrl));
+  if(graphics?.some(graphic=>graphic.audioReactive&&!analyzedSources.has(graphic.audioReactive.sourceUrl)))throw new Error('Audio-reactive graphics require analyzed audio.');
+  const scene=normalizeVideoScene(v.scene);
+  const exportSettings=normalizeExportSettings(v.exportSettings);
+  duration = timelineDuration({clips,layers,labels,audioTracks,graphics} as VideoTimeline);
+  if (duration > 900_000) throw new Error("A timeline may be at most 15 minutes.");
   const music = v.music === undefined ? {} : object(v.music);
   const hasMusicRange = music.startMs !== undefined || music.endMs !== undefined;
   const musicStartMs = hasMusicRange ? number(music.startMs,0,900_000,0) : undefined;
@@ -81,12 +132,18 @@ export function normalizeVideoTimeline(value: unknown): VideoTimeline {
     background = { color: color(b.color), ...(b.endColor === undefined ? {} : { endColor: color(b.endColor) }), ...(b.imageUrl === undefined ? {} : {imageUrl: url(b.imageUrl)}), ...(b.imageFit === undefined ? {} : {imageFit: b.imageFit}) };
   }
   const camera = normalizeVideoCamera(v.camera);
-  return { version: 1, aspectRatio: v.aspectRatio as VideoTimeline["aspectRatio"], ...(background ? { background } : {}), ...(camera ? {camera} : {}), clips, ...(layers === undefined ? {} : {layers}), labels, music: { url: url(music.url,true), ...(musicName ? { name: musicName } : {}), volume: number(music.volume,0,1,.8), offsetMs: number(music.offsetMs,0,3_600_000,0), fadeInMs: number(music.fadeInMs,0,900_000,0), fadeOutMs: number(music.fadeOutMs,0,900_000,0), ...(hasMusicRange ? { startMs: musicStartMs, endMs: musicEndMs } : {}) }, coverMs: number(v.coverMs,0,Math.max(0,duration-1),0) };
+  return { version: 1, aspectRatio: v.aspectRatio as VideoTimeline["aspectRatio"], ...(background ? { background } : {}), ...(camera ? {camera} : {}), clips, ...(graphics?{graphics}:{}), ...(audioAnalysis===undefined?{}:{audioAnalysis}), ...(scene?{scene}:{}), ...(exportSettings?{exportSettings}:{}), ...(audioTracks === undefined ? {} : {audioTracks}), ...(beatGrid ? {beatGrid} : {}), ...(layers === undefined ? {} : {layers}), labels, music: { url: url(music.url,true), ...(musicName ? { name: musicName } : {}), volume: number(music.volume,0,1,.8), offsetMs: number(music.offsetMs,0,3_600_000,0), fadeInMs: number(music.fadeInMs,0,900_000,0), fadeOutMs: number(music.fadeOutMs,0,900_000,0), ...(hasMusicRange ? { startMs: musicStartMs, endMs: musicEndMs } : {}) }, coverMs: number(v.coverMs,0,Math.max(0,duration-1),0) };
 }
 export function splitVideoClip(timeline: VideoTimeline, id: string, localMs: number): VideoTimeline {
   const index = timeline.clips.findIndex(c => c.id === id); const clip = timeline.clips[index];
-  if (!clip || localMs < 100 || localMs > clip.outMs-clip.inMs-100) return timeline;
-  const next = [...timeline.clips]; next.splice(index,1,{...clip,outMs:clip.inMs+localMs},{...clip,id:crypto.randomUUID(),inMs:clip.inMs+localMs,transition:undefined}); return {...timeline,clips:next};
+  const speed = clip?.speed ?? 1;
+  if (!clip || timeline.clips.length >= 50 || !Number.isFinite(localMs) || localMs < Math.max(100,100/speed) || clipDuration(clip)-localMs < Math.max(100,100/speed)) return timeline;
+  const schedule = clipSchedule(timeline);
+  // A cut cannot shorten either overlap below its original half-duration cap.
+  if (localMs < schedule[index].transitionMs*2 || clipDuration(clip)-localMs < (schedule[index+1]?.transitionMs ?? 0)*2) return timeline;
+  const groupId = clip.groupId ?? crypto.randomUUID();
+  const sourceMs = clip.inMs + localMs * speed;
+  const next = [...timeline.clips]; next.splice(index,1,{...clip,outMs:sourceMs,groupId,motionOffsetMs:clip.motionOffsetMs ?? 0},{...clip,id:crypto.randomUUID(),inMs:sourceMs,groupId,motionOffsetMs:(clip.motionOffsetMs ?? 0)+localMs,transition:undefined}); return {...timeline,clips:next};
 }
 export function subtitlesToLabels(srt: string): VideoTimeline["labels"] {
   const time = (v: string) => { const [h,m,s,ms] = v.split(/[:,.]/).map(Number); return ((h*60+m)*60+s)*1000+ms; };

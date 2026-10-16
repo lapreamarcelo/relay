@@ -1,0 +1,416 @@
+{
+  "version": 1,
+  "aspectRatio": "16:9",
+  "background": {
+    "color": "#071B28"
+  },
+  "camera": {
+    "zoom": 1,
+    "x": 0.5,
+    "y": 0.5,
+    "keyframes": [
+      {
+        "timeMs": 0,
+        "zoom": 1
+      },
+      {
+        "timeMs": 3000,
+        "easing": "spring",
+        "curve": {
+          "stiffness": 160,
+          "damping": 20,
+          "mass": 1
+        },
+        "zoom": 1
+      },
+      {
+        "timeMs": 4500,
+        "zoom": 1.015,
+        "x": 0.53,
+        "y": 0.5
+      },
+      {
+        "timeMs": 12000,
+        "zoom": 1.025,
+        "x": 0.53,
+        "y": 0.5
+      }
+    ]
+  },
+  "clips": [
+    {
+      "id": "proof",
+      "sourceUrl": "https://racketly.demo.relay/watch-footage.mp4",
+      "name": "Real Watch scoring",
+      "kind": "video",
+      "inMs": 0,
+      "outMs": 3000,
+      "sourceDurationMs": 3000,
+      "fit": "cover",
+      "x": 0.5,
+      "y": 0.5,
+      "zoom": 1,
+      "volume": 0
+    },
+    {
+      "id": "canvas",
+      "sourceUrl": "https://racketly.demo.relay/canvas.png",
+      "name": "Device showcase",
+      "kind": "image",
+      "inMs": 0,
+      "outMs": 9300,
+      "fit": "cover",
+      "x": 0.5,
+      "y": 0.5,
+      "zoom": 1,
+      "volume": 0,
+      "transition": {
+        "kind": "crossfade",
+        "durationMs": 300,
+        "easing": "ease-in-out"
+      }
+    }
+  ],
+  "graphics": [
+    {
+      "id": "accent-ring",
+      "kind": "ring",
+      "startMs": 3000,
+      "endMs": 12000,
+      "x": 0.94,
+      "y": 0.14,
+      "width": 0.08,
+      "height": 0.14,
+      "color": "#244A60",
+      "seed": 4,
+      "count": 1,
+      "speed": 0.12,
+      "animation": {
+        "keyframes": [
+          {
+            "timeMs": 0,
+            "opacity": 0.7
+          },
+          {
+            "timeMs": 9000,
+            "opacity": 0.7
+          }
+        ]
+      }
+    }
+  ],
+  "scene": {
+    "version": 1,
+    "camera": {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "rotateX": 0,
+      "rotateY": 0,
+      "rotateZ": 0,
+      "focalLength": 50
+    },
+    "environment": "softbox",
+    "exposure": 1.1,
+    "roughness": 0.4,
+    "metallic": 0.65,
+    "shadow": 0.22,
+    "lightAngle": -35,
+    "focusDepth": 0,
+    "aperture": 0,
+    "motionBlur": 0
+  },
+  "exportSettings": {
+    "format": "mp4",
+    "fps": 24,
+    "resolution": "720p",
+    "quality": "high"
+  },
+  "layers": [
+    {
+      "id": "iphone",
+      "sourceUrl": "https://racketly.demo.relay/iphone-match.png",
+      "name": "Racketly match history",
+      "kind": "image",
+      "inMs": 0,
+      "outMs": 9000,
+      "fit": "contain",
+      "x": 0.5,
+      "y": 0.5,
+      "zoom": 1,
+      "volume": 0,
+      "deviceFrame": {
+        "device": "iphone",
+        "background": "#071B28",
+        "color": "#516E7F",
+        "renderMode": "mesh",
+        "depth": 0,
+        "x": 0.6,
+        "y": 0.54,
+        "scale": 0.85,
+        "animation": {
+          "entrance": {
+            "preset": "fade",
+            "durationMs": 450
+          },
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "x": 0.63,
+              "y": 0.6,
+              "scale": 0.78,
+              "rotateY": -17,
+              "rotateZ": -4
+            },
+            {
+              "timeMs": 1100,
+              "x": 0.6,
+              "y": 0.54,
+              "scale": 0.85,
+              "rotateY": 8,
+              "rotateZ": 2
+            },
+            {
+              "timeMs": 9000,
+              "x": 0.6,
+              "y": 0.54,
+              "scale": 0.86,
+              "rotateY": -9,
+              "rotateZ": -2
+            }
+          ]
+        }
+      },
+      "startMs": 3000
+    },
+    {
+      "id": "watch",
+      "sourceUrl": "https://racketly.demo.relay/watch-official-canvas.png",
+      "name": "Racketly — official Apple Watch Ultra bezel",
+      "kind": "image",
+      "inMs": 0,
+      "outMs": 9000,
+      "fit": "contain",
+      "x": 0.5,
+      "y": 0.5,
+      "zoom": 1,
+      "volume": 0,
+      "startMs": 3000
+    }
+  ],
+  "labels": [
+    {
+      "id": "proof-title",
+      "text": "Score on your wrist.",
+      "x": 0.5,
+      "y": 0.1,
+      "width": 0.8,
+      "height": 0.08,
+      "fontSize": 76,
+      "font": "modern",
+      "textColor": "#FFFFFF",
+      "background": "light",
+      "backgroundColor": "#071B28",
+      "style": "light",
+      "startMs": 0,
+      "endMs": 2700,
+      "animation": {
+        "entrance": {
+          "preset": "letter-rise",
+          "durationMs": 450,
+          "staggerMs": 24
+        },
+        "exit": {
+          "preset": "fade",
+          "durationMs": 250
+        }
+      }
+    },
+    {
+      "id": "proof-caption",
+      "text": "A tap. A point. Back to play.",
+      "x": 0.5,
+      "y": 0.89,
+      "width": 0.72,
+      "height": 0.08,
+      "fontSize": 40,
+      "font": "modern",
+      "textColor": "#FFFFFF",
+      "background": "light",
+      "backgroundColor": "#071B28",
+      "style": "light",
+      "startMs": 500,
+      "endMs": 2700,
+      "animation": {
+        "entrance": {
+          "preset": "fade",
+          "durationMs": 250
+        },
+        "exit": {
+          "preset": "fade",
+          "durationMs": 250
+        }
+      }
+    },
+    {
+      "id": "brand",
+      "text": "RACKETLY",
+      "x": 0.22,
+      "y": 0.15,
+      "width": 0.36,
+      "height": 0.08,
+      "fontSize": 40,
+      "font": "modern",
+      "textColor": "#87CFE4",
+      "background": "light",
+      "backgroundColor": "#071B28",
+      "style": "light",
+      "startMs": 3000,
+      "endMs": 12000,
+      "animation": {
+        "entrance": {
+          "preset": "fade",
+          "durationMs": 400
+        }
+      }
+    },
+    {
+      "id": "first-title",
+      "text": "Play the point.\nKeep the score.",
+      "x": 0.22,
+      "y": 0.36,
+      "width": 0.38,
+      "height": 0.08,
+      "fontSize": 72,
+      "font": "modern",
+      "textColor": "#FFFFFF",
+      "background": "light",
+      "backgroundColor": "#071B28",
+      "style": "light",
+      "startMs": 3000,
+      "endMs": 8000,
+      "animation": {
+        "entrance": {
+          "preset": "line-cascade",
+          "durationMs": 650,
+          "easing": "spring",
+          "curve": {
+            "stiffness": 160,
+            "damping": 20,
+            "mass": 1
+          },
+          "staggerMs": 70
+        },
+        "exit": {
+          "preset": "fade",
+          "durationMs": 350
+        }
+      }
+    },
+    {
+      "id": "last-title",
+      "text": "Your match.\nYour story.",
+      "x": 0.22,
+      "y": 0.36,
+      "width": 0.38,
+      "height": 0.08,
+      "fontSize": 88,
+      "font": "modern",
+      "textColor": "#FFFFFF",
+      "background": "light",
+      "backgroundColor": "#071B28",
+      "style": "light",
+      "startMs": 8000,
+      "endMs": 12000,
+      "animation": {
+        "entrance": {
+          "preset": "line-cascade",
+          "durationMs": 550,
+          "easing": "ease-out",
+          "staggerMs": 60
+        }
+      }
+    },
+    {
+      "id": "platforms",
+      "text": "Apple Watch + iPhone",
+      "x": 0.22,
+      "y": 0.63,
+      "width": 0.38,
+      "height": 0.08,
+      "fontSize": 34,
+      "font": "modern",
+      "textColor": "#87CFE4",
+      "background": "light",
+      "backgroundColor": "#071B28",
+      "style": "light",
+      "startMs": 3700,
+      "endMs": 12000,
+      "animation": {
+        "entrance": {
+          "preset": "slide-up",
+          "durationMs": 450,
+          "easing": "spring",
+          "curve": {
+            "stiffness": 160,
+            "damping": 20,
+            "mass": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "cta",
+      "text": "Track your next match.",
+      "x": 0.22,
+      "y": 0.79,
+      "width": 0.38,
+      "height": 0.08,
+      "fontSize": 36,
+      "font": "modern",
+      "textColor": "#FFFFFF",
+      "background": "light",
+      "backgroundColor": "#071B28",
+      "style": "light",
+      "startMs": 9600,
+      "endMs": 12000,
+      "animation": {
+        "entrance": {
+          "preset": "soft-reveal",
+          "durationMs": 500,
+          "easing": "ease-out"
+        }
+      }
+    },
+    {
+      "id": "samples",
+      "text": "Sample app screens",
+      "x": 0.22,
+      "y": 0.94,
+      "width": 0.38,
+      "height": 0.08,
+      "fontSize": 28,
+      "font": "modern",
+      "textColor": "#7D9AA9",
+      "background": "light",
+      "backgroundColor": "#071B28",
+      "style": "light",
+      "startMs": 3300,
+      "endMs": 12000,
+      "animation": {
+        "entrance": {
+          "preset": "fade",
+          "durationMs": 500
+        }
+      }
+    }
+  ],
+  "music": {
+    "url": "https://racketly.demo.relay/racketly-song.mp3",
+    "volume": 0.2,
+    "offsetMs": 0,
+    "fadeInMs": 600,
+    "fadeOutMs": 900
+  },
+  "coverMs": 6200
+}

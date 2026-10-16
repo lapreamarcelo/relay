@@ -1,0 +1,9 @@
+Relay label fonts
+
+The generated `label-font-data.ts` embeds the unmodified bytes of DejaVu 2.35 Sans, Serif and Sans Mono, regular and bold. These files came from the local Matplotlib font distribution. The original font name tables retain the full copyright and permission notice; a readable copy is in `LICENSE_DEJAVU.txt` and an `@license` block precedes the generated data.
+
+`label-font-metrics.ts` reads cmap (formats 4/12), hmtx, kern, loca and simple/composite glyf contours synchronously. Glyph advances and pair kerning use original font units. SVG paths serve browser preview, GPU plane textures and Sharp export; no system font substitution or font-loading race is involved. Parsed faces, outlines and bounded text measurements are cached. The TrueType outline format is described in [Microsoft's OpenType specification](https://learn.microsoft.com/en-us/typography/opentype/spec/glyf); codepoint mappings follow its [cmap specification](https://learn.microsoft.com/en-us/typography/opentype/spec/cmap).
+
+Weight 400 selects regular; 700 and the legacy default 800 select bold. Italic applies a deterministic twelve-degree shear. Automatic pair kerning is on by default and can be disabled independently of letter spacing. NFC composition and Intl grapheme/word segmentation preserve composed accents, emoji clusters and non-space-delimited words during reveal and wrapping. Codepoints absent from these fonts use their deterministic missing-glyph outline. This is not a complex-script shaping engine: contextual Arabic/Indic shaping, bidirectional layout, color emoji and font substitution are outside its current contract.
+
+Tests compare advance widths against independently read source-font hmtx/kern values, rasterize composed glyph paths, and compare settled animated effects with the static path image. Explicit scene text supports X/Y tilt and depth; ordinary overlay labels retain 2D key constraints.

@@ -92,7 +92,7 @@ async function sharedAppPalette(page: Page) {
   const saveButton = page.getByRole("button", { name: "Save & download", exact: true });
   for (const property of ["background-color", "color"])
     await expect(saveButton).toHaveCSS(property, await appButton.evaluate((element, name) => getComputedStyle(element).getPropertyValue(name), property));
-  await expect(page.getByRole("navigation", { name: "Video settings shortcuts" }).getByRole("button")).toHaveCount(6);
+  await expect(page.getByRole("navigation", { name: "Video settings shortcuts" }).getByRole("button")).toHaveCount(7);
   await expect(page.getByRole("button", { name: "AI settings", exact: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "AI video composer", exact: true })).toHaveCount(0);
 }
@@ -269,7 +269,7 @@ for (const initialTheme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: "Save draft", exact: true }).click();
     const document = structuredClone(state.project().timeline);
     const media = await page.locator(".unified-video-canvas").getAttribute("style");
-    const labels = await page.locator(".unified-video-canvas > .timeline-label-preview").innerHTML();
+    const labels = await page.locator(".unified-video-canvas > .timeline-label-preview").evaluateAll(elements => elements.map(element => element.innerHTML));
     const before = testInfo.project.name === "chromium" ? await pinnedWorkspace(page) : undefined;
     const framedScreen = page.locator(".unified-video-canvas [data-device-panel]").first();
     await expect(framedScreen).toBeVisible();
@@ -287,7 +287,7 @@ for (const initialTheme of ["light", "dark"] as const) {
     expect(nextPalette.color).not.toBe(originalPalette.color);
     expect(state.project().timeline).toEqual(document);
     await expect(page.locator(".unified-video-canvas")).toHaveAttribute("style", media!);
-    await expect(page.locator(".unified-video-canvas > .timeline-label-preview")).toHaveJSProperty("innerHTML", labels);
+    expect(await page.locator(".unified-video-canvas > .timeline-label-preview").evaluateAll(elements => elements.map(element => element.innerHTML))).toEqual(labels);
     await expect(framedScreen).toBeVisible();
     if (before) {
       const after = await pinnedWorkspace(page);

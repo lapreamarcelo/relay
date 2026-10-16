@@ -1,5 +1,5 @@
 import type { VideoCamera, VideoCameraKeyframe } from "@relay/core";
-import { animationExpressions, normalizeAnimationEasing } from "./video-animation.ts";
+import { animationExpressions, normalizeAnimationEasing, normalizeAnimationCurve } from "./video-animation.ts";
 
 export const defaultVideoCamera: VideoCamera = { zoom: 1, x: .5, y: .5 };
 export const videoCameraPresets = ["zoom-in", "zoom-out", "focus-return"] as const;
@@ -20,23 +20,26 @@ function number(value: unknown, min: number, max: number): number {
 export function normalizeVideoCamera(value: unknown): VideoCamera | undefined {
   if (value === undefined) return undefined;
   const input = object(value);
-  allowed(input, ["zoom", "x", "y", "keyframes"]);
+  allowed(input, ["zoom", "x", "y", "keyframes", "scaleMode", "returnMs"]);
   const camera: VideoCamera = {
     zoom: input.zoom === undefined ? 1 : number(input.zoom, 1, 4),
     x: input.x === undefined ? .5 : number(input.x, 0, 1),
     y: input.y === undefined ? .5 : number(input.y, 0, 1),
   };
+  if(input.scaleMode!==undefined){if(input.scaleMode!=="linear"&&input.scaleMode!=="perceptual")throw new Error("Choose linear or perceptual camera scaling.");camera.scaleMode=input.scaleMode;}
+  if(input.returnMs!==undefined)camera.returnMs=number(input.returnMs,50,60000);
   if (input.keyframes !== undefined) {
     if (!Array.isArray(input.keyframes) || input.keyframes.length > 100) throw new Error("Use up to 100 camera keyframes.");
     let previous = -1;
     camera.keyframes = input.keyframes.map(value => {
       const frame = object(value);
-      allowed(frame, ["timeMs", "zoom", "x", "y", "easing"]);
+      allowed(frame, ["timeMs", "zoom", "x", "y", "easing", "curve"]);
       const timeMs = number(frame.timeMs, 0, 900000);
       if (timeMs <= previous) throw new Error("Camera keyframe times must be unique and increasing.");
       previous = timeMs;
       const result: VideoCameraKeyframe = { timeMs };
       if (frame.easing !== undefined) result.easing = normalizeAnimationEasing(frame.easing);
+      if (frame.curve !== undefined) result.curve = normalizeAnimationCurve(frame.curve);
       for (const key of ["zoom", "x", "y"] as const) {
         if (frame[key] !== undefined) result[key] = number(frame[key], key === "zoom" ? 1 : 0, key === "zoom" ? 4 : 1);
       }
@@ -51,8 +54,8 @@ function expressions(camera: VideoCamera | undefined, timeMs: number | string) {
   const base = camera ?? defaultVideoCamera;
   // Camera tracks use the same independent sparse interpolation and departing
   // easing as device and label tracks. Scale is the shared algebra's zoom field.
-  const state = animationExpressions({ keyframes: base.keyframes?.map(({ zoom, ...frame }) => ({ ...frame, ...(zoom === undefined ? {} : { scale: zoom }) })) }, timeMs, 1, { scale: base.zoom, x: base.x, y: base.y });
-  return { zoom: state.scale, x: state.x, y: state.y };
+  const state = animationExpressions({ scaleMode:base.scaleMode,returnMs:base.returnMs,keyframes: base.keyframes?.map(({ zoom, ...frame }) => ({ ...frame, ...(zoom === undefined ? {} : { scale: zoom }) })) }, timeMs, 1, { scale: base.zoom, x: base.x, y: base.y });
+  return { zoom:typeof state.scale==="number"?Math.max(1,state.scale):`max(1,${state.scale})`, x: state.x, y: state.y };
 }
 
 export function videoCameraState(camera: VideoCamera | undefined, timeMs: number): { zoom: number; x: number; y: number } {
@@ -73,9 +76,9 @@ export function videoCameraTransform(camera: VideoCamera | undefined, timeMs: nu
 }
 
 /** One output frame per input frame; camera time is the global 30fps scene clock. */
-export function videoCameraFilter(camera: VideoCamera, width: number, height: number): string {
-  const state = expressions(camera, "on/30*1000");
-  return `fps=30,setpts=PTS-STARTPTS,zoompan=z='${state.zoom}':x='max(0,min(iw-iw/zoom,iw*(${state.x})-iw/(2*zoom)))':y='max(0,min(ih-ih/zoom,ih*(${state.y})-ih/(2*zoom)))':d=1:s=${width}x${height}:fps=30`;
+export function videoCameraFilter(camera: VideoCamera, width: number, height: number, fps = 30): string {
+  const state = expressions(camera, `on/${fps}*1000`);
+  return `fps=${fps},setpts=PTS-STARTPTS,zoompan=z='${state.zoom}':x='max(0,min(iw-iw/zoom,iw*(${state.x})-iw/(2*zoom)))':y='max(0,min(ih-ih/zoom,ih*(${state.y})-ih/(2*zoom)))':d=1:s=${width}x${height}:fps=${fps}`;
 }
 
 export function videoCameraPreset(preset: typeof videoCameraPresets[number], durationMs: number, focus: { zoom: number; x: number; y: number }): VideoCamera {

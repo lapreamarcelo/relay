@@ -3,6 +3,8 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
 import { z } from "zod/v4";
+import { normalizeCodeClip } from "../../web/lib/video-code-clips.ts";
+import { deviceModels } from "../../web/lib/device-model-catalog.ts";
 
 export function createRelayMcpServer(relayUrl: string, apiKey: string, remote = false) {
 async function relay(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -58,28 +60,48 @@ const postFields = {
   targets: z.array(postTargetSchema).min(1).max(20),
 };
 
-const animationEasingSchema = z.enum(["linear", "ease-in", "ease-out", "ease-in-out"]);
-const animationSchema = (device = false) => z.object({
-  entrance: z.object({ preset: z.enum(device ? ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom"] : ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom", "typewriter"]), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional() }).strict().optional(),
-  exit: z.object({ preset: z.enum(device ? ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom"] : ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom", "typewriter"]), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional() }).strict().optional(),
-  keyframes: z.array(z.object({ timeMs: z.number().min(0).max(900000), easing: animationEasingSchema.optional().describe("Easing toward the next keyframe, linear by default."), x: z.number().min(0).max(1).optional(), y: z.number().min(0).max(1).optional(), scale: z.number().min(device ? .25 : .1).max(device ? 1.5 : 3).optional(), rotateZ: z.number().min(-180).max(180).optional(), opacity: z.number().min(0).max(1).optional(), ...(device ? { rotateX: z.number().min(-60).max(60).optional(), rotateY: z.number().min(-60).max(60).optional(), foldAngle: z.number().min(0).max(165).optional().describe("Duo only.") } : {}) }).strict()).max(100).optional().describe("Sparse property keyframes, unique increasing times in local layer milliseconds."),
+const animationEasingSchema = z.enum(["linear", "ease-in", "ease-out", "ease-in-out", "spring", "bouncy", "cubic-bezier"]);
+const animationCurveSchema = z.object({
+  controlPoints: z.tuple([z.number().min(0).max(1), z.number().min(-2).max(3), z.number().min(0).max(1), z.number().min(-2).max(3)]).optional(),
+  stiffness: z.number().min(1).max(1000).optional(), damping: z.number().min(.1).max(100).optional(), mass: z.number().min(.1).max(10).optional(), velocity: z.number().min(-20).max(20).optional(),
 }).strict();
-const clipTransitionSchema = z.object({ kind: z.enum(["crossfade", "slide-left", "slide-right", "wipe-left", "wipe-right", "zoom"]), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional() }).strict();
+const framePresets = ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom"] as const;
+const textPresets = [...framePresets, "typewriter", "letter-rise", "word-spring", "line-cascade", "tracking", "soft-reveal", "focus", "ripple", "spin-in", "letter-drop", "letter-slide", "word-slide", "word-blur", "line-wipe", "letter-zoom", "word-zoom", "letter-flip", "wave-rise", "arc-in", "bounce-in", "elastic-in", "scatter-in", "wipe-left", "wipe-right", "mask-up", "mask-down", "pulse-reveal", "alternating-rise", "ink-reveal"] as const;
+const animationSchema = (device = false, sceneText = false) => z.object({
+  entrance: z.object({ preset: z.enum(device ? framePresets : textPresets), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional(), curve: animationCurveSchema.optional(), staggerMs: z.number().min(0).max(500).optional() }).strict().optional(),
+  exit: z.object({ preset: z.enum(device ? framePresets : textPresets), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional(), curve: animationCurveSchema.optional(), staggerMs: z.number().min(0).max(500).optional() }).strict().optional(),
+  scaleMode: z.enum(["linear", "perceptual"]).optional(), returnMs: z.number().min(50).max(60000).optional(),
+  keyframes: z.array(z.object({ timeMs: z.number().min(0).max(900000), easing: animationEasingSchema.optional().describe("Easing toward the next keyframe, linear by default."), curve: animationCurveSchema.optional(), x: z.number().min(0).max(1).optional(), y: z.number().min(0).max(1).optional(), scale: z.number().min(device ? .25 : .1).max(device ? 1.5 : 3).optional(), rotateZ: z.number().min(device || sceneText ? -1080 : -180).max(device || sceneText ? 1080 : 180).optional(), opacity: z.number().min(0).max(1).optional(), ...(device || sceneText ? { depth: z.number().min(-2).max(2).optional(), rotateX: z.number().min(-1080).max(1080).optional(), rotateY: z.number().min(-1080).max(1080).optional(), foldAngle: z.number().min(0).max(165).optional().describe("Duo only.") } : {}) }).strict().refine(frame => ["x", "y", "scale", "rotateZ", "opacity", ...(device || sceneText ? ["rotateX", "rotateY", "depth", ...(device?["foldAngle"]:[])] : [])].some(key => (frame as Record<string, unknown>)[key] !== undefined), "Each keyframe needs an animated property.")).max(100).optional().describe("Sparse property keyframes, unique increasing times in local layer milliseconds."),
+}).strict().refine(animation => (animation.keyframes ?? []).every((frame, index, frames) => index === 0 || frame.timeMs > frames[index - 1].timeMs), "Keyframe times must be unique and increasing.");
+const clipTransitionSchema = z.object({ kind: z.enum(["crossfade", "slide-left", "slide-right", "wipe-left", "wipe-right", "zoom"]), durationMs: z.number().min(50).max(60000), easing: animationEasingSchema.optional(), curve: animationCurveSchema.optional() }).strict();
 const cameraKeyframeSchema = z.object({
   timeMs: z.number().min(0).max(900000),
   zoom: z.number().min(1).max(4).optional(),
   x: z.number().min(0).max(1).optional(),
   y: z.number().min(0).max(1).optional(),
   easing: animationEasingSchema.optional().describe("Easing toward the next keyframe; linear by default."),
+  curve: animationCurveSchema.optional(),
 }).strict().refine(frame => frame.zoom !== undefined || frame.x !== undefined || frame.y !== undefined, "Each camera keyframe needs zoom or a focus coordinate.");
 const videoCameraSchema = z.object({
+  scaleMode: z.enum(["linear", "perceptual"]).optional(), returnMs: z.number().min(50).max(60000).optional(),
   zoom: z.number().min(1).max(4).default(1).describe("1 shows the full canvas; up to 4 magnifies footage and device frames. Labels stay steady."),
   x: z.number().min(0).max(1).default(.5).describe("Horizontal focus point on the unzoomed canvas. Edge focus clamps to avoid blank borders."),
   y: z.number().min(0).max(1).default(.5).describe("Vertical focus point on the unzoomed canvas."),
   keyframes: z.array(cameraKeyframeSchema).max(100).optional().describe("Unique increasing times on the global timeline clock, independent of source trims. Sparse properties interpolate from the base pose and hold their last value."),
 }).strict().refine(camera => (camera.keyframes ?? []).every((frame, index, frames) => index === 0 || frame.timeMs > frames[index - 1].timeMs), "Camera keyframe times must be unique and increasing.");
 
+const sceneKeyframeSchema = z.object({ z:z.number().min(-2).max(2).optional(), focalLength:z.number().min(18).max(120).optional(), timeMs: z.number().min(0).max(86400000), x: z.number().min(-2).max(2).optional(), y: z.number().min(-2).max(2).optional(), scale: z.number().min(.25).max(4).optional(), rotateX: z.number().min(-180).max(180).optional(), rotateY: z.number().min(-180).max(180).optional(), rotateZ: z.number().min(-180).max(180).optional(), easing: animationEasingSchema.optional(), curve: animationCurveSchema.optional() }).strict();
+const sceneSchema = z.object({
+  version: z.literal(1).default(1), environment: z.enum(["studio", "softbox", "sunset", "night"]).optional(),
+  camera: z.object({ x: z.number().min(-2).max(2).optional(), y: z.number().min(-2).max(2).optional(), z: z.number().min(-2).max(2).optional(), rotateX: z.number().min(-180).max(180).optional(), rotateY: z.number().min(-180).max(180).optional(), rotateZ: z.number().min(-180).max(180).optional(), focalLength: z.number().min(18).max(120).optional(), keyframes: z.array(sceneKeyframeSchema).max(100).optional() }).strict().optional(),
+  exposure: z.number().min(.1).max(3).optional(), roughness: z.number().min(0).max(1).optional(), metallic: z.number().min(0).max(1).optional(), shadow: z.number().min(0).max(1).optional(), lightAngle: z.number().min(-180).max(180).optional(), focusDepth: z.number().min(-2).max(2).optional(), aperture: z.number().min(0).max(1).optional(), motionBlur: z.number().min(0).max(1).optional(),
+}).strict();
+const pointerSchema = z.object({
+  events: z.array(z.object({ timeMs: z.number().min(0).max(86400000), x: z.number().min(0).max(1), y: z.number().min(0).max(1), kind: z.enum(["move", "down", "up"]), screen: z.enum(["inner", "outer"]).optional() }).strict()).max(2000),
+  style: z.enum(["arrow", "touch"]).optional(), color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), size: z.number().min(4).max(100).optional(), smoothing: z.number().min(0).max(1000).optional(), display: z.enum(["continuous", "tap-only"]).optional(), idleMs: z.number().min(0).max(60000).optional(), fadeMs: z.number().min(0).max(5000).optional(),
+}).strict().describe("Pointer events use original source timestamps, so trimming, speed changes and freezing stay aligned.");
 const deviceFrameSchemaBase = z.object({
+  renderMode: z.enum(["vector", "mesh", "gpu"]).optional(), modelId:z.string().max(120).optional(), finish:z.enum(["graphite","silver","gold","natural"]).optional(), band:z.enum(["woven","none"]).optional(), scene: sceneSchema.optional(), depth: z.number().min(-2).max(2).optional(),
   animation: animationSchema(true).optional().describe("Frame entrance/exit and keyframes in local clip time. Call list_video_animations for examples."),
   motionEasing: animationEasingSchema.optional(),
   device: z.enum(["phone", "tablet", "browser", "iphone", "iphone-duo", "mac", "watch", "android"]).describe("Built-in stylized device; call list_device_frames for geometry and supported controls."),
@@ -89,16 +111,20 @@ const deviceFrameSchemaBase = z.object({
   x: z.number().min(0).max(1).optional().describe("Device center on the whole canvas, default .5; distinct from clip crop x."),
   y: z.number().min(0).max(1).optional().describe("Device center on the whole canvas, default .5."),
   scale: z.number().min(.25).max(1.5).optional(),
-  rotateX: z.number().min(-60).max(60).optional(),
-  rotateY: z.number().min(-60).max(60).optional(),
-  rotateZ: z.number().min(-180).max(180).optional(),
+  rotateX: z.number().min(-1080).max(1080).optional(),
+  rotateY: z.number().min(-1080).max(1080).optional(),
+  rotateZ: z.number().min(-1080).max(1080).optional(),
   foldAngle: z.number().min(0).max(165).optional().describe("Duo hinge angle in degrees; 0 is open. Duo only."),
   motion: z.enum(["none", "orbit", "float", "fold", "unfold", "fold-cycle"]).optional().describe("Time-based preset; folding presets require iphone-duo. Video timelines only."),
   motionDurationMs: z.number().min(500).max(60000).optional().describe("Preset duration in local clip time, default 4000ms."),
-});
+}).strict();
 
 const staticDeviceFrameSchema = deviceFrameSchemaBase.pick({device:true,background:true,color:true,backgroundEnd:true}).strict();
 const deviceFrameSchema = deviceFrameSchemaBase.superRefine((frame, context) => {
+  if(frame.modelId&&!deviceModels.some(model=>model.id===frame.modelId&&model.device===frame.device))context.addIssue({code:"custom",message:"Choose a bundled model matching this device."});
+  if(frame.band!==undefined&&frame.device!=="watch")context.addIssue({code:"custom",message:"Bands are supported on Watch only."});
+  if(frame.renderMode !== "mesh" && frame.renderMode !== "gpu" && frame.animation?.keyframes?.some(key=>key.depth!==undefined))context.addIssue({code:"custom",message:"Depth keyframes require a studio device."});
+  if (frame.renderMode !== "mesh" && frame.renderMode !== "gpu" && [frame, ...(frame.animation?.keyframes ?? [])].some(pose => Math.abs(Number(pose.rotateX ?? 0)) > 60 || Math.abs(Number(pose.rotateY ?? 0)) > 60 || Math.abs(pose.rotateZ ?? 0) > 180)) context.addIssue({ code: "custom", message: "Vector devices support X/Y rotation up to 60 degrees and Z up to 180; choose mesh or gpu for full rotation." });
   if (frame.device !== "iphone-duo" && (frame.foldAngle !== undefined || frame.animation?.keyframes?.some(key => key.foldAngle !== undefined) || ["fold", "unfold", "fold-cycle"].includes(frame.motion ?? "none"))) {
     context.addIssue({ code: "custom", message: "Fold angles and folding motion require the iPhone Duo frame." });
   }
@@ -357,14 +383,32 @@ server.registerTool("create_slideshow_batch", {
 });
 
 const creativeLabelSchema = z.object({
+  fontWeight:z.union([z.literal(400),z.literal(700),z.literal(800)]).optional(), italic:z.boolean().optional(), kerning:z.boolean().optional(), letterSpacing:z.number().min(-10).max(40).optional(), lineHeight:z.number().min(.8).max(2).optional(), textAlign:z.enum(["left","center","right"]).optional(),
+  strokeColor:z.string().regex(/^#[0-9a-f]{6}$/i).optional(), strokeWidth:z.number().min(0).max(16).optional(), shadowColor:z.string().regex(/^#[0-9a-f]{6}$/i).optional(), shadowBlur:z.number().min(0).max(40).optional(), shadowX:z.number().min(-40).max(40).optional(), shadowY:z.number().min(-40).max(40).optional(), backgroundOpacity:z.number().min(0).max(1).optional(), backgroundRadius:z.number().min(0).max(80).optional(), padding:z.number().min(0).max(100).optional(), sceneLayer:z.enum(["overlay","scene","back"]).optional(), sceneDepth:z.number().min(-2).max(2).optional(),
   id: z.string().optional(), text: z.string().min(1).max(500), x: z.number().min(.08).max(.92).default(.5), y: z.number().min(.06).max(.94).default(.18), width: z.number().min(.25).max(.92).default(.84), height: z.number().min(.06).max(.35).default(.12), fontSize: z.number().int().min(28).max(160).default(72), font: z.enum(["modern", "editorial", "mono"]).default("modern"),
   style: z.enum(["dark", "light", "outline"]).default("dark"), textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default("#FFFFFF"), background: z.enum(["dark", "light", "none"]).default("dark"), backgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default("#000000"),
 });
 
-const videoClipSchema = z.object({ transition: clipTransitionSchema.optional().describe("Incoming transition overlaps preceding clip; first clip ignores it. Duration caps at half either clip, reducing total timeline length."), deviceFrame: deviceFrameSchema.optional().describe("Wrap media in a built-in device. Call list_device_frames for background, pose, motion and slideshow constraints. Omit to disable."), id: z.string().optional(), sourceUrl: z.string().url(), name: z.string().max(120), kind: z.enum(["video", "image"]), inMs: z.number().min(0), outMs: z.number().min(100), sourceDurationMs: z.number().min(100).max(86400000).optional(), fit: z.enum(["cover", "contain"]).default("cover"), x: z.number().min(0).max(1).default(.5), y: z.number().min(0).max(1).default(.5), zoom: z.number().min(1).max(3).default(1), volume: z.number().min(0).max(1).default(1) });
+const videoClipSchema = z.object({ speed: z.number().min(.25).max(4).optional(), freezeMs: z.number().min(0).max(86400000).optional(), groupId: z.string().regex(/^[\w-]{1,120}$/).optional(), motionOffsetMs: z.number().min(0).max(900000).optional(), pointer: pointerSchema.optional(), transition: clipTransitionSchema.optional().describe("Incoming transition overlaps preceding clip; first clip ignores it. Duration caps at half either clip, reducing total timeline length."), deviceFrame: deviceFrameSchema.optional().describe("Wrap media in a built-in device. Call list_device_frames for background, pose, motion and slideshow constraints. Omit to disable."), id: z.string().optional(), sourceUrl: z.string().url(), name: z.string().max(120), kind: z.enum(["video", "image"]), inMs: z.number().min(0), outMs: z.number().min(100), sourceDurationMs: z.number().min(100).max(86400000).optional(), fit: z.enum(["cover", "contain"]).default("cover"), x: z.number().min(0).max(1).default(.5), y: z.number().min(0).max(1).default(.5), zoom: z.number().min(1).max(3).default(1), volume: z.number().min(0).max(1).default(1) }).strict();
 const videoLayerSchema = videoClipSchema.omit({transition:true}).extend({startMs:z.number().min(0).max(899900).describe("Timeline start in milliseconds; duration is outMs-inMs. Source and animation clocks restart locally.")}).strict();
 
+const sourceMediaSchema=z.string().url().max(2000).refine(value=>new URL(value).protocol==="https:","Analyzed media must use HTTPS.");
+const codeClipSchema=z.object({source:z.string().max(24000),parameters:z.array(z.object({name:z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,31}$/),kind:z.enum(["number","color","text"]),value:z.union([z.number().min(-1e6).max(1e6),z.string().max(500)]),min:z.number().min(-1e6).max(1e6).optional(),max:z.number().min(-1e6).max(1e6).optional()}).strict()).max(16)}).strict().refine(value=>{try{normalizeCodeClip(value);return true;}catch{return false;}},"Use bounded JSON drawing instructions and valid controls.");
+const audioFrameSchema=z.object({rms:z.number().min(0).max(1),peak:z.number().min(0).max(1),bass:z.number().min(0).max(1),mid:z.number().min(0).max(1),treble:z.number().min(0).max(1)}).strict();
+const audioAnalysisSchema=z.object({version:z.literal(1),durationMs:z.number().min(1).max(900000),frameMs:z.number().min(20).max(1000),frames:z.array(audioFrameSchema).max(45000),bpm:z.number().min(20).max(300),offsetMs:z.number().min(0).max(900000),confidence:z.number().min(0).max(1),beats:z.array(z.number().min(0).max(900000)).max(45000),bars:z.array(z.number().min(0).max(900000)).max(45000),drops:z.array(z.number().min(0).max(900000)).max(45000),quiet:z.array(z.object({startMs:z.number().min(0).max(900000),endMs:z.number().min(0).max(900000)}).strict()).max(1800)}).strict().refine(a=>a.frames.length===Math.ceil(a.durationMs/a.frameMs)&&a.offsetMs<=a.durationMs&&[a.beats,a.bars,a.drops].every(markers=>markers.every((n,i)=>n<=a.durationMs&&(i===0||n>=markers[i-1])))&&a.quiet.every(q=>q.endMs>=q.startMs&&q.endMs<=a.durationMs),"Analysis frames and ordered markers must match source duration.");
+const audioAnalysisTrackSchema=z.object({sourceUrl:sourceMediaSchema,startMs:z.number().min(0).max(900000),endMs:z.number().min(0).max(900000).optional(),offsetMs:z.number().min(0).max(900000),volume:z.number().min(0).max(1),fadeInMs:z.number().min(0).max(900000).optional(),fadeOutMs:z.number().min(0).max(900000).optional(),loop:z.boolean().optional(),analysis:audioAnalysisSchema}).strict().refine(t=>t.endMs===undefined||t.endMs>=t.startMs,"Analyzed sound end must follow start.");
+const timedLabelSchema=creativeLabelSchema.extend({startMs:z.number().min(0).max(900000),endMs:z.number().min(100).max(900000),animation:animationSchema(false,true).optional()}).strict().superRefine((label,context)=>{
+ if(label.endMs<=label.startMs)context.addIssue({code:"custom",message:"Label end must follow start."});
+ const scene=label.sceneLayer==='scene';
+ for(const frame of label.animation?.keyframes??[]){if(frame.foldAngle!==undefined)context.addIssue({code:"custom",message:"Text cannot fold."});if(!scene&&(frame.depth!==undefined||frame.rotateX!==undefined||frame.rotateY!==undefined||Math.abs(frame.rotateZ??0)>180))context.addIssue({code:"custom",message:"3D text keyframes require scene placement."});}
+});
 const timelineSchema = z.object({
+  scene: sceneSchema.optional(),
+  audioAnalysis:z.array(audioAnalysisTrackSchema).max(13).optional(),
+  exportSettings: z.object({ format: z.enum(["mp4", "webm", "gif", "png", "jpeg"]), fps: z.union([z.literal(24), z.literal(30), z.literal(60)]), resolution: z.enum(["720p", "1080p", "2160p"]), quality: z.enum(["draft", "standard", "high"]) }).strict().optional(),
+  beatGrid: z.object({ bpm: z.number().min(20).max(300), offsetMs: z.number().min(0).max(900000) }).strict().optional(),
+  audioTracks: z.array(z.object({ id: z.string().regex(/^[\w-]{1,120}$/), url: z.string().url(), name: z.string().max(120), startMs: z.number().min(0).max(900000), endMs: z.number().min(100).max(900000), offsetMs: z.number().min(0).max(3600000), volume: z.number().min(0).max(1), fadeInMs: z.number().min(0).max(900000), fadeOutMs: z.number().min(0).max(900000) }).strict().refine(track => track.endMs - track.startMs >= 100 && track.fadeInMs <= track.endMs - track.startMs && track.fadeOutMs <= track.endMs - track.startMs, "Sound track timing or fades exceed its lifetime.")).max(12).optional(),
+  graphics: z.array(z.object({ id: z.string().regex(/^\w[\w-]{0,119}$/), kind: z.enum(["shape", "particles", "bars", "ring", "code"]), code:codeClipSchema.optional(), audioReactive:z.object({sourceUrl:sourceMediaSchema,signal:z.enum(["envelope","bass","mid","treble"]),amount:z.number().min(0).max(10)}).strict().optional(), startMs: z.number().min(0).max(900000), endMs: z.number().min(100).max(900000), x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().min(.01).max(1), height: z.number().min(.01).max(1), color: z.string().regex(/^#[0-9a-f]{6}$/i), seed: z.number().min(0).max(2147483647), count: z.number().min(1).max(100), speed: z.number().min(0).max(10), animation: animationSchema().optional() }).strict().refine(graphic => graphic.endMs > graphic.startMs && (graphic.kind!=="code"||graphic.code!==undefined), "Graphic end must follow start and code graphics require drawing source.")).max(24).optional(),
   camera: videoCameraSchema.optional().describe("Animated camera zoom, focus and pans across the composed footage/devices below labels. Call list_video_animations for camera limits and cinematic examples. Omit to disable."),
   background: z.object({
     color:z.string().regex(/^#[0-9A-Fa-f]{6}$/),endColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
@@ -374,10 +418,10 @@ const timelineSchema = z.object({
   version: z.literal(1), aspectRatio: z.enum(["9:16", "4:5", "1:1", "16:9"]),
   clips: z.array(videoClipSchema).max(50),
   layers: z.array(videoLayerSchema).max(12).optional().describe("Independent simultaneous device/media layers, back-to-front array order above sequential clips and below labels. Each has its own source, startMs, trims, frame pose/motion/keyframes and volume. Multiple layers may use the same recording. Layer backgrounds are transparent outside their frames; timeline.background is shared. Omit transition on layers. Empty clips supports a layers-only scene."),
-  labels: z.array(creativeLabelSchema.extend({startMs:z.number().min(0),endMs:z.number().min(100),animation:animationSchema().optional().describe("Text entrance/exit, typewriter and keyframes; time zero is this label's startMs.")})).max(200),
+  labels: z.array(timedLabelSchema).max(200),
   music:z.object({url:z.string().default(""),name:z.string().max(120).optional(),startMs:z.number().min(0).max(900000).optional(),endMs:z.number().min(0).max(900000).optional(),volume:z.number().min(0).max(1).default(.8),offsetMs:z.number().min(0).default(0),fadeInMs:z.number().min(0).default(0),fadeOutMs:z.number().min(0).default(0)}),
   coverMs:z.number().min(0).default(0),
-});
+}).strict();
 
 const videoSchema = z.object({
   timeline: timelineSchema.optional(), revision:z.number().int().positive().optional(), templateId:z.string().optional(),
@@ -386,7 +430,7 @@ const videoSchema = z.object({
 
 server.registerTool("list_videos", { description: "List editable video projects or retrieve one complete project by id, including timeline, timed labels, device motion, background, audio and revision. Retrieve before updating with save_video.", inputSchema: { id: z.string().optional() } }, async ({ id }) => result(await relay(`/api/v1/videos${id ? `?id=${encodeURIComponent(id)}` : ""}`)));
 
-server.registerTool("save_video", { description: "Create or update an editable video timeline: sequential clips, independent simultaneous device layers (for Watch+iPhone or multiple Watches), shared image/color/gradient backgrounds, transitions, crops, animated timed text, audio, device pose/motion, Duo folding and global camera zoom/focus/pans. Labels and device frames accept entrance/exit effects and eased keyframes. Pass the retrieved revision to detect conflicts. Call list_device_frames and list_video_animations before composing; all edits remain editable in the browser.", inputSchema: videoSchema.shape }, async (video) => result(await relay("/api/v1/videos", { method: video.id ? "PATCH" : "POST", body: JSON.stringify(video) })));
+server.registerTool("save_video", { description: "Create or update an editable video timeline: sequential clips, independent simultaneous device layers (for Watch+iPhone or multiple Watches), shared image/color/gradient backgrounds, transitions, crops, measured styled typography and scene text, analyzed audio and beat grids, bounded custom drawing and audio-reactive graphics, GPU device models/finishes/bands with optional motion, device pose/motion, Duo folding and global camera zoom/focus/pans. Labels and device frames accept entrance/exit effects and eased keyframes. Pass the retrieved revision to detect conflicts. Call list_device_frames and list_video_animations before composing; all edits remain editable in the browser.", inputSchema: videoSchema.shape }, async (video) => result(await relay("/api/v1/videos", { method: video.id ? "PATCH" : "POST", body: JSON.stringify(video) })));
 server.registerTool("get_video_composer", { description: "Check whether prompt-based video composition is configured and discover its limits. Requires videos:read; never returns provider credentials." }, async () => result(await relay("/api/v1/videos/compose")));
 server.registerTool("generate_video_composition", {
   description: "Turn a prompt and existing footage into an editable promotional timeline through the workspace's configured OpenAI account. Sends the prompt and bounded recording frames to OpenAI. Returns a preview only: review the timeline, then use save_video with the current project revision to apply it. Never saves, renders, or publishes by itself. Requires videos:write; check get_video_composer first.",
@@ -500,8 +544,8 @@ server.registerTool("save_idea",{description:"Create or update an idea with note
 server.registerTool("delete_idea",{description:"Permanently delete an idea.",inputSchema:{id:z.string().min(1),confirmDelete:z.literal(true)}},async({id})=>result(await relay("/api/v1/ideas",{method:"DELETE",body:JSON.stringify({id})})));
 server.registerTool("list_brand_kits",{description:"Read brand colors, text styles, logo URLs, voice and guidelines."},async()=>result(await relay("/api/v1/brands/kit")));
 server.registerTool("save_brand_kit",{description:"Replace a brand's reusable creative and writing guidelines.",inputSchema:{id:z.string().min(1),kit:z.object({textColor:z.string().optional(),backgroundColor:z.string().optional(),font:z.enum(["modern","editorial","mono"]).optional(),logoUrl:z.string().optional(),voice:z.string().max(5000).optional(),guidelines:z.string().max(10000).optional(),defaultCta:z.string().max(500).optional()})}},async(input)=>result(await relay("/api/v1/brands/kit",{method:"PUT",body:JSON.stringify(input)})));
-server.registerTool("list_device_frames",{description:"Discover built-in device frames for images and videos, including iPhone Duo, pose and motion controls, backgrounds, screen geometry per aspect ratio, examples and design constraints. No AI keys required. Use before composing product demos."},async()=>result(await relay("/api/v1/capabilities?section=device-frames")));
-server.registerTool("list_video_animations",{description:"Discover text/frame entrance and exit effects, typewriter, keyframes/easing, clip overlap transitions, cinematic camera zoom/focus/pans, timing rules and editable project examples."},async()=>result(await relay("/api/v1/capabilities?section=video-animation")));
+server.registerTool("list_device_frames",{description:"Discover built-in device frames for images and videos, including bundled GPU model ids, finishes, Watch bands, static poses or optional motion, iPhone Duo, backgrounds, screen geometry per aspect ratio, examples and design constraints. No AI keys required. Use before composing product demos."},async()=>result(await relay("/api/v1/capabilities?section=device-frames")));
+server.registerTool("list_video_animations",{description:"Discover measured typography, text/frame entrance and exit effects, custom drawing/audio analysis capabilities, typewriter, keyframes/easing, clip overlap transitions, cinematic camera zoom/focus/pans, timing rules and editable project examples."},async()=>result(await relay("/api/v1/capabilities?section=video-animation")));
 server.registerTool("get_capabilities",{description:"Discover API version, authenticated scopes, creative workflow limits and the device-frame design catalog."},async()=>result(await relay("/api/v1/capabilities")));
 server.registerTool("prepare_media_upload",{description:"Get a signed upload URL. Upload bytes with HTTP PUT from the agent's environment, then use the returned media URL.",inputSchema:{fileName:z.string().min(1),contentType:z.string().min(1),kind:z.enum(["media","music"]).default("media"),projectId:z.string().optional()}},async(input)=>result(await relay("/api/v1/media",{method:"POST",body:JSON.stringify(input)})));
 

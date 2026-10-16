@@ -1,0 +1,35 @@
+/* Relay's motion tools keep the editor's compact, warm instrument-panel rhythm. */
+.motion-timing-controls,.motion-spring-controls,.motion-curve-coordinates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:9px 0;min-width:0}
+.motion-timing-controls label,.motion-spring-controls label,.motion-curve-coordinates label,.motion-recipes label{display:grid;gap:4px;font-size:10px;color:var(--muted,#8a8177);min-width:0}
+.motion-timing-controls input,.motion-timing-controls select,.motion-spring-controls input,.motion-curve-coordinates input,.motion-recipes input{width:100%;min-width:0;padding:6px;border:1px solid var(--line,#d7cec1);border-radius:5px;background:var(--surface,#fffdf8);color:var(--ink,#2e2b26);font:inherit;font-size:11px}
+.motion-spring-controls small,.motion-curve-editor small{grid-column:1/-1;font-size:10px;line-height:1.4}
+.motion-curve-editor{grid-column:1/-1;min-width:0;margin:7px 0;border:1px solid var(--line,#d7cec1);border-radius:7px;padding:8px;background:var(--surface,#fffdf8)}
+.motion-curve-graph{display:block;width:100%;height:124px;overflow:visible;background:var(--surface-alt,#f4eee4);border-radius:5px}
+.motion-curve-grid{stroke:var(--line,#d7cec1);stroke-width:.7;fill:none}
+.motion-curve-tangents{stroke:var(--muted,#8a8177);stroke-width:1;fill:none;stroke-dasharray:3 3}
+.motion-curve-path{stroke:var(--accent,#ac592e);stroke-width:2;fill:none}
+.motion-curve-handle{stroke:var(--accent,#ac592e);stroke-width:2;fill:var(--surface,#fffdf8);cursor:grab;touch-action:none}
+.motion-curve-handle:focus-visible{outline:none;stroke-width:4;fill:var(--accent,#ac592e)}
+.motion-curve-handle[aria-disabled=true]{cursor:default;opacity:.4}
+.motion-curve-editor>.secondary-button,.motion-spring-controls>.secondary-button{font-size:10px;padding:4px 7px}
+.motion-recipes{margin:10px 0;border-top:1px solid var(--line,#d7cec1);padding-top:8px}
+.motion-recipes summary{font-size:11px;cursor:pointer}
+.motion-recipes small{display:block;font-size:10px;margin:6px 0;line-height:1.4}
+.motion-recipe-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin:8px 0}
+.motion-recipe-grid .secondary-button{font-size:10px;justify-content:flex-start;padding:7px}
+.motion-keyframe-lane{position:relative;min-width:0;border:1px solid var(--line,#d7cec1);background:var(--surface,#fffdf8);border-radius:6px;padding:5px 9px;margin:6px 0;overflow:hidden}
+.motion-lane-heading{display:flex;align-items:center;gap:6px;min-width:0;font-size:10px}
+.motion-lane-name{appearance:none;background:none;border:0;color:inherit;cursor:pointer;font:inherit;font-weight:600;padding:0;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.motion-lane-heading>span{margin-right:auto;color:var(--muted,#8a8177);white-space:nowrap}
+.motion-lane-heading .secondary-button{padding:3px 5px;font-size:9px;min-height:22px}
+.motion-lane-rail{height:25px;position:relative;margin:4px 5px;border-bottom:1px solid var(--line,#d7cec1);touch-action:none}
+.motion-lane-span{position:absolute;top:10px;height:4px;background:var(--line,#d7cec1);border-radius:2px}
+.motion-keyframe-marker{position:absolute;top:0;transform:translateX(-50%);width:20px;height:24px;border:0;background:none;color:var(--muted,#8a8177);font-size:15px;line-height:24px;cursor:ew-resize;touch-action:none;padding:0}
+.motion-keyframe-marker[aria-pressed=true]{color:var(--accent,#ac592e);text-shadow:0 0 4px color-mix(in srgb,var(--accent,#ac592e) 35%,transparent)}
+.motion-keyframe-marker:focus-visible{outline:2px solid var(--accent,#ac592e);outline-offset:0;border-radius:3px}
+.motion-lane-playhead{position:absolute;top:0;bottom:0;width:1px;background:var(--accent,#ac592e);pointer-events:none}
+.motion-lane-hint{display:block;font-size:9px!important;color:var(--muted,#8a8177);line-height:1.35}
+.motion-lane-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.video-keyframe-fields>.motion-curve-editor,.video-camera-frame-fields>.motion-curve-editor,.video-keyframe-fields>.motion-spring-controls,.video-camera-frame-fields>.motion-spring-controls{grid-column:1/-1}
+@media(max-width:640px){.motion-lane-hint{font-size:8px!important}.motion-keyframe-marker{width:24px}.motion-lane-heading{gap:4px}.motion-lane-heading .secondary-button{font-size:8px;padding:3px 4px}}
+.motion-spring-graph{grid-column:1/-1;width:100%;height:76px;display:block;background:var(--surface-alt,#f4eee4);border-radius:5px}

@@ -41,7 +41,8 @@ test("demo scheduling stays local and appears on the calendar", async ({ page })
   await page.getByRole("button", { name: /Create post/ }).first().click();
   const composer = page.getByRole("dialog", { name: "Create post" });
   await composer.getByLabel("Content").fill("A demo-only scheduled post");
-  await composer.locator(".destination-list button").filter({ hasText: "Instagram" }).click();
+  await composer.getByRole("group", { name: /Brand/ }).getByRole("button", { name: /Field Notes/ }).click();
+  await composer.locator(".destination-list button").filter({ hasText: "Facebook" }).click();
   await composer.getByRole("button", { name: /Schedule post/ }).click();
   await expect(composer).toBeHidden();
   await page.getByRole("button", { name: "List", exact: true }).click();
@@ -304,7 +305,7 @@ test("media folders can be renamed and assets moved between them", async ({ page
   await expect.poll(() => movedMedia).toEqual({ key: `media-projects/${sourceId}/media/clip.png`, projectId: destinationId, kind: "media" });
 });
 
-test("media folders can be nested and moved with drag and drop", async ({ page }) => {
+test("media folders can be nested with desktop drag or the mobile move dialog", async ({ page, isMobile }) => {
   const sourceId = "33333333-3333-4333-8333-333333333333";
   const destinationId = "44444444-4444-4444-8444-444444444444";
   let movedFolder: Record<string, unknown> | undefined;
@@ -324,9 +325,15 @@ test("media folders can be nested and moved with drag and drop", async ({ page }
 
   await page.goto("/demo?view=media");
   const source = page.getByRole("button", { name: /Source assets/ });
-  const destination = page.getByRole("button", { name: /Destination assets/ });
+  const destination = page.getByRole("button", { name: /^Destination assets/ });
   await expect(source).toHaveAttribute("draggable", "true");
-  await source.dragTo(destination);
+  if (isMobile) {
+    await source.click();
+    await page.getByRole("button", { name: "Move folder", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Move folder", exact: true });
+    await dialog.getByRole("option", { name: /Destination assets/ }).click();
+    await dialog.getByRole("button", { name: "Move folder", exact: true }).click();
+  } else await source.dragTo(destination);
   await expect.poll(() => movedFolder).toEqual({ id: sourceId, parentId: destinationId });
   await expect(page.getByText("Source assets moved inside Destination assets.")).toBeVisible();
   await destination.click();
@@ -378,15 +385,12 @@ test("video studio supports media, draggable labels, audio, and post handoff", a
   await page.getByRole("button", { name: /Hook reel/ }).first().click();
   await expect(page.getByRole("button",{name:/Open timeline editor|Label recipes/})).toHaveCount(0);
   await expect(page.locator(".video-studio")).toHaveCSS("opacity", "1");
-  await expect(page.getByText("Add media to your video")).toBeVisible();
-  await expect(page.locator(".video-empty-actions").getByRole("button", { name: "Upload media" })).toBeVisible();
-  await expect(page.locator(".video-label-canvas .creative-label")).toHaveCount(0);
-  await expect(page.locator(".video-stage > p")).toHaveCount(0);
-  const sourceSection = page.locator(".video-inspector > section").first();
+  await expect(page.locator(".video-label-canvas .creative-label")).toHaveText("Launch hook");
+  await expect(page.locator(".video-stage > p")).toContainText("Drag any label directly on the video");
+  const sourceSection = page.locator(".video-inspector > [data-device-settings]");
   await expect(sourceSection.getByRole("button", { name: "Choose from Media" })).toBeVisible();
   await expect(sourceSection.getByRole("button", { name: "Upload media" })).toBeVisible();
-  await expect(sourceSection.getByRole("combobox")).toHaveCount(0);
-  await page.locator(".video-empty-actions").getByRole("button", { name: "Browse Media" }).click();
+  await sourceSection.getByRole("button", { name: "Choose from Media" }).click();
   await expect(page.getByRole("dialog", { name: "Video assets" })).toBeVisible();
   await expect(page.locator(".timeline-assets button")).toHaveCount(1);
   await page.getByRole("button", { name: /source.mp4/ }).click();
@@ -396,13 +400,12 @@ test("video studio supports media, draggable labels, audio, and post handoff", a
   await expect(page.locator(".timeline-clips > button")).toHaveCount(1);
   await expect(page.locator(".video-label-canvas video")).toHaveAttribute("src","https://media.example.com/device.mp4");
   await expect(page.locator(".video-label-canvas .creative-label")).toBeVisible();
-  await expect(page.getByText("Drag any label directly on the video")).toBeVisible();
   await expect(page.locator(".label-style-shortcuts button")).toHaveCount(3);
   await expect(page.getByLabel("Label text color")).toHaveValue("#ffffff");
   await expect(page.getByLabel("Label background color")).toHaveValue("#000000");
-  await expect(page.getByLabel("Label font")).toHaveValue("modern");
-  await page.getByLabel("Label font").selectOption("editorial");
-  await expect(page.getByLabel("Label font")).toHaveValue("editorial");
+  await expect(page.getByLabel("Label font", { exact: true })).toHaveValue("modern");
+  await page.getByLabel("Label font", { exact: true }).selectOption("editorial");
+  await expect(page.getByLabel("Label font", { exact: true })).toHaveValue("editorial");
   await expect(page.getByLabel("Label minimum height")).toHaveValue("12");
   await page.getByLabel("Label minimum height").fill("20");
   await expect(page.getByLabel("Label minimum height")).toHaveValue("20");
@@ -449,9 +452,9 @@ test("slideshow and video use the same label controls", async ({ page }) => {
   await page.goto("/demo?view=slideshows");
   await page.getByRole("button", { name: /Launch carousel/ }).first().click();
   await expect(page.locator(".slide-inspector .label-style-shortcuts button")).toHaveCount(3);
-  await expect(page.getByLabel("Label font")).toHaveValue("modern");
-  await page.getByLabel("Label font").selectOption("mono");
-  await expect(page.getByLabel("Label font")).toHaveValue("mono");
+  await expect(page.getByLabel("Label font", { exact: true })).toHaveValue("modern");
+  await page.getByLabel("Label font", { exact: true }).selectOption("mono");
+  await expect(page.getByLabel("Label font", { exact: true })).toHaveValue("mono");
   await expect(page.getByLabel("Label width")).toHaveValue("87");
   await expect(page.getByLabel("Label minimum height")).toHaveValue("12");
   await page.getByLabel("Label text color").fill("#ff5c35");

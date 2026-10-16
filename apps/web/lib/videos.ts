@@ -1,4 +1,4 @@
-import type { VideoMusicMode, VideoProject } from "@relay/core";
+import type { VideoMusicMode, VideoProject, VideoTimeline } from "@relay/core";
 
 import { normalizeCreativeLabels } from "./creative-labels.ts";
 
@@ -42,4 +42,9 @@ export function selectMusicTrack(mode: VideoMusicMode, tracks: string[], index: 
   if (!tracks.length || mode === "none") return undefined;
   if (mode === "rotate") return tracks[index % tracks.length];
   return tracks[Math.min(tracks.length - 1, Math.floor(random() * tracks.length))];
+}
+
+/** References carried by analysis and reactive drawings are validated even when cached sound is no longer active. */
+export function videoAnalysisMediaUrls(timeline:VideoTimeline):string[] {
+  return [...new Set([...(timeline.audioAnalysis??[]).map(track=>track.sourceUrl),...(timeline.graphics??[]).flatMap(graphic=>graphic.audioReactive?[graphic.audioReactive.sourceUrl]:[])])];
 }

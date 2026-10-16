@@ -5,10 +5,14 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { VideoTimeline } from "@relay/core";
 import { ChevronDown, LoaderCircle, Sparkles, X } from "lucide-react";
-import { clipSchedule, layerSchedule, normalizeVideoTimeline, timelineDuration, videoSizes } from "../lib/video-timeline";
+import { clipSchedule, layerSchedule, normalizeVideoTimeline, timelineDuration, videoSizes,clipDuration,clipSourceTime,clipMotionTime,clipMotionDuration } from "../lib/video-timeline";
 import { videoCameraTransform } from "../lib/video-camera";
 import { animationEase } from "../lib/video-animation";
 import { animatedLabelsMarkup } from "../lib/animated-label-markup";
+import {graphicsMarkup} from "../lib/video-graphics";
+import {VideoGpuPreview} from "./video-gpu-preview";
+import {timelineAudioAnalysis} from "../lib/video-audio-analysis";
+import {sortSceneLayers} from "../lib/video-scene";
 import { DeviceFramePreview } from "./device-frame-controls";
 
 type Composition = { timeline: VideoTimeline; summary: string; warnings: string[]; signature: string; timelineSignature: string };
@@ -33,13 +37,14 @@ export function CompositionPreview({ timeline, timeMs, label = "Generated compos
   const active = clipSchedule(timeline).filter(entry => timeMs >= entry.startMs && timeMs < entry.endMs);
   const incoming = active.length > 1 ? active[1] : undefined;
   const raw = incoming ? Math.min(1, Math.max(0, (timeMs - incoming.startMs) / incoming.transitionMs)) : 1;
-  const progress = incoming ? Number(animationEase(raw, incoming.clip.transition?.easing)) : 1;
-  const layers = layerSchedule(timeline).filter(entry => timeMs >= entry.startMs && timeMs < entry.endMs);
+  const progress = incoming ? Number(animationEase(raw, incoming.clip.transition?.easing,incoming.clip.transition?.curve)) : 1;
+  const layers = sortSceneLayers(layerSchedule(timeline).filter(entry => timeMs >= entry.startMs && timeMs < entry.endMs).map(entry=>({...entry,deviceFrame:entry.clip.deviceFrame})));
   const color = timeline.background?.color ?? active.at(-1)?.clip.deviceFrame?.background ?? "#000000";
   const endColor = timeline.background ? timeline.background.endColor : active.at(-1)?.clip.deviceFrame?.backgroundEnd;
   const background = videoBackgroundCss(width,height,timeline.background ?? {color,endColor});
   return <div className="video-composer-canvas" style={{ background: background, aspectRatio: `${width}/${height}`, width: `min(100%, ${300 * width / height}px)` }} aria-label={label}>
-    <div className="video-camera-scene" data-camera-preview style={{transform:videoCameraTransform(timeline.camera,timeMs),background:background}}>{[...active,...layers].map((entry, index) => {
+    <div className="timeline-label-preview" style={{zIndex:0,transform:videoCameraTransform(timeline.camera,timeMs)}} aria-hidden="true" dangerouslySetInnerHTML={{__html:animatedLabelsMarkup(timeline.labels.filter(l=>l.sceneLayer==="back"),timeMs,width,height)}}/>
+    <div className="video-camera-scene" data-camera-preview style={{transform:videoCameraTransform(timeline.camera,timeMs),zIndex:1}}>{[...active,...layers].map((entry, index) => {
       const clip = entry.clip, local = timeMs - entry.startMs, kind = incoming?.clip.transition?.kind;
       const style: CSSProperties = {};
       const overlay = index >= active.length;
@@ -51,12 +56,13 @@ export function CompositionPreview({ timeline, timeMs, label = "Generated compos
         if (kind === "wipe-right" && index > 0) style.clipPath = `inset(0 ${(1 - progress) * 100}% 0 0)`;
       }
       return <div className="video-clip-preview-layer" key={clip.id} style={style}>
-        <DeviceFramePreview advanced transparent={overlay} value={clip.deviceFrame} width={width} height={height} timeMs={local} durationMs={clip.outMs - clip.inMs} sourceTimeMs={clip.inMs + local} sourceVolume={0} background={timeline.background}>
+        <DeviceFramePreview advanced gpuManaged transparent={overlay} value={clip.deviceFrame} width={width} height={height} scene={timeline.scene} sceneTimeMs={timeMs} fps={timeline.exportSettings?.fps??30} pointer={clip.pointer} playbackRate={clip.speed??1} timeMs={clipMotionTime(clip,local)} durationMs={clipMotionDuration(timeline,clip)} sourceTimeMs={clipSourceTime(clip,local)} sourceVolume={0} background={timeline.background}>
           {clip.kind === "video" ? <video src={clip.sourceUrl} muted playsInline preload="metadata" style={{ objectFit: clip.fit, objectPosition: `${clip.x * 100}% ${clip.y * 100}%`, transform: clip.fit === "cover" ? `scale(${clip.zoom})` : undefined, transformOrigin: `${clip.x * 100}% ${clip.y * 100}%` }} /> : <img src={clip.sourceUrl} alt="" style={{ objectFit: clip.fit, objectPosition: `${clip.x * 100}% ${clip.y * 100}%`, transform: clip.fit === "cover" ? `scale(${clip.zoom})` : undefined, transformOrigin: `${clip.x * 100}% ${clip.y * 100}%` }} />}
         </DeviceFramePreview>
       </div>;
     })}</div>
-    <div className="timeline-label-preview" aria-hidden="true" dangerouslySetInnerHTML={{ __html: animatedLabelsMarkup(timeline.labels, timeMs, width, height) }} />
+    <VideoGpuPreview timeline={timeline} timeMs={timeMs} width={width} height={height}/>
+    <div className="timeline-graphics-preview" aria-hidden="true" dangerouslySetInnerHTML={{__html:`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${graphicsMarkup(timeline.graphics,timeMs,width,height,timelineAudioAnalysis(timeline))}</svg>`}}/><div className="timeline-label-preview" aria-hidden="true" dangerouslySetInnerHTML={{ __html: animatedLabelsMarkup(timeline.labels.filter(l=>!l.sceneLayer||l.sceneLayer==="overlay"), timeMs, width, height) }} />
   </div>;
 }
 
@@ -142,7 +148,7 @@ export function VideoComposer({ timeline, projectName, onApply }: Props) {
       <label htmlFor="video-composer-prompt">Describe your video</label>
       <textarea id="video-composer-prompt" maxLength={4000} rows={3} value={prompt} disabled={pending} placeholder="Make a clean cinematic launch video for my app, with bold titles and dynamic device moves…" onChange={event => setPrompt(event.target.value)} />
       <div className="video-composer-meta"><small>Your prompt and selected recording frames are sent to your configured OpenAI account. Review the result before applying.</small><span>{prompt.length}/4000</span></div>
-      <details className="video-composer-options"><summary>Recordings & direction <span>{selectedClips.length} selected · {duration || "—"}s</span></summary><div className="video-composer-fields"><label>App or product name<input maxLength={120} value={productName} disabled={pending} onChange={event => setProductName(event.target.value)} /></label><label>Target duration (seconds)<input type="number" min={1} max={60} step={1} value={duration} disabled={pending} onChange={event => setDuration(event.target.value)} /></label></div><fieldset><legend>Use these recordings</legend>{sources.map(clip => <label key={clip.id}><input type="checkbox" checked={selected.includes(clip.id)} disabled={pending} onChange={event => setSelected(ids => event.target.checked ? [...ids, clip.id] : ids.filter(id => id !== clip.id))} /><span>{clip.name}</span><small>{((clip.outMs - clip.inMs) / 1000).toFixed(1)}s</small></label>)}</fieldset></details>
+      <details className="video-composer-options"><summary>Recordings & direction <span>{selectedClips.length} selected · {duration || "—"}s</span></summary><div className="video-composer-fields"><label>App or product name<input maxLength={120} value={productName} disabled={pending} onChange={event => setProductName(event.target.value)} /></label><label>Target duration (seconds)<input type="number" min={1} max={60} step={1} value={duration} disabled={pending} onChange={event => setDuration(event.target.value)} /></label></div><fieldset><legend>Use these recordings</legend>{sources.map(clip => <label key={clip.id}><input type="checkbox" checked={selected.includes(clip.id)} disabled={pending} onChange={event => setSelected(ids => event.target.checked ? [...ids, clip.id] : ids.filter(id => id !== clip.id))} /><span>{clip.name}</span><small>{(clipDuration(clip) / 1000).toFixed(1)}s</small></label>)}</fieldset></details>
       {!sources.length && <p className="video-composer-message">Upload a video or choose media first, then describe the demo you want.</p>}
       {sources.length > 0 && !selectedClips.length && <p className="video-composer-message">Select at least one recording to compose your video.</p>}
       {available === false && <p className="video-composer-message">Video composition needs OpenAI to be configured for this workspace. You can keep editing manually.</p>}

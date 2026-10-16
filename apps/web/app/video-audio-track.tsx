@@ -5,7 +5,7 @@ import type { VideoTimeline } from "@relay/core";
 import { Music2, Trash2 } from "lucide-react";
 
 type Audio = VideoTimeline["music"];
-type Props = { audio: Audio; total: number; selected: boolean; onSelect: () => void; onChange: (audio: Audio) => void };
+type Props = { audio: Audio; total: number; selected: boolean; onSelect: () => void; onChange: (audio: Audio) => void; snapTime?: (timeMs: number) => number };
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 export function VideoAudioControls({ audio, total, onChange }: Pick<Props, "audio" | "total" | "onChange">) {
@@ -29,7 +29,7 @@ export function VideoAudioControls({ audio, total, onChange }: Pick<Props, "audi
  </div>;
 }
 
-export function VideoAudioTrack({ audio, total, selected, onSelect, onChange }: Props) {
+export function VideoAudioTrack({ audio, total, selected, onSelect, onChange, snapTime }: Props) {
  const [draft, setDraft] = useState<Audio | null>(null);
  const lane = useRef<HTMLDivElement>(null);
  const drag = useRef<{ x: number; start: number; end: number; width: number; mode: "move" | "start" | "end" } | null>(null);
@@ -42,7 +42,7 @@ export function VideoAudioTrack({ audio, total, selected, onSelect, onChange }: 
   <button type="button" aria-label={`Edit audio: ${audio.name || "Audio track"}`} aria-pressed={selected} className={`video-audio-block ${selected ? "selected" : ""}`} style={{ left: `${start / Math.max(1, total) * 100}%`, width: `${Math.max(0, end - start) / Math.max(1, total) * 100}%` }}
    onClick={onSelect}
    onPointerDown={e => { if (!total) return; onSelect(); e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX, start, end, width: lane.current?.getBoundingClientRect().width || 1, mode: (e.target as HTMLElement).dataset.edge as "start" | "end" || "move" }; }}
-   onPointerMove={e => { const d = drag.current; if (!d || !e.currentTarget.hasPointerCapture(e.pointerId)) return; const delta = Math.round((e.clientX - d.x) / d.width * total / 100) * 100; const nextStart = d.mode === "end" ? d.start : clamp(d.start + delta, d.mode === "start" ? Math.max(0, d.start - audio.offsetMs) : 0, d.mode === "start" ? Math.min(d.end - 100, d.start + 3600000 - audio.offsetMs) : total - (d.end - d.start)); const nextEnd = d.mode === "move" ? nextStart + d.end - d.start : d.mode === "start" ? d.end : clamp(d.end + delta, d.start + 100, total); setDraft({ ...audio, startMs: nextStart, endMs: nextEnd, offsetMs: d.mode === "start" ? audio.offsetMs + nextStart - d.start : audio.offsetMs }); }}
+   onPointerMove={e => { const d = drag.current; if (!d || !e.currentTarget.hasPointerCapture(e.pointerId)) return; const rawDelta = (e.clientX - d.x) / d.width * total; const anchor = d.mode === "end" ? d.end : d.start; const delta = snapTime ? snapTime(anchor + rawDelta)-anchor : Math.round(rawDelta / 100) * 100; const nextStart = d.mode === "end" ? d.start : clamp(d.start + delta, d.mode === "start" ? Math.max(0, d.start - audio.offsetMs) : 0, d.mode === "start" ? Math.min(d.end - 100, d.start + 3600000 - audio.offsetMs) : total - (d.end - d.start)); const nextEnd = d.mode === "move" ? nextStart + d.end - d.start : d.mode === "start" ? d.end : clamp(d.end + delta, d.start + 100, total); setDraft({ ...audio, startMs: nextStart, endMs: nextEnd, offsetMs: d.mode === "start" ? audio.offsetMs + nextStart - d.start : audio.offsetMs }); }}
    onPointerUp={commit} onPointerCancel={() => { drag.current = null; setDraft(null); }}
    onKeyDown={e => { if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return; e.preventDefault(); const nextStart = clamp(start + (e.key === "ArrowRight" ? 100 : -100), 0, total - (end - start)); onChange({ ...audio, startMs: nextStart, endMs: nextStart + end - start }); }}>
    <span className="video-audio-edge" data-edge="start"/><Music2 size={14}/><span>{audio.name || "Audio track"} · {((end - start) / 1000).toFixed(1)}s</span><span className="video-audio-edge end" data-edge="end"/>

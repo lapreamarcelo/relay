@@ -1,0 +1,27 @@
+1692890 ease-in-spring
+1692920 ease-in-spring
+16ba030 MetalPreviewExporter
+16ba570 MetalPreviewExportError
+16d3270 AnimationCurveControlPoints
+16dd850 TimelineAnimationBarAccessibilityElement
+18660d0 _TtC5Matte20MetalPreviewExporter
+1866100 _TtCC5Matte20MetalPreviewExporterP33_43F2ACF6368D859A344CBB64DF206FA614ExportProfiler
+1866160 _TtCFC5Matte20MetalPreviewExporterP33_43F2ACF6368D859A344CBB64DF206FA66finishFzZCSo13AVAssetWriterT_L_9WriterBox
+1866e00 _TtC5MatteP33_30CB99B7D6A3B72C073B0A14BEAC1CD640TimelineAnimationBarAccessibilityElement
+18bbd40 Seconds to ease in.
+18bbd60 Seconds to ease out.
+18bcc1b  Move through keyframes: pass keys, e.g. [{"time":2,"rotation_y":0},{"time":4,"rotation_y":-25,"offset_z":0.3}]. Unset fields carry over from the key before.
+18bced4 A new camera shot at a video cut: an animation whose first key is on the cut, with in 0, cuts on the same frame as the picture. With hold it only needs to cover the move; the shot keeps its framing until the next one. Matte keeps a last key that lands on a cut on the frame before it.
+18bd000 Seconds to ease in from the resting view before the first key. Default: 0.8 for a pose, 0 for keyframes.
+18d8a60 Custom animation curves are available in the Matte app but are not supported by the CLI. Use linear, ease-in-out, spring, or bouncy.
+18eb8f7  SimulatorCursorTracker: Stopped tracking
+18ebb67  SimulatorCursorTracker: Stopped recording, captured 
+18ebd27  SimulatorCursorTracker: Started recording cursor
+18ebda7  SimulatorCursorTracker: Started tracking (background polling)
+18f3545         // Emission is linear light. Ease into black before tone mapping
+18fba00 AVAssetWriter rejected the video input settings
+18fbca6  MetalPreviewExporter: Audio muxing failed: 
+18fbe40 AVAssetWriter rejected a video frame
+1905450 Matte.TimelineAnimationBarAccessibilityElement
+1905c2d  zooms and camera keyframes stay at fixed timeline times
+1905c8c  unlocked zooms and camera keyframes move with video clips

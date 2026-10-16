@@ -1,8 +1,10 @@
 import { useRef } from "react";
 import type { VideoClip, VideoLayer, VideoTimeline } from "@relay/core";
 import { Copy, FolderOpen, Layers, Plus, Trash2, Upload } from "lucide-react";
-import { layerSchedule } from "../lib/video-timeline";
-import { deviceScene } from "../lib/device-motion";
+import { layerSchedule, clipDuration, clipSourceTime, clipMotionTime, clipMotionDuration } from "../lib/video-timeline";
+import {sortSceneLayers} from "../lib/video-scene";
+import {animationState} from "../lib/video-animation";
+import { deviceScene,deviceMeshBounds } from "../lib/device-motion";
 import { DeviceFramePreview } from "./device-frame-controls";
 
 export function VideoDeviceLayers({ timeline, selected, source, time, onChange, onSelect, onMedia, onUpload }: {
@@ -16,7 +18,7 @@ export function VideoDeviceLayers({ timeline, selected, source, time, onChange, 
     if (!source || layers.length >= 12) return;
     const { transition: _transition, ...recording } = source;
     const next: VideoLayer = { ...recording, id: crypto.randomUUID(), name: `${source.name} layer`, startMs: Math.min(899900, Math.round(time)), volume: 0, deviceFrame: { ...(source.deviceFrame ?? { device: "iphone", color: "#1D1D1F", background: "#E8E2D8" }), x: .65, y: .5, scale: .6 } };
-    next.outMs = Math.min(next.outMs,next.inMs+900000-next.startMs);
+    next.outMs = Math.min(next.outMs,next.inMs+(900000-next.startMs)*(next.speed??1));
     onChange({ ...timeline, layers: [...layers, next] }); onSelect(next.id);
   };
   const update = (patch: Partial<VideoLayer>) => layer && onChange({ ...timeline, layers: layers.map(item => item.id === layer.id ? { ...item, ...patch } : item) });
@@ -39,7 +41,7 @@ export function VideoDeviceLayers({ timeline, selected, source, time, onChange, 
     </ol>}
     {layer && <div className="video-layer-edit" aria-label="Selected device layer">
       <label>Layer name<input aria-label="Layer name" maxLength={120} value={layer.name} onChange={event => update({ name: event.target.value })}/></label>
-      <label>Appears at (ms)<input aria-label="Layer start time" type="number" min={0} max={900000 - (layer.outMs-layer.inMs)} step={100} value={layer.startMs} onChange={event => update({ startMs: Math.round(Math.max(0, Math.min(900000-(layer.outMs-layer.inMs), Number(event.target.value)))) })}/></label>
+      <label>Appears at (ms)<input aria-label="Layer start time" type="number" min={0} max={900000 - (clipDuration(layer))} step={100} value={layer.startMs} onChange={event => update({ startMs: Math.round(Math.max(0, Math.min(900000-(clipDuration(layer)), Number(event.target.value)))) })}/></label>
       <small>Source: {layer.sourceUrl.split("/").at(-1)}. Trim and screen crop in the timeline below; device motion above.</small>
       <div className="video-layer-actions">
         <button className="secondary-button" disabled={layers.indexOf(layer) === layers.length - 1} onClick={() => reorder(1)}>Bring forward</button>
@@ -56,19 +58,23 @@ export function VideoDeviceLayerPreview({ timeline, time, playing, width, height
   onSelect: (id: string) => void; onChange: (id: string, dx: number, dy: number) => void;
 }) {
   const drag = useRef({ x: 0, y: 0 });
-  return <div className="video-device-layer-stage">{layerSchedule(timeline).filter(entry => time >= entry.startMs && time < entry.endMs).map(entry => {
+  return <div className="video-device-layer-stage">{sortSceneLayers(layerSchedule(timeline).filter(entry => time >= entry.startMs && time < entry.endMs).map(entry=>({...entry,deviceFrame:entry.clip.deviceFrame}))).map(entry => {
     const c = entry.clip, local = time - entry.startMs;
-    const scene = c.deviceFrame ? deviceScene(width, height, c.deviceFrame, local, c.outMs-c.inMs) : undefined;
-    const corners = scene?.panels.filter(panel => panel.visible).flatMap(panel => panel.corners) ?? [];
+    const frame=c.deviceFrame?{...c.deviceFrame,...(timeline.scene?{scene:timeline.scene}:{})}:undefined;
+    const mesh=frame?.renderMode==="mesh";
+    const scene=frame&&!mesh?deviceScene(width,height,frame,clipMotionTime(c,local),clipMotionDuration(timeline,c),time):undefined;
+    const bounds=frame&&mesh?deviceMeshBounds(width,height,frame,clipMotionTime(c,local),clipMotionDuration(timeline,c),time):undefined;
+    const opacity=frame&&mesh?animationState(frame.animation,clipMotionTime(c,local),clipMotionDuration(timeline,c),frame,"device").opacity:scene?.opacity??1;
+    const corners = [...(bounds?[{x:bounds.x,y:bounds.y},{x:bounds.x+bounds.width,y:bounds.y+bounds.height}]:[]),...(scene?.panels.filter(panel => panel.visible).flatMap(panel => panel.corners) ?? [])];
     const left = corners.length ? Math.min(...corners.map(point => point.x)) / width : 0;
     const top = corners.length ? Math.min(...corners.map(point => point.y)) / height : 0;
     const right = corners.length ? Math.max(...corners.map(point => point.x)) / width : 1;
     const bottom = corners.length ? Math.max(...corners.map(point => point.y)) / height : 1;
     return <div key={c.id} className="video-device-layer" data-layer-preview={c.id} data-layer-start={entry.startMs}>
-      <DeviceFramePreview transparent advanced value={c.deviceFrame} width={width} height={height} timeMs={local} durationMs={c.outMs-c.inMs} sourceTimeMs={c.inMs+local} playing={playing} sourceVolume={c.volume}>
+      <DeviceFramePreview gpuManaged transparent advanced value={c.deviceFrame} width={width} height={height} scene={timeline.scene} fps={timeline.exportSettings?.fps??30} sceneTimeMs={time} pointer={c.pointer} playbackRate={c.speed??1} timeMs={clipMotionTime(c,local)} durationMs={clipMotionDuration(timeline,c)} sourceTimeMs={clipSourceTime(c,local)} playing={playing&&c.freezeMs===undefined} sourceVolume={c.volume}>
         {c.kind === "video" ? <video src={c.sourceUrl} playsInline preload="auto" style={{ objectFit:c.fit, objectPosition:`${c.x*100}% ${c.y*100}%`, transform:c.fit === "cover" ? `scale(${c.zoom})` : undefined, transformOrigin:`${c.x*100}% ${c.y*100}%` }}/> : <img src={c.sourceUrl} alt={c.name} style={{ objectFit:c.fit, objectPosition:`${c.x*100}% ${c.y*100}%`, transform:c.fit === "cover" ? `scale(${c.zoom})` : undefined, transformOrigin:`${c.x*100}% ${c.y*100}%` }}/>}
       </DeviceFramePreview>
-      {(!scene || (scene.opacity > .01 && corners.length > 0)) && <button aria-label={`Select device layer: ${c.name}`} className={`video-layer-hit-area ${selected === c.id ? "selected" : ""}`} style={{ left:`${left*100}%`, top:`${top*100}%`, width:`${(right-left)*100}%`, height:`${(bottom-top)*100}%` }} onClick={() => onSelect(c.id)} onPointerDown={event => { event.stopPropagation(); drag.current = { x:event.clientX, y:event.clientY }; event.currentTarget.setPointerCapture(event.pointerId); onSelect(c.id); }} onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const bounds = event.currentTarget.parentElement!.getBoundingClientRect(); onChange(c.id,(event.clientX-drag.current.x)/bounds.width,(event.clientY-drag.current.y)/bounds.height); drag.current={x:event.clientX,y:event.clientY}; }}/>} 
+      {(opacity > .01 && (!frame || corners.length > 0)) && <button aria-label={`Select device layer: ${c.name}`} className={`video-layer-hit-area ${selected === c.id ? "selected" : ""}`} style={{ left:`${left*100}%`, top:`${top*100}%`, width:`${(right-left)*100}%`, height:`${(bottom-top)*100}%` }} onClick={() => onSelect(c.id)} onPointerDown={event => { event.stopPropagation(); drag.current = { x:event.clientX, y:event.clientY }; event.currentTarget.setPointerCapture(event.pointerId); onSelect(c.id); }} onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const bounds = event.currentTarget.parentElement!.getBoundingClientRect(); onChange(c.id,(event.clientX-drag.current.x)/bounds.width,(event.clientY-drag.current.y)/bounds.height); drag.current={x:event.clientX,y:event.clientY}; }}/>}
     </div>;
   })}</div>;
 }

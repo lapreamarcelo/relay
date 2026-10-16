@@ -1,10 +1,11 @@
 import type { ProviderAuthMethod, ProviderId, ProviderPostSettings } from "@relay/core";
 import { sql } from "@relay/database";
 import { ProviderPublishError, type ProviderPublishRegistry } from "@relay/providers/publish";
-import type { TokenLifecycleService } from "./token-lifecycle.ts";
+import { TokenRefreshTransientError, type TokenLifecycleService } from "./token-lifecycle.ts";
 import { withFreshAccountToken } from "./publisher-auth.ts";
 
 interface ClaimedTarget {
+  lease_owner: string;
   id: string; post_id: string; owner_id: string; social_account_id: string | null; provider: ProviderId;
   status: "publishing" | "processing"; settings: ProviderPostSettings; provider_post_id: string | null;
   publish_attempts: number; processing_started_at: string | Date | null; text: string; media_type: "none" | "image" | "video";
@@ -16,6 +17,12 @@ interface ClaimedTarget {
 
 export interface PublishingSweepResult { examined: number; published: number; processing: number; failed: number; deferred: number }
 
+export interface PublishingLeaseOptions { leaseMs?: number; leaseRenewalMs?: number }
+
+class PublishingLeaseLostError extends Error {
+  constructor() { super("The publishing claim is no longer owned by this worker."); }
+}
+
 function isoAfter(milliseconds: number): string { return new Date(Date.now() + milliseconds).toISOString(); }
 
 function isTikTokInboxUpload(target: ClaimedTarget): boolean {
@@ -24,7 +31,41 @@ function isTikTokInboxUpload(target: ClaimedTarget): boolean {
 
 export class PostPublishingService {
   private readonly workerId: string;
-  constructor(private readonly lifecycle: Pick<TokenLifecycleService, "getValidAccessToken" | "markAuthorizationRejected">, private readonly providers: ProviderPublishRegistry, workerId = `publisher-${crypto.randomUUID()}`) { this.workerId = workerId; }
+  private readonly leaseMs: number;
+  private readonly leaseRenewalMs: number;
+  constructor(private readonly lifecycle: Pick<TokenLifecycleService, "getValidAccessToken" | "markAuthorizationRejected">, private readonly providers: ProviderPublishRegistry, workerId = `publisher-${crypto.randomUUID()}`, options: PublishingLeaseOptions = {}) {
+    this.workerId = workerId;
+    this.leaseMs = options.leaseMs ?? 3 * 60_000;
+    this.leaseRenewalMs = options.leaseRenewalMs ?? this.leaseMs / 3;
+    if (!Number.isFinite(this.leaseMs) || !Number.isFinite(this.leaseRenewalMs) || this.leaseMs <= 0 || this.leaseRenewalMs <= 0 || this.leaseRenewalMs >= this.leaseMs) throw new Error("Publishing lease renewal must be positive and shorter than the lease.");
+  }
+
+  private renewLease(target: ClaimedTarget) {
+    let stopped = false;
+    let lost = false;
+    let pending: Promise<void> = Promise.resolve();
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        pending = (async () => {
+          try {
+            const rows = await sql`
+              UPDATE "post_target" SET publish_lease_expires_at = ${isoAfter(this.leaseMs)}
+              WHERE id = ${target.id} AND publish_lease_owner = ${target.lease_owner} AND publish_lease_expires_at > NOW()
+              RETURNING id
+            `;
+            if (rows.length === 0) lost = true;
+          } catch { lost = true; }
+          if (!stopped && !lost) schedule();
+        })();
+      }, this.leaseRenewalMs);
+    };
+    schedule();
+    return {
+      check: () => { if (lost) throw new PublishingLeaseLostError(); },
+      stop: async () => { stopped = true; clearTimeout(timer); await pending; },
+    };
+  }
 
   private async claim(): Promise<ClaimedTarget | null> {
     return sql.begin(async (transaction) => {
@@ -41,19 +82,20 @@ export class PostPublishingService {
         FOR UPDATE OF target SKIP LOCKED LIMIT 1
       `;
       if (!candidate) return null;
+      const leaseOwner = `${this.workerId}:${crypto.randomUUID()}`;
       await transaction`
         UPDATE "post_target" SET status = CASE WHEN status = 'scheduled' THEN 'publishing' ELSE status END,
           processing_started_at = CASE WHEN status = 'processing' THEN COALESCE(processing_started_at, NOW()) ELSE processing_started_at END,
-          publish_lease_owner = ${this.workerId}, publish_lease_expires_at = ${isoAfter(3 * 60_000)}, updated_at = NOW()
+          publish_lease_owner = ${leaseOwner}, publish_lease_expires_at = ${isoAfter(this.leaseMs)}, updated_at = NOW()
         WHERE id = ${candidate.id}
       `;
       const [row] = await transaction<ClaimedTarget[]>`
-        SELECT target.id, target.post_id, post.owner_id, target.social_account_id, target.provider, target.status,
+        SELECT target.id, target.publish_lease_owner AS lease_owner, target.post_id, post.owner_id, target.social_account_id, target.provider, target.status,
           target.settings, target.text_override, target.provider_post_id, target.publish_attempts, target.processing_started_at, post.text, post.media_type,
           post.media_url, post.media_urls, account.auth_method, account.provider_account_id, account.provider_metadata
         FROM "post_target" target INNER JOIN "post" post ON post.id = target.post_id
         LEFT JOIN "social_account" account ON account.id = target.social_account_id
-        WHERE target.id = ${candidate.id} AND target.publish_lease_owner = ${this.workerId}
+        WHERE target.id = ${candidate.id} AND target.publish_lease_owner = ${leaseOwner}
       `;
       return row ?? null;
     });
@@ -91,11 +133,13 @@ export class PostPublishingService {
 
   private async complete(target: ClaimedTarget, providerPostId: string, externalUrl?: string, warning?: string): Promise<void> {
     const inboxUpload = isTikTokInboxUpload(target);
-    await sql`
+    const updated = await sql`
       UPDATE "post_target" SET status = 'published', provider_post_id = ${providerPostId}, external_url = ${externalUrl ?? null}, error = ${warning ?? null},
+        published_at = COALESCE(published_at, NOW()),
         publish_lease_owner = NULL, publish_lease_expires_at = NULL, analytics_after = ${inboxUpload ? null : isoAfter(5 * 60_000)}, updated_at = NOW()
-      WHERE id = ${target.id} AND publish_lease_owner = ${this.workerId}
+      WHERE id = ${target.id} AND publish_lease_owner = ${target.lease_owner} RETURNING id
     `;
+    if (updated.length === 0) throw new PublishingLeaseLostError();
     await sql`
       DELETE FROM "notification"
       WHERE owner_id = ${target.owner_id} AND target_id = ${target.id} AND kind = 'error'
@@ -107,34 +151,37 @@ export class PostPublishingService {
   }
 
   private async processing(target: ClaimedTarget, providerPostId: string): Promise<void> {
-    await sql`
+    const updated = await sql`
       UPDATE "post_target" SET status = 'processing', provider_post_id = ${providerPostId}, error = NULL, publish_after = ${isoAfter(15_000)},
         processing_started_at = COALESCE(processing_started_at, NOW()),
         publish_lease_owner = NULL, publish_lease_expires_at = NULL, updated_at = NOW()
-      WHERE id = ${target.id} AND publish_lease_owner = ${this.workerId}
+      WHERE id = ${target.id} AND publish_lease_owner = ${target.lease_owner} RETURNING id
     `;
+    if (updated.length === 0) throw new PublishingLeaseLostError();
     await this.updatePostStatus(target.post_id);
   }
 
   private async fail(target: ClaimedTarget, error: unknown): Promise<"failed" | "deferred"> {
     const message = error instanceof Error ? error.message : "The provider returned an unknown publishing error.";
-    const retryable = error instanceof ProviderPublishError && error.retryable;
+    const retryable = (error instanceof ProviderPublishError && error.retryable) || error instanceof TokenRefreshTransientError;
     const attempts = target.publish_attempts + 1;
     if (retryable && attempts < 5) {
       const status = target.provider_post_id ? "processing" : "publishing";
-      await sql`
+      const updated = await sql`
         UPDATE "post_target" SET status = ${status}, publish_attempts = ${attempts}, error = ${message},
           publish_after = ${isoAfter(Math.min(15 * 60_000, 30_000 * 2 ** (attempts - 1)))}, publish_lease_owner = NULL,
           publish_lease_expires_at = NULL, updated_at = NOW()
-        WHERE id = ${target.id} AND publish_lease_owner = ${this.workerId}
+        WHERE id = ${target.id} AND publish_lease_owner = ${target.lease_owner} RETURNING id
       `;
+      if (updated.length === 0) return "deferred";
       await this.updatePostStatus(target.post_id); return "deferred";
     }
-    await sql`
+    const updated = await sql`
       UPDATE "post_target" SET status = 'failed', publish_attempts = ${attempts}, error = ${message},
         publish_lease_owner = NULL, publish_lease_expires_at = NULL, updated_at = NOW()
-      WHERE id = ${target.id} AND publish_lease_owner = ${this.workerId}
+      WHERE id = ${target.id} AND publish_lease_owner = ${target.lease_owner} RETURNING id
     `;
+    if (updated.length === 0) return "deferred";
     await this.updatePostStatus(target.post_id); await this.notify(target, "error", message); return "failed";
   }
 
@@ -142,17 +189,26 @@ export class PostPublishingService {
     const result: PublishingSweepResult = { examined: 0, published: 0, processing: 0, failed: 0, deferred: 0 };
     for (let index = 0; index < limit; index += 1) {
       const target = await this.claim(); if (!target) break; result.examined += 1;
-      if (!target.social_account_id || !target.auth_method || !target.provider_account_id) { const outcome = await this.fail(target, new ProviderPublishError("The destination account is no longer connected.")); result[outcome] += 1; continue; }
+      const renewal = this.renewLease(target);
       try {
+        if (!target.social_account_id || !target.auth_method || !target.provider_account_id) throw new ProviderPublishError("The destination account is no longer connected.");
         const providerResult = await withFreshAccountToken(this.lifecycle, target.social_account_id, (accessToken) => {
+          renewal.check();
           const input = { provider: target.provider, authMethod: target.auth_method!, providerAccountId: target.provider_account_id!, providerMetadata: target.provider_metadata ?? {}, accessToken, text: target.text_override ?? target.text, mediaType: target.media_type, mediaUrl: target.media_url ?? undefined, mediaUrls: target.media_urls, settings: target.settings, providerPostId: target.provider_post_id ?? undefined };
           return target.status === "processing" ? this.providers.check(input) : this.providers.publish(input);
         });
+        await renewal.stop();
+        renewal.check();
         if (providerResult.state === "published") { await this.complete(target, providerResult.providerPostId, providerResult.externalUrl, providerResult.warning); result.published += 1; }
         else if (target.status === "processing" && target.processing_started_at && Date.now() - new Date(target.processing_started_at).getTime() > 24 * 60 * 60_000) {
           const outcome = await this.fail(target, new ProviderPublishError("The provider did not finish processing this post within 24 hours.")); result[outcome] += 1;
         } else { await this.processing(target, providerResult.providerPostId); result.processing += 1; }
-      } catch (error) { const outcome = await this.fail(target, error); result[outcome] += 1; }
+      } catch (error) {
+        await renewal.stop();
+        try { renewal.check(); } catch { error = new PublishingLeaseLostError(); }
+        const outcome = error instanceof PublishingLeaseLostError ? "deferred" : await this.fail(target, error);
+        result[outcome] += 1;
+      } finally { await renewal.stop(); }
     }
     return result;
   }

@@ -1,0 +1,20 @@
+// Isolated local demo through Relay's production export pipeline; no cloud writes.
+import {registerHooks} from 'node:module';
+import {readFile,writeFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import {dirname,join,basename} from 'node:path';
+const directory=dirname(fileURLToPath(import.meta.url)),root=join(directory,'../../..');
+registerHooks({resolve(s,c,next){if(s==='server-only')return{url:'data:text/javascript,export{}',shortCircuit:true};try{return next(s,c);}catch(e){if(s.startsWith('.')&&!/\.[a-z]+$/i.test(s))return next(s+'.ts',c);throw e;}}});
+const timeline=JSON.parse(await readFile(join(directory,'timeline.json'),'utf8'));
+timeline.layers[0].deviceFrame={device:'iphone',modelId:'iphone-15-pro-max',renderMode:'gpu',color:'#292A2D',background:'#071B28',x:.59,y:.55,scale:.82,motion:'none',animation:{keyframes:[{timeMs:0,rotateY:0},{timeMs:2500,rotateY:0,easing:'ease-in-out'},{timeMs:5000,rotateY:-26,rotateX:8,easing:'ease-in-out'},{timeMs:8000,rotateY:12,rotateX:0}]}};
+timeline.layers[1]={...timeline.layers[1],name:'Racketly — 3D Watch Ultra 2',sourceUrl:'https://racketly.demo.relay/watch-score.png',deviceFrame:{device:'watch',modelId:'watch-ultra-2',renderMode:'gpu',color:'#99958C',background:'#071B28',x:.84,y:.55,scale:.57,motion:'none',animation:{keyframes:[{timeMs:0,rotateY:0},{timeMs:2500,rotateY:0,easing:'ease-in-out'},{timeMs:5000,rotateY:25,rotateX:-6,easing:'ease-in-out'},{timeMs:8000,rotateY:-12,rotateX:0}]}}};
+timeline.exportSettings={...timeline.exportSettings,resolution:'1080p'};timeline.camera=undefined;timeline.scene.shadow=.14;timeline.scene.lightAngle=-20;timeline.labels=timeline.labels.filter(l=>l.id!=='samples');
+const {normalizeVideoTimeline}=await import(join(root,'apps/web/lib/video-timeline.ts'));const normalized=normalizeVideoTimeline(timeline);
+await writeFile(join(directory,'timeline-gpu.json'),JSON.stringify(normalized,null,2)+'\n');
+Object.assign(process.env,{R2_ACCOUNT_ID:'local',R2_ACCESS_KEY_ID:'local',R2_SECRET_ACCESS_KEY:'local',R2_BUCKET_NAME:'local',R2_PUBLIC_URL:'https://racketly.demo.relay'});
+const allowed=new Set(['watch-footage.mp4','iphone-match.png','watch-score.png','canvas.png','racketly-song.mp3']);
+globalThis.fetch=async(url,{signal}={})=>{signal?.throwIfAborted();const name=basename(new URL(String(url)).pathname);if(!allowed.has(name))throw Error('Unexpected local asset '+name);return new Response(await readFile(join(directory,name)));};
+const {getR2Client}=await import(join(root,'apps/web/lib/r2.ts'));getR2Client().send=async c=>{await writeFile(join(directory,basename(c.input.Key)),c.input.Body);return{};};
+const {renderVideoArtifactDetails}=await import(join(root,'apps/web/lib/video-renderer.ts'));
+const result=await renderVideoArtifactDetails({projectId:'racketly-local-demo',sourceUrl:'',labels:[],timeline:normalized,targetKey:'racketly-relay-demo-3d.mp4',onProgress:async p=>console.log('Render progress',p)});
+await writeFile(join(directory,'render-result-gpu.json'),JSON.stringify(result,null,2)+'\n');console.log('Complete:',join(directory,'racketly-relay-demo-3d.mp4'));

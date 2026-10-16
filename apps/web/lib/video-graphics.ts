@@ -1,0 +1,22 @@
+import type { VideoGraphic } from '@relay/core';
+import {normalizeCodeClip,renderCodeClip,type VideoCodeClip} from './video-code-clips.ts';
+import {audioSignalAt,type VideoAudioAnalysisTrack,type AudioSignal} from './video-audio-analysis.ts';
+export type AdvancedVideoGraphic = Omit<VideoGraphic,'kind'> & {kind:VideoGraphic['kind']|'code';code?:VideoCodeClip;audioReactive?:{sourceUrl:string;signal:AudioSignal;amount:number}};
+import {animationState,normalizeLayerAnimation} from './video-animation.ts';
+export function normalizeGraphics(value:unknown):AdvancedVideoGraphic[]|undefined{
+ if(value===undefined)return undefined;if(!Array.isArray(value)||value.length>24)throw new Error('Use up to 24 graphics.');const ids=new Set<string>();
+ return value.map(input=>{if(!input||typeof input!=='object')throw new Error('Expected graphic.');const v=input as AdvancedVideoGraphic;const n=(x:unknown,min:number,max:number,f:number)=>{const a=x??f;if(typeof a!=='number'||!Number.isFinite(a)||a<min||a>max)throw new Error('Invalid graphic value.');return a;};
+ if(typeof v.id!=='string'||!/^\w[\w-]{0,119}$/.test(v.id)||ids.has(v.id))throw new Error('Graphic ids must be unique.');ids.add(v.id);if(!['shape','particles','bars','ring','code'].includes(v.kind)||!/^#[0-9a-f]{6}$/i.test(v.color))throw new Error('Choose a graphic and color.');
+ const startMs=n(v.startMs,0,900000,0),endMs=n(v.endMs,100,900000,5000);if(endMs<=startMs)throw new Error('Graphic end must follow start.');
+ const code=v.kind==='code'?normalizeCodeClip(v.code):undefined;const reactive=v.audioReactive;if(reactive&&(typeof reactive.sourceUrl!=='string'||reactive.sourceUrl.length>4096||!/^https?:\/\//.test(reactive.sourceUrl)||!['envelope','bass','mid','treble'].includes(reactive.signal)))throw new Error('Choose analyzed audio and a signal.');
+ return {...(code?{code}:{}),...(reactive?{audioReactive:{sourceUrl:reactive.sourceUrl,signal:reactive.signal,amount:n(reactive.amount,0,10,1)}}:{}),id:v.id,kind:v.kind,startMs,endMs,x:n(v.x,0,1,.5),y:n(v.y,0,1,.5),width:n(v.width,.01,1,.4),height:n(v.height,.01,1,.2),color:v.color,seed:n(v.seed,0,2147483647,1),count:n(v.count,1,100,24),speed:n(v.speed,0,10,1),...(v.animation?{animation:normalizeLayerAnimation(v.animation)}:{})};});
+}
+/** Fixed seeds and absolute time yield identical frames in any sampling order. */
+export function graphicsMarkup(graphics:AdvancedVideoGraphic[]|undefined,timeMs:number,width:number,height:number,audioAnalysis?:VideoAudioAnalysisTrack[]):string{return (graphics??[]).filter(g=>timeMs>=g.startMs&&timeMs<g.endMs).map(g=>{
+ const time=(timeMs-g.startMs)/1000*g.speed;const pose=animationState(g.animation,timeMs-g.startMs,g.endMs-g.startMs,{x:g.x,y:g.y},'label');const w=g.width*width,h=g.height*height;let seed=g.seed|0;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return (seed>>>0)/4294967296;};let shape='';const track=audioAnalysis?.find(t=>t.sourceUrl===g.audioReactive?.sourceUrl),amplitude=track?audioSignalAt(track,timeMs,g.audioReactive?.signal):0,reactivity=1+amplitude*(g.audioReactive?.amount??0);
+ if(g.kind==='code'&&g.code){try{shape=renderCodeClip(g.code,{time,width:w,height:h,seed:g.seed,audio:track?audioSignalAt(track,timeMs):0,bass:track?audioSignalAt(track,timeMs,'bass'):0,mid:track?audioSignalAt(track,timeMs,'mid'):0,treble:track?audioSignalAt(track,timeMs,'treble'):0});}catch{shape='';}}
+ if(g.kind==='shape')shape=`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="${Math.min(w,h)*.12}"/>`;
+ if(g.kind==='ring')shape=`<ellipse rx="${w/2}" ry="${h/2}" fill="none" stroke="${g.color}" stroke-width="${Math.min(w,h)*.08}" transform="rotate(${time*40})"/>`;
+ if(g.kind==='bars')for(let i=0;i<Math.min(100,Math.max(0,g.count));i++){const phase=random()*6.28;const bh=h*Math.min(1,(.15+.85*(.5+.5*Math.sin(time*3+phase)))*reactivity);shape+=`<rect x="${-w/2+i*w/g.count}" y="${h/2-bh}" width="${w/g.count*.65}" height="${bh}" rx="${w/g.count*.2}"/>`;}
+ if(g.kind==='particles')for(let i=0;i<Math.min(100,Math.max(0,g.count));i++){const x=random(),y=random(),r=random();shape+=`<circle cx="${(x-.5)*w+Math.sin(time+6.28*x)*w*.08}" cy="${(((y-time*.1)%1+1)%1-.5)*h}" r="${2+r*Math.min(w,h)*.035}" opacity="${.3+r*.7}"/>`;}
+ return `<g fill="${g.color}" opacity="${pose.opacity}" transform="translate(${pose.x*width} ${pose.y*height}) rotate(${pose.rotateZ}) scale(${pose.scale*(g.kind==='bars'?1:reactivity)})">${shape}</g>`;}).join('');}

@@ -107,3 +107,29 @@ test("composer emits a global zoom/focus camera for unframed footage and rejects
   }
   assert.deepEqual(videoComposerCatalog(true).sceneCamera.presets,["zoom-in","zoom-out","focus-return"]);
 });
+
+test("composer keeps expressive text effects separate from compatible device effects", () => {
+  for (const preset of ["letter-rise", "word-spring", "line-cascade", "tracking", "soft-reveal", "focus", "ripple", "spin-in"]) {
+    const plan = compositionFixturePlan();
+    plan.shots[0].entrance = preset;
+    assert.throws(() => compileVideoComposition(compositionFixtureRequest(), plan), /frame entrance/);
+    plan.shots[0].entrance = "fade"; plan.shots[0].titles[0].entrance = preset;
+    assert.equal(compileVideoComposition(compositionFixtureRequest(), plan).timeline.labels[0].animation?.entrance?.preset, preset);
+  }
+});
+
+test("composer trims on playback time, preserves source pointer/freeze, and starts newly authored moves locally", () => {
+  const request = compositionFixtureRequest(); request.durationMs = 3000;
+  request.timeline.clips[0].speed = 2; request.timeline.clips[0].freezeMs = 2300;
+  request.timeline.clips[0].groupId = "old-motion"; request.timeline.clips[0].motionOffsetMs = 1200;
+  request.timeline.clips[0].pointer = { events: [{ timeMs: 2300, x: .4, y: .6, kind: "down" }], style: "touch", color: "#FFFFFF", size: 24, smoothing: 80, display: "tap-only", idleMs: 1200, fadeMs: 250 };
+  const plan = compositionFixturePlan(); plan.shots.forEach(shot => { shot.titles[0].endMs = 2000; });
+  const result = compileVideoComposition(request, plan);
+  assert.equal(timelineDuration(result.timeline), 3000); assert.equal(result.timeline.clips[1].outMs, 8000);
+  assert.equal(result.timeline.clips[0].deviceFrame?.animation?.keyframes?.at(-1)?.timeMs, 2000);
+  assert.equal(result.timeline.clips[1].deviceFrame?.animation?.keyframes?.at(-1)?.timeMs, 1500);
+  for (const clip of result.timeline.clips) {
+    assert.equal(clip.speed, 2); assert.equal(clip.freezeMs, 2300); assert.deepEqual(clip.pointer, request.timeline.clips[0].pointer);
+    assert.equal(clip.groupId, undefined); assert.equal(clip.motionOffsetMs, undefined);
+  }
+});

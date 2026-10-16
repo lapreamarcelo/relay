@@ -1,6 +1,6 @@
 import type { VideoClip } from "@relay/core";
 import { animationEase } from "./video-animation.ts";
-import { clipSchedule } from "./video-timeline.ts";
+import { clipSchedule, clipDuration } from "./video-timeline.ts";
 
 // FFmpeg xfade's P runs from one to zero. Our shared progress runs zero to one.
 // Plane-aware sampling gives slides and zoom the same geometry as CSS preview.
@@ -9,7 +9,7 @@ function sample(source: "a" | "b", x: string, y = "Y"): string {
 }
 
 export function transitionExpression(transition: NonNullable<VideoClip["transition"]>): string {
-  const p = String(animationEase("(1-P)", transition.easing));
+  const p = String(animationEase("(1-P)", transition.easing,transition.curve));
   switch (transition.kind) {
     case "slide-left": return `if(lt(X,W*(1-${p})),${sample("a", `X+W*${p}`)},${sample("b", `X-W*(1-${p})`)})`;
     case "slide-right": return `if(lt(X,W*${p}),${sample("b", `X+W*(1-${p})`)},${sample("a", `X-W*${p}`)})`;
@@ -24,9 +24,9 @@ export function transitionExpression(transition: NonNullable<VideoClip["transiti
 }
 
 /** Clips have already been rendered individually at 30fps with source audio. */
-export function timelineJoinFilter(clips: VideoClip[]): string {
+export function timelineJoinFilter(clips: VideoClip[], fps = 30): string {
   const schedule = clipSchedule(clips);
-  const filters = clips.flatMap((clip, i) => [`[${i}:v]fps=30,settb=AVTB,setpts=PTS-STARTPTS,format=yuv444p[v${i}]`, `[${i}:a]aresample=48000,apad,atrim=duration=${(clip.outMs-clip.inMs)/1000},asetpts=PTS-STARTPTS[a${i}]`]);
+  const filters = clips.flatMap((clip, i) => [`[${i}:v]fps=${fps},settb=AVTB,setpts=PTS-STARTPTS,format=yuv444p[v${i}]`, `[${i}:a]aresample=48000,apad,atrim=duration=${clipDuration(clip)/1000},asetpts=PTS-STARTPTS[a${i}]`]);
   let video = "v0", audio = "a0";
   for (let i = 1; i < clips.length; i++) {
     const outVideo = `joinedv${i}`, outAudio = `joineda${i}`;

@@ -51,3 +51,12 @@ test("long sparse tracks retain numeric and export parity without losing default
     assert.ok(Math.abs(actual.x-evaluate(animationExpressions(animation,"clock",10000).x,time))<1e-10);
   }
 });
+
+test("scene text may author 3D tilt and depth while overlay text retains 2D constraints", () => {
+  const input = { keyframes: [{ timeMs: 0, rotateX: 0, rotateY: 0, depth: 0 }, { timeMs: 600, rotateX: 30, rotateY: -75, depth: .4 }] };
+  assert.deepEqual(normalizeLayerAnimation(input, "label", false, true)?.keyframes, input.keyframes);
+  assert.throws(() => normalizeLayerAnimation(input), /3D|Depth/);
+  assert.throws(() => normalizeLayerAnimation({ keyframes: [{ timeMs: 0, depth: 2.01 }] }, "label", false, true));
+  const rest = animationState(undefined, 500, 1000);
+  assert.equal(rest.rotateX, 0); assert.equal(rest.rotateY, 0); assert.equal(rest.rotateZ, 0); assert.equal(rest.depth, 0);
+});

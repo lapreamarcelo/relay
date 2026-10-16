@@ -24,6 +24,16 @@ ENV APP_URL=http://localhost:3000
 ENV BETTER_AUTH_SECRET=docker-build-placeholder-secret-32-characters
 RUN pnpm --filter @relay/web build
 
+# Shared browser runtime uses the locked Playwright version, its Linux libraries,
+# and a user-independent browser path for both web and dedicated export workers.
+FROM base AS browser-runtime
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN --mount=from=dependencies,source=/app,target=/app,ro \
+    node /app/apps/web/node_modules/playwright/cli.js install --with-deps chromium \
+    && chmod -R a+rX /ms-playwright \
+    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+
 FROM base AS migrator
 ENV NODE_ENV=production
 COPY --from=dependencies /app/node_modules ./node_modules
@@ -40,29 +50,30 @@ COPY packages ./packages
 COPY apps/worker ./apps/worker
 CMD ["./apps/worker/node_modules/.bin/tsx", "apps/worker/src/run.ts"]
 
-FROM node:22-bookworm-slim AS runner
+FROM browser-runtime AS runner
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
 USER nextjs
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
 
-# Dedicated CPU-bounded creative renderer; publishing retains its own process.
-FROM dependencies AS renderer
+# Dedicated resource-bounded creative renderer; publishing retains its own process.
+FROM browser-runtime AS renderer
 ENV NODE_ENV=production
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+COPY --from=dependencies /app/ ./
 COPY packages ./packages
 COPY apps/web/lib ./apps/web/lib
 COPY apps/web/scripts ./apps/web/scripts
+COPY --from=builder /app/apps/web/public ./apps/web/public
 CMD ["node", "--import", "./apps/worker/node_modules/tsx/dist/loader.mjs", "--import", "./apps/web/scripts/render-loader.mjs", "apps/web/scripts/run-render-worker.ts"]
 
 FROM dependencies AS mcp

@@ -17,3 +17,6 @@ apps/web/playwright-report
 
 # Downloaded reference assets are not part of releases.
 /local-assets/
+
+# Generated from the shared 3D renderer at build time.
+/apps/web/public/renderer/

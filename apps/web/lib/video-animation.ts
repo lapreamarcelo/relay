@@ -1,6 +1,7 @@
-import type { AnimationEasing, AnimationEffect, ClipTransition, LayerAnimation, LayerKeyframe } from "@relay/core";
-export const animationEasings = ["linear", "ease-in", "ease-out", "ease-in-out"] as const;
-export const animationPresets = ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom", "typewriter"] as const;
+import type { AnimationCurve, AnimationEasing, AnimationEffect, ClipTransition, LayerAnimation, LayerKeyframe } from "@relay/core";
+export const animationEasings = ["linear", "ease-in", "ease-out", "ease-in-out", "spring", "bouncy", "cubic-bezier"] as const;
+export const animationPresets = ["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom", "typewriter", "letter-rise", "word-spring", "line-cascade", "tracking", "soft-reveal", "focus", "ripple", "spin-in", "letter-drop", "letter-slide", "word-slide", "word-blur", "line-wipe", "letter-zoom", "word-zoom", "letter-flip", "wave-rise", "arc-in", "bounce-in", "elastic-in", "scatter-in", "wipe-left", "wipe-right", "mask-up", "mask-down", "pulse-reveal", "alternating-rise", "ink-reveal"] as const;
+export const textOnlyPresets = new Set<AnimationEffect["preset"]>(animationPresets.filter(preset => !["fade", "slide-up", "slide-down", "slide-left", "slide-right", "pop", "zoom"].includes(preset)));
 export const transitionKinds = ["crossfade", "slide-left", "slide-right", "wipe-left", "wipe-right", "zoom"] as const;
 export type AnimationScalar = number | string;
 export interface AnimationState {
@@ -11,6 +12,7 @@ export interface AnimationState {
   rotateY: number;
   rotateZ: number;
   foldAngle: number;
+  depth: number;
   opacity: number;
   reveal: number;
 }
@@ -24,7 +26,35 @@ export const scalarClamp = (v: AnimationScalar): AnimationScalar => typeof v ===
 const less = (t: AnimationScalar, boundary: number, a: AnimationScalar, b: AnimationScalar): AnimationScalar => typeof t === "number" ? t < boundary ? a : b : `if(lt(${t},${boundary}),${a},${b})`;
 const lerp = (a: AnimationScalar, b: AnimationScalar, p: AnimationScalar) => scalarAdd(a, scalarMul(sub(b, a), p));
 /** Same algebra generates preview values and FFmpeg expressions. */
-export function animationEase(progress: AnimationScalar, easing: AnimationEasing = "linear"): AnimationScalar {
+const curves = new Map<string, number[]>();
+function curveSamples(easing: AnimationEasing, curve?: AnimationCurve): number[] {
+  const id = JSON.stringify([easing,curve]);
+  const cached = curves.get(id); if(cached) return cached;
+  const values = Array.from({length:65},(_,index)=> {
+    const p=index/64;
+    if(p===0||p===1)return p;
+    if(easing==="cubic-bezier") {
+      const [x1,y1,x2,y2]=curve?.controlPoints??[.22,1,.36,1];
+      const bezier=(t:number,a:number,b:number)=>3*(1-t)*(1-t)*t*a+3*(1-t)*t*t*b+t*t*t;
+      let lo=0,hi=1;
+      for(let i=0;i<32;i++){const mid=(lo+hi)/2;if(bezier(mid,x1,x2)<p)lo=mid;else hi=mid;}
+      return bezier((lo+hi)/2,y1,y2);
+    }
+    const k=curve?.stiffness??180,c=curve?.damping??(easing==="bouncy"?12:22),m=curve?.mass??1,v=curve?.velocity??0;
+    const w=Math.sqrt(k/m),z=c/(2*Math.sqrt(k*m));
+    const spring=(t:number)=> {
+      if(z<1){const wd=w*Math.sqrt(1-z*z);return 1+Math.exp(-z*w*t)*(-Math.cos(wd*t)+(v-z*w)/wd*Math.sin(wd*t));}
+      if(Math.abs(z-1)<1e-8)return 1+Math.exp(-w*t)*(-1+(v-w)*t);
+      const q=Math.sqrt(z*z-1),r1=-w*(z-q),r2=-w*(z+q),a=(v+r2)/(r1-r2);
+      return 1+a*Math.exp(r1*t)+(-1-a)*Math.exp(r2*t);
+    };
+    // Resolve the finite segment exactly without truncating useful overshoot.
+    return spring(p)-(spring(1)-1)*p*p*p*p;
+  });
+  if(curves.size>=128)curves.delete(curves.keys().next().value!);
+  curves.set(id,values);return values;
+}
+export function animationEase(progress: AnimationScalar, easing: AnimationEasing = "linear", curve?: AnimationCurve): AnimationScalar {
   const p = scalarClamp(progress);
   if (easing === "ease-in")
       return scalarMul(p, p);
@@ -32,20 +62,31 @@ export function animationEase(progress: AnimationScalar, easing: AnimationEasing
       return sub(1, scalarMul(sub(1, p), sub(1, p)));
   if (easing === "ease-in-out")
       return less(p, .5, scalarMul(2, scalarMul(p, p)), sub(1, scalarMul(2, scalarMul(sub(1, p), sub(1, p)))));
+  if(easing==="spring"||easing==="bouncy"||easing==="cubic-bezier") {
+    const samples=curveSamples(easing,curve);
+    if(typeof p==="number") {const i=Math.min(63,Math.floor(p*64));return samples[i]+(samples[i+1]-samples[i])*(p*64-i);}
+    const choose=(lo:number,hi:number):AnimationScalar=>{
+      if(hi-lo===1)return scalarAdd(samples[lo],scalarMul(samples[lo+1]-samples[lo],sub(scalarMul(p,64),lo)));
+      const mid=(lo+hi)>>1;return less(p,mid/64,choose(lo,mid),choose(mid,hi));
+    };
+    return choose(0,64);
+  }
   return p;
 }
-export const easingProgress = (progress: number, easing?: AnimationEasing): number => animationEase(progress, easing) as number;
-export const easingExpression = (progress: string, easing?: AnimationEasing): string => String(animationEase(progress, easing));
-const fields = ["x", "y", "scale", "rotateX", "rotateY", "rotateZ", "foldAngle", "opacity"] as const;
+export const easingProgress = (progress: number, easing?: AnimationEasing, curve?: AnimationCurve): number => animationEase(progress, easing,curve) as number;
+export const easingExpression = (progress: string, easing?: AnimationEasing, curve?: AnimationCurve): string => String(animationEase(progress, easing,curve));
+const fields = ["x", "y", "scale", "rotateX", "rotateY", "rotateZ", "foldAngle", "opacity", "depth"] as const;
 function track(animation: LayerAnimation | undefined, key: typeof fields[number], time: AnimationScalar, base: number): AnimationScalar {
   const keys = (animation?.keyframes ?? []).filter(k => k[key] !== undefined);
   if (!keys.length)
       return base;
-  const points = keys[0].timeMs > 0 ? [{ timeMs: 0, [key]: base }, ...keys] : keys;
+  const points:LayerKeyframe[] = keys[0].timeMs > 0 ? [{ timeMs: 0, [key]: base }, ...keys] : [...keys];
+  if(animation?.returnMs){points[points.length-1]={...points.at(-1)!,easing:"ease-in-out",curve:undefined};points.push({timeMs:points.at(-1)!.timeMs+animation.returnMs,[key]:base});}
   const segments = points.slice(0,-1).map((a,index) => {
     const b = points[index+1];
-    const progress = animationEase(scalarMul(sub(time,a.timeMs),1/(b.timeMs-a.timeMs)),a.easing);
-    return {endMs:b.timeMs,value:lerp(a[key]!,b[key]!,progress)};
+    const progress = animationEase(scalarMul(sub(time,a.timeMs),1/(b.timeMs-a.timeMs)),a.easing,a.curve);
+    const value=key==="scale"&&animation?.scaleMode==="perceptual" ? geometricLerp(a[key]!,b[key]!,progress) : lerp(a[key]!,b[key]!,progress);
+    return {endMs:b.timeMs,value};
   });
   segments.push({endMs:Infinity,value:points[points.length-1][key]!});
   // Balance the decision tree: long keyframe tracks must stay within FFmpeg's
@@ -57,12 +98,16 @@ function track(animation: LayerAnimation | undefined, key: typeof fields[number]
   }
   return choose(0,segments.length);
 }
+export function geometricLerp(a:number,b:number,p:AnimationScalar):AnimationScalar {
+  const from=Math.max(.001,a),ratio=Math.max(.001,b)/from;
+  return typeof p==="number" ? from*Math.pow(ratio,p) : `${from}*pow(${ratio},${p})`;
+}
 
 function effect(state: AnimationExpressions, e: AnimationEffect | undefined, time: AnimationScalar, duration: number, exit: boolean) {
   if (!e)
       return;
   const length = Math.min(e.durationMs, duration / 2);
-  const p = animationEase(scalarMul(sub(time, exit ? duration - length : 0), 1 / Math.max(1, length)), e.easing ?? "ease-out");
+  const p = animationEase(scalarMul(sub(time, exit ? duration - length : 0), 1 / Math.max(1, length)), e.easing ?? "ease-out",e.curve);
   const amount = exit ? p : sub(1, p);
   if (e.preset === "fade")
       state.opacity = scalarMul(state.opacity, sub(1, amount));
@@ -81,7 +126,7 @@ function effect(state: AnimationExpressions, e: AnimationEffect | undefined, tim
       state.reveal = scalarMul(state.reveal, sub(1, amount));
 }
 export function animationExpressions(animation: LayerAnimation | undefined, timeMs: AnimationScalar, durationMs: number, basePose: Partial<AnimationState> = {}, target: "label" | "device" = "label"): AnimationExpressions {
-  const base: AnimationState = { x: .5, y: target === "label" ? .2 : .5, scale: 1, rotateX: 0, rotateY: 0, rotateZ: 0, foldAngle: 0, opacity: 1, reveal: 1 };
+  const base: AnimationState = { x: .5, y: target === "label" ? .2 : .5, scale: 1, rotateX: 0, rotateY: 0, rotateZ: 0, foldAngle: 0, depth: 0, opacity: 1, reveal: 1 };
   for (const key of [...fields, "reveal"] as const) if (basePose[key] !== undefined) base[key] = basePose[key]!;
   const state: AnimationExpressions = { ...base };
   for (const key of fields)
@@ -108,19 +153,34 @@ export function normalizeAnimationEasing(value: unknown): AnimationEasing | unde
   if (!animationEasings.includes(value as AnimationEasing)) throw new Error("Choose a supported animation easing.");
   return value as AnimationEasing;
 }
-export function normalizeLayerAnimation(value: unknown, target: "label" | "device" = "label", duo = false): LayerAnimation | undefined {
+export function normalizeAnimationCurve(value:unknown):AnimationCurve|undefined {
+  if(value===undefined)return undefined;
+  const input=object(value),result:AnimationCurve={};
+  if(Object.keys(input).some(key=>!["controlPoints","stiffness","damping","mass","velocity"].includes(key)))throw new Error("Unknown animation curve parameter.");
+  if(input.controlPoints!==undefined){
+    if(!Array.isArray(input.controlPoints)||input.controlPoints.length!==4)throw new Error("A curve needs four control point coordinates.");
+    result.controlPoints=input.controlPoints.map((v,i)=>number(v,i%2?-2:0,i%2?3:1)) as [number,number,number,number];
+  }
+  for(const [key,min,max] of [["stiffness",1,1000],["damping",.1,100],["mass",.1,10],["velocity",-20,20]] as const)if(input[key]!==undefined)result[key]=number(input[key],min,max);
+  return result;
+}
+export function normalizeLayerAnimation(value: unknown, target: "label" | "device" = "label", duo = false, meshRotation = false): LayerAnimation | undefined {
   if (value === undefined) return undefined;
   const input = object(value);
   const animation: LayerAnimation = {};
+  if(input.scaleMode!==undefined){if(input.scaleMode!=="linear"&&input.scaleMode!=="perceptual")throw new Error("Choose linear or perceptual scaling.");animation.scaleMode=input.scaleMode;}
+  if(input.returnMs!==undefined)animation.returnMs=number(input.returnMs,50,60000);
   for (const key of ["entrance", "exit"] as const) {
       if (input[key] === undefined) continue;
       const effect = object(input[key]);
       if (!animationPresets.includes(effect.preset as AnimationEffect["preset"])) throw new Error("Choose a supported animation preset.");
-      if (target === "device" && effect.preset === "typewriter") throw new Error("Typewriter is supported on text labels only.");
+      if (target === "device" && textOnlyPresets.has(effect.preset as AnimationEffect["preset"])) throw new Error("This effect is supported on text labels only.");
       animation[key] = {
           preset: effect.preset as AnimationEffect["preset"],
           durationMs: number(effect.durationMs, 50, 60000),
           ...(effect.easing === undefined ? {} : { easing: normalizeAnimationEasing(effect.easing) }),
+          ...(effect.curve === undefined ? {} : { curve: normalizeAnimationCurve(effect.curve) }),
+          ...(effect.staggerMs === undefined ? {} : { staggerMs: number(effect.staggerMs,0,500) }),
       };
   }
   if (input.keyframes !== undefined) {
@@ -131,12 +191,13 @@ export function normalizeLayerAnimation(value: unknown, target: "label" | "devic
           const timeMs = number(input.timeMs, 0, 900000);
           if (timeMs <= previous) throw new Error("Keyframe times must be unique and increasing.");
           previous = timeMs;
-          const keyframe: LayerKeyframe = { timeMs, ...(input.easing === undefined ? {} : { easing: normalizeAnimationEasing(input.easing) }) };
-          const ranges = { x: [0, 1], y: [0, 1], scale: target === "device" ? [.25, 1.5] : [.1, 3], rotateX: [-60, 60], rotateY: [-60, 60], rotateZ: [-180, 180], foldAngle: [0, 165], opacity: [0, 1] } as const;
+          const keyframe: LayerKeyframe = { timeMs, ...(input.easing === undefined ? {} : { easing: normalizeAnimationEasing(input.easing) }),...(input.curve===undefined?{}:{curve:normalizeAnimationCurve(input.curve)}) };
+          const ranges = { x: [0, 1], y: [0, 1], scale: target === "device" ? [.25, 1.5] : [.1, 3], rotateX: meshRotation ? [-1080, 1080] : [-60, 60], rotateY: meshRotation ? [-1080, 1080] : [-60, 60], rotateZ: meshRotation ? [-1080, 1080] : [-180, 180], foldAngle: [0, 165], opacity: [0, 1], depth: [-2,2] } as const;
           for (const field of fields) {
               if (input[field] === undefined) continue;
+              if(field === "depth" && !meshRotation)throw new Error("Depth keyframes require a 3D device or scene text.");
               if (field === "foldAngle" && !duo) throw new Error("Folding keyframes require the iPhone Duo frame.");
-              if (target === "label" && (field === "rotateX" || field === "rotateY")) throw new Error("Text keyframes support 2D rotation only.");
+              if (target === "label" && !meshRotation && (field === "rotateX" || field === "rotateY")) throw new Error("Overlay text supports 2D rotation only. Choose scene placement for 3D rotation.");
               keyframe[field] = number(input[field], ranges[field][0], ranges[field][1]);
           }
           if (!fields.some(field => keyframe[field] !== undefined)) throw new Error("Each keyframe needs an animated property.");
@@ -153,5 +214,6 @@ export function normalizeClipTransition(value: unknown): ClipTransition | undefi
       kind: transition.kind as ClipTransition["kind"],
       durationMs: number(transition.durationMs, 50, 60000),
       ...(transition.easing === undefined ? {} : { easing: normalizeAnimationEasing(transition.easing) }),
+      ...(transition.curve === undefined ? {} : { curve: normalizeAnimationCurve(transition.curve) }),
   };
 }

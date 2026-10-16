@@ -1,0 +1,3034 @@
+{
+  "target": {
+    "path": "/Applications/Matte.app",
+    "version": "2.0.2",
+    "build": "231",
+    "executable_sha256": "cf669b5e3a8f99e1235f80075c7872c10e37e0db19c2d684fc8f761bb4d62452"
+  },
+  "artifact": {
+    "evidence_id": "ev_0bface269c6984e8b60074d168bc9a27b4f9bd28f73509edf32b2eb380078c42",
+    "inventory_evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3",
+    "manifest": {
+      "manifest_id": "agm_8b0427f042a1381c2ac780ca86c1900bd492b4dffc34891721d840d5a088bfce",
+      "root_artifact_id": "art_054d18868897dd703474f15d6290438eba0d45a1924ecf92ebd887e8bcf2e30c",
+      "root_sha256": "e5c0336048fdbe6c92d6c9c5d037f1979abbad22dbf98287eb0cdcb9d04c6824",
+      "root_format": "directory"
+    },
+    "coverage": {
+      "status": "complete-within-substeps",
+      "substeps_completed": 1,
+      "observations_retained": 1067,
+      "observations_omitted": 0,
+      "relationships_retained": 532,
+      "relationships_omitted": 0,
+      "hypotheses_retained": 0,
+      "hypotheses_omitted": 0,
+      "unexplored_branches_retained": 1,
+      "unexplored_branches_omitted": 0,
+      "next_probes_retained": 1,
+      "next_probes_omitted": 0
+    },
+    "limitations": [
+      "Inspection derives bounded static hypotheses and next probes; it does not execute the artifact or claim format-specific semantics."
+    ],
+    "selected_resource_occurrences": [
+      {
+        "observation_id": "aio_151d454a0b73f9e223e9ca25ac21448ff9cce4ab06a50221da2a304384692b00",
+        "kind": "occurrence",
+        "subject": "occ_7ba25075ba65e6f0f899863dc9ce8e75c28d616b569eb94533023b3fa64a0ebe",
+        "value": {
+          "occurrence_id": "occ_7ba25075ba65e6f0f899863dc9ce8e75c28d616b569eb94533023b3fa64a0ebe",
+          "artifact_id": "art_253b886a84ba2cc560308f8b2e414e2351fdfe994b12d3312cf07b46724089ee",
+          "parent_occurrence_id": "occ_455ac4203e759dc7d00d59531bcdae467b02611f522bdb92df632d900c96263d",
+          "logical_path": "Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/Info.plist",
+          "entry_kind": "file",
+          "declared_size": 2400,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_c7171d3e71b135da8f2d751e00f2d28f7cfb7459f4d899c4287c5531ffb53421",
+        "kind": "occurrence",
+        "subject": "occ_3f101c1ea63a764a41453278cf4bdc24db30a0dc48e72eaa4feaf1928ac134d1",
+        "value": {
+          "occurrence_id": "occ_3f101c1ea63a764a41453278cf4bdc24db30a0dc48e72eaa4feaf1928ac134d1",
+          "artifact_id": "art_4c9f63acc84dbdae285b3c1aed8b4c8daf5bc5ea3949267719d69f797cacd23b",
+          "parent_occurrence_id": "occ_0798fb25145e946a08a7e48aecb8dded2a177a9dcb0e239d4e4afbd2bf8723f3",
+          "logical_path": "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/Info.plist",
+          "entry_kind": "file",
+          "declared_size": 1717,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_db32eb3d0b8e02e5498c0872b411c55e8713293cf9e7aa92432ab5582e775d37",
+        "kind": "occurrence",
+        "subject": "occ_d02e0c8b38723f06f64c3300c743050d138f881bc02965dc77530b38c2aaa877",
+        "value": {
+          "occurrence_id": "occ_d02e0c8b38723f06f64c3300c743050d138f881bc02965dc77530b38c2aaa877",
+          "artifact_id": "art_07a9d464d20bee7a471d7c34b62b49fa9ae2f73ed30b0beb7e5dee4dcbe781e0",
+          "parent_occurrence_id": "occ_3a2aed3461ea501d799700488be9b7fe1992e488d98795ef0be851b5c4832a31",
+          "logical_path": "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/Info.plist",
+          "entry_kind": "file",
+          "declared_size": 1605,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_b22f35c25d272925881a6780dd22e3c1c50d5828185910701edf39e479bfd4ae",
+        "kind": "occurrence",
+        "subject": "occ_06bf6ddb67b8069d45c81475f161d4ddd6ec955e80a4ccbdc1f5f02ca2a5035f",
+        "value": {
+          "occurrence_id": "occ_06bf6ddb67b8069d45c81475f161d4ddd6ec955e80a4ccbdc1f5f02ca2a5035f",
+          "artifact_id": "art_ed7996067bfa4d92b8fb52a9f0b00d9717f6bdb03ab5a2de6e2f290588f23a2d",
+          "parent_occurrence_id": "occ_7177bf2809b27433e23c5c783e49510b7b0619bd8d88c49fa68cc9ae08f02be3",
+          "logical_path": "Contents/Info.plist",
+          "entry_kind": "file",
+          "declared_size": 3387,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_da85aa655d1f66b2d04bab8090d2bd603d98a353b4ff5c9bc79e33e8dc839d47",
+        "kind": "occurrence",
+        "subject": "occ_d2a53b0a557a8d2bd9f6a7aa4fd9a2b623717e244645bc027cd6e2ec906291b5",
+        "value": {
+          "occurrence_id": "occ_d2a53b0a557a8d2bd9f6a7aa4fd9a2b623717e244645bc027cd6e2ec906291b5",
+          "artifact_id": "art_162c59d26738f2ba50b1e6c1c62e7f7cac9851f1b88e0088e7a7ba177f4e422e",
+          "parent_occurrence_id": "occ_571460257bdf26732ed2779a7534b60c17f871962357ff57d301afdd650db467",
+          "logical_path": "Contents/MacOS/Matte",
+          "entry_kind": "file",
+          "declared_size": 60841344,
+          "compressed_size": null,
+          "executable": true,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_4a7f576f660f38fd2f48307f6abacdbde126bffc9ac2a7a84d1abe8f3cc3a5c5",
+        "kind": "occurrence",
+        "subject": "occ_7b9fcd915fd60447ca8e873f278e5f6f3cd9bfda4dca2d29883b06b4463a1887",
+        "value": {
+          "occurrence_id": "occ_7b9fcd915fd60447ca8e873f278e5f6f3cd9bfda4dca2d29883b06b4463a1887",
+          "artifact_id": "art_0ca17b6a21cb089cacd958741bb434b7ea5fcbe0a4825177dacaa9cd9aa2b363",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/.protected-model-assets-v1",
+          "entry_kind": "file",
+          "declared_size": 42,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_d04331f00e21d20aea26f7da4c391157e55354714aa47b76b90e5eb764777572",
+        "kind": "occurrence",
+        "subject": "occ_3cf10bbbb9d5ae546cb41bb2178e03846d0c4ae12f6343640eb9d094cc8e7fa6",
+        "value": {
+          "occurrence_id": "occ_3cf10bbbb9d5ae546cb41bb2178e03846d0c4ae12f6343640eb9d094cc8e7fa6",
+          "artifact_id": "art_e8da6c3ff37284ebfda58b49980b039d23a832264f9e0da03cf417653bb6bdee",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/01c4835665cfc83b3379fe66.matte3d",
+          "entry_kind": "file",
+          "declared_size": 4177772,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_3b33bd26e1538c75df927e34be23bc0e029b18439ed4722c240a8c3ed6a71734",
+        "kind": "occurrence",
+        "subject": "occ_19c6351331c49bdd17616d58a09b826449541d43fcc7c1bbdd1fbb89b227c295",
+        "value": {
+          "occurrence_id": "occ_19c6351331c49bdd17616d58a09b826449541d43fcc7c1bbdd1fbb89b227c295",
+          "artifact_id": "art_ff91cb5bd667d2cbb50a656184c2e721ca5054564874c67f2021d848ea88fd07",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/19838755997feb7976b90575.matte3d",
+          "entry_kind": "file",
+          "declared_size": 4201651,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_298538fd943d3e1ab67150fd22d24860d02929c60e5efc9971f6a966e1b5d8d5",
+        "kind": "occurrence",
+        "subject": "occ_104f63df94bebd2592ab82f64d55cd2b1a10062ddc1411cf56232109abc8defa",
+        "value": {
+          "occurrence_id": "occ_104f63df94bebd2592ab82f64d55cd2b1a10062ddc1411cf56232109abc8defa",
+          "artifact_id": "art_1767b35d7809380796e0d52159ac16fdff1868dce54464bca06c03af9ac3b7d7",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/1dabce41100d5613397de954.matte3d",
+          "entry_kind": "file",
+          "declared_size": 4276962,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_c8ac459ddb3d7f87e3a08e8585143fca97e878da064fca215b19f5bb26620dbc",
+        "kind": "occurrence",
+        "subject": "occ_93629d4cf887d9fb08603b0bf1b15c90993a1b72bfabd3f282f7b4fbd5e61242",
+        "value": {
+          "occurrence_id": "occ_93629d4cf887d9fb08603b0bf1b15c90993a1b72bfabd3f282f7b4fbd5e61242",
+          "artifact_id": "art_a22b8502ecfb9932f430880cee31123c66af54c9dcb304f66f7cefe6a18705ba",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/2a81f93b3b6677e6cef1f815.matte3d",
+          "entry_kind": "file",
+          "declared_size": 3406537,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_732d81f628fc1d451879d5b373b75b875b5408e48b6c8f16b18cc0e06fbe9b4d",
+        "kind": "occurrence",
+        "subject": "occ_36159ba01860635c47442f5c84d491c6287961cc4b2b23ce08f7753093cb3996",
+        "value": {
+          "occurrence_id": "occ_36159ba01860635c47442f5c84d491c6287961cc4b2b23ce08f7753093cb3996",
+          "artifact_id": "art_09b03d2ea5ac166c90697fe3eea2b86ad3fd8e5a730a5b9e3985375e94d30746",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/5bb47f51dbc20cc470eb5c3d.matte3d",
+          "entry_kind": "file",
+          "declared_size": 5304061,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_99a74f380ef9faf434fc4c44ed4de7065eddb44e5d1870bcdf51d35c821534d8",
+        "kind": "occurrence",
+        "subject": "occ_7754fcbf71bfd1d07525b926bb7f22f347d042b0564b045f2088f038b16aa7d5",
+        "value": {
+          "occurrence_id": "occ_7754fcbf71bfd1d07525b926bb7f22f347d042b0564b045f2088f038b16aa7d5",
+          "artifact_id": "art_33cfc05971d54506dfd72444fed7ad47a96f025cb4e99abab43dfac1ba149f87",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/5e9d420cb43498eab014ea32.matte3d",
+          "entry_kind": "file",
+          "declared_size": 3899950,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_07f161faeabff3711ae7efae86089e3e44ad1134f28605e7a8997129c5e47b9c",
+        "kind": "occurrence",
+        "subject": "occ_070588215c39ba7b2a40c1bbe1949d9163449bb05709257fe088cc0ea04d9d8c",
+        "value": {
+          "occurrence_id": "occ_070588215c39ba7b2a40c1bbe1949d9163449bb05709257fe088cc0ea04d9d8c",
+          "artifact_id": "art_7ad2a8e4132713da0f5136defc5f71c44b376de9b507258b19c44a8e86262907",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/64b472fa260cb8560040b977.matte3d",
+          "entry_kind": "file",
+          "declared_size": 2503996,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_747ea7449611cab4b1ef63162d8bf70984f2e799a26ee4b334bd6b85da52299f",
+        "kind": "occurrence",
+        "subject": "occ_fc6d1dacb4484bb436a1bc9d3faa05bd4aadaa3e4d1a99a11a34edf29566a6e1",
+        "value": {
+          "occurrence_id": "occ_fc6d1dacb4484bb436a1bc9d3faa05bd4aadaa3e4d1a99a11a34edf29566a6e1",
+          "artifact_id": "art_d973a4f6d49eaaf2384561424bc008402dfc63a09f48972d80de202261cebeb9",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/6fceec0341a5b69939880b32.matte3d",
+          "entry_kind": "file",
+          "declared_size": 4682456,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_36acd666a242f0241aa9aebd34fd7fb9514e44bbe1f9160d9441a381a66bdba1",
+        "kind": "occurrence",
+        "subject": "occ_8f33cee2e908924e90926d668f5982f0f82e08b2755e0edebad2bfc81e762486",
+        "value": {
+          "occurrence_id": "occ_8f33cee2e908924e90926d668f5982f0f82e08b2755e0edebad2bfc81e762486",
+          "artifact_id": "art_cfed7ffec5793c8c0b054c1d77a6f0c69f34c99d6e2ee0c061d98357c8814c7f",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/8caa47653fc5442e1a2d0f0f.matte3d",
+          "entry_kind": "file",
+          "declared_size": 2128621,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_5dfcee17a99d83cd25aa6e67d2430ee08e33c068ea0ea466cfedacad843e30a1",
+        "kind": "occurrence",
+        "subject": "occ_15a2aecad8a0e1f20cf9550d0300b87e4ad4e4d8cecdf2eef7eb1dd54355c3cc",
+        "value": {
+          "occurrence_id": "occ_15a2aecad8a0e1f20cf9550d0300b87e4ad4e4d8cecdf2eef7eb1dd54355c3cc",
+          "artifact_id": "art_4bd9127437901792ce5937c075f6221cb4705518dcdabe66a479d66d07d854d9",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/8f10fe0f0b4c6193b55a9207.matte3d",
+          "entry_kind": "file",
+          "declared_size": 3945480,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_6bca21c2b8e948de027c3335010ee7623c275c9005677bb078ef58b3799d0278",
+        "kind": "occurrence",
+        "subject": "occ_c5b6957ad1bb78aac10a160155cefc258fc70ffbad9c0a0cdd482ab9ff490d22",
+        "value": {
+          "occurrence_id": "occ_c5b6957ad1bb78aac10a160155cefc258fc70ffbad9c0a0cdd482ab9ff490d22",
+          "artifact_id": "art_701791911c988f7e548cadb9b2ba48be1b701c6993c7c01eb7ce319a9cedcc09",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/a863d8362790c7e1a1f13119.matte3d",
+          "entry_kind": "file",
+          "declared_size": 3922981,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_3e8850cb8c08803d5d1be160da636833b2f6e4ad68a6e8bf9fee4267f16c47c5",
+        "kind": "occurrence",
+        "subject": "occ_50eb4b6d03308b579438e045b51e74bbe078bcaf956f8c13f6ead69bcb4dbc26",
+        "value": {
+          "occurrence_id": "occ_50eb4b6d03308b579438e045b51e74bbe078bcaf956f8c13f6ead69bcb4dbc26",
+          "artifact_id": "art_02c7abc74aaec28f3904c3b5cb7ffe073984e1f1293a0fb9707f15ec5bdd6603",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/b2f44b0b7072fb31bdaecf94.matte3d",
+          "entry_kind": "file",
+          "declared_size": 4169593,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_a84733f19de5cd5d74382fb2c1fe54cbf3bce883275dff8d4fbc4d6c93daeb41",
+        "kind": "occurrence",
+        "subject": "occ_bd46f1cdf8776a4e1f4e79cf3d88b1527192fcb5b5f0ce6d7a9981e8076aa6b0",
+        "value": {
+          "occurrence_id": "occ_bd46f1cdf8776a4e1f4e79cf3d88b1527192fcb5b5f0ce6d7a9981e8076aa6b0",
+          "artifact_id": "art_c02c99af20255380e878e70e77f3fed9f016d3c8f9c12f6756e7c55cc21766b7",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/ca0787ea39c569de90b41d66.matte3d",
+          "entry_kind": "file",
+          "declared_size": 4169593,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_363890b67cf896a897d441b63cf5979d82cc613e8f7265da12529b9166b6558e",
+        "kind": "occurrence",
+        "subject": "occ_b2bc73aa6dbf831929e7e31b1111dac4bcb2b1bdac72e27ee8963e458e443849",
+        "value": {
+          "occurrence_id": "occ_b2bc73aa6dbf831929e7e31b1111dac4bcb2b1bdac72e27ee8963e458e443849",
+          "artifact_id": "art_006bd1c4d6fceaa60732c2298e14a5f6ccd619c18e304943c5ef0823ec210c06",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/d85ab06e570d978b97fd6031.matte3d",
+          "entry_kind": "file",
+          "declared_size": 4201651,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_1775f8d574045d9b3fc46bb7b10d9cf81e489220db675434da13bad86a60db47",
+        "kind": "occurrence",
+        "subject": "occ_71f47e779b1da8ae66e02a50ec7f93ed5f54abb3af2f784c64df9b5ab6d67cb0",
+        "value": {
+          "occurrence_id": "occ_71f47e779b1da8ae66e02a50ec7f93ed5f54abb3af2f784c64df9b5ab6d67cb0",
+          "artifact_id": "art_f38103b7f5940ffa09c1a6a1a5d7ef3e38243beec1b2bf947c448ad37f6d530a",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/e75eddbe320d7edd5cf56533.matte3d",
+          "entry_kind": "file",
+          "declared_size": 2158450,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_76a762329400714b8923e4d7e917e46c29f8d48d2710a5d1ff936074646fdf0d",
+        "kind": "occurrence",
+        "subject": "occ_e26e3ea9009435734c1cee1b2c0bebbd21ef53a66034ee326445d44828881484",
+        "value": {
+          "occurrence_id": "occ_e26e3ea9009435734c1cee1b2c0bebbd21ef53a66034ee326445d44828881484",
+          "artifact_id": "art_f234f21bfd306e02b522c206a4326c275c22f9be1e9f3f09c16e86d8afe1766c",
+          "parent_occurrence_id": "occ_329b57fec0ccb332805c253e4f23afcb560975ee1ce30eb057d88a625773971e",
+          "logical_path": "Contents/Resources/3DModels/ffd3a3386f07df46ad59d946.matte3d",
+          "entry_kind": "file",
+          "declared_size": 2475559,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_abf841705803f5040d4d5e06eb66afcf4f078d155b38ac79cecae14faf72a6f9",
+        "kind": "occurrence",
+        "subject": "occ_406f9b4e0d824b67bd565dda4e0d83804efd108eda56e08b00ef68a3e1b0d949",
+        "value": {
+          "occurrence_id": "occ_406f9b4e0d824b67bd565dda4e0d83804efd108eda56e08b00ef68a3e1b0d949",
+          "artifact_id": "art_392b6ae06c40fe0661fbbea3c999e26159eefae274a82416cc65a3e2ef08c4ff",
+          "parent_occurrence_id": "occ_8eff23f78b3dcbc7fffdfc5ac115f86e78023b75c039de723476a7d4501df62d",
+          "logical_path": "Contents/Resources/3DModelVariants/applewatchs1142/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 4269,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_f5dedb238a5aea511bc282d1ff25cc6bf043eb635413b7f63cbf39efb3bb6d2e",
+        "kind": "occurrence",
+        "subject": "occ_c855fe37275567cc89800c3ff67a80194929790861547c46cf0bebb897b1deb4",
+        "value": {
+          "occurrence_id": "occ_c855fe37275567cc89800c3ff67a80194929790861547c46cf0bebb897b1deb4",
+          "artifact_id": "art_ee5cd07b8216fb3a68eeec05eeaa21cf42085521aee8d606e112a09db74fc996",
+          "parent_occurrence_id": "occ_8eff23f78b3dcbc7fffdfc5ac115f86e78023b75c039de723476a7d4501df62d",
+          "logical_path": "Contents/Resources/3DModelVariants/applewatchs1142/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 6309,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_ef18e9d859af17c70b8a58ca91a6a4de12711240fd5edb23abf027cf57c0ec8a",
+        "kind": "occurrence",
+        "subject": "occ_0a6dae1b5cb79ba46afd2f401701533c41d6be1e358178642490e61524eddee4",
+        "value": {
+          "occurrence_id": "occ_0a6dae1b5cb79ba46afd2f401701533c41d6be1e358178642490e61524eddee4",
+          "artifact_id": "art_18fc6c1552b35fb52154ee581764593d45795e8b55d3d0b46a27e99b1994837d",
+          "parent_occurrence_id": "occ_06771caefb8e10ea02e5dbe3ce615b9c551e749352e3547a867eb143ddb040a4",
+          "logical_path": "Contents/Resources/3DModelVariants/applewatchs1146/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 4269,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_96cd2a6d410a47aca8be9bdf5fbe67587d1ca6b49ab54756460be76689917767",
+        "kind": "occurrence",
+        "subject": "occ_1c343215f5aa0d415206cb8925d93604a6961c7b183590d3141b580ac3881482",
+        "value": {
+          "occurrence_id": "occ_1c343215f5aa0d415206cb8925d93604a6961c7b183590d3141b580ac3881482",
+          "artifact_id": "art_ee5cd07b8216fb3a68eeec05eeaa21cf42085521aee8d606e112a09db74fc996",
+          "parent_occurrence_id": "occ_06771caefb8e10ea02e5dbe3ce615b9c551e749352e3547a867eb143ddb040a4",
+          "logical_path": "Contents/Resources/3DModelVariants/applewatchs1146/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 6309,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_add26cf816f3121c6a3e93b433b1f58a3d3912fd3c6cef7377cefaaa32cf1f0b",
+        "kind": "occurrence",
+        "subject": "occ_025e5ed4a40e20e371c4a353d8961bc21f432d83876a008a618235df3bd282d8",
+        "value": {
+          "occurrence_id": "occ_025e5ed4a40e20e371c4a353d8961bc21f432d83876a008a618235df3bd282d8",
+          "artifact_id": "art_c6d44efb6ec278cb32af0a1429a72a2cab1c7eae2b8d99582ce0031e818dac44",
+          "parent_occurrence_id": "occ_81fb904b429febe40c0789c4abe2de544fef352dbdbdea18381d2f0f37335bb1",
+          "logical_path": "Contents/Resources/3DModelVariants/applewatchultra3/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 4507,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_e67cf63210a2a233e0d28c05f24e5e028b4b591d7f0f97667967f1cd3c06429d",
+        "kind": "occurrence",
+        "subject": "occ_95e2b7aef33f06c20321ac5bcf41a267fc4a36c8e676fbbef0e29479921cbf8f",
+        "value": {
+          "occurrence_id": "occ_95e2b7aef33f06c20321ac5bcf41a267fc4a36c8e676fbbef0e29479921cbf8f",
+          "artifact_id": "art_f3dd75b950c1ec0f007ecec391d0a87d7ce20e73deae4b755cc13234b260c0a3",
+          "parent_occurrence_id": "occ_81fb904b429febe40c0789c4abe2de544fef352dbdbdea18381d2f0f37335bb1",
+          "logical_path": "Contents/Resources/3DModelVariants/applewatchultra3/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 5713,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_ded470ba95cc7e6c2766501dc3ba5cc4d5507c355da3c0fc0b2f6bd827e411f8",
+        "kind": "occurrence",
+        "subject": "occ_7a368bf34f1fe34d7e5557e6a20c843f9a92a7ab99fa8dec2d3c26796770ea0a",
+        "value": {
+          "occurrence_id": "occ_7a368bf34f1fe34d7e5557e6a20c843f9a92a7ab99fa8dec2d3c26796770ea0a",
+          "artifact_id": "art_6ec763131da1fb19b3be2c2afa6459e21ebc330ea221b7af122a2a8b04673311",
+          "parent_occurrence_id": "occ_e05c64ddbb9b0a2fe6e1bc7a6730e6796d330c89d92a5a7445c64dd35706c4c7",
+          "logical_path": "Contents/Resources/3DModelVariants/imac24/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 4741,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_ab5b7587cf9091459ca8a7e8a595e1b8ba83cce621c28ca73e34035a4c915afe",
+        "kind": "occurrence",
+        "subject": "occ_20e9632d2ad458354e9734c7c572373670a4bbaedef15a85d327fb762781f401",
+        "value": {
+          "occurrence_id": "occ_20e9632d2ad458354e9734c7c572373670a4bbaedef15a85d327fb762781f401",
+          "artifact_id": "art_ce1f080d5a853f5d85d8452242ef655a9c0d9f35b79c70e458e838093acfe229",
+          "parent_occurrence_id": "occ_e05c64ddbb9b0a2fe6e1bc7a6730e6796d330c89d92a5a7445c64dd35706c4c7",
+          "logical_path": "Contents/Resources/3DModelVariants/imac24/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 8171,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_62de10154cb25a01595ca2c36e1898a556d5b2855e00cab7bc381134a833c76b",
+        "kind": "occurrence",
+        "subject": "occ_172a025a1682cbb31a1696c2f110ebc944a4cf54948c87e83c508f9812e72f41",
+        "value": {
+          "occurrence_id": "occ_172a025a1682cbb31a1696c2f110ebc944a4cf54948c87e83c508f9812e72f41",
+          "artifact_id": "art_5817afded2cb69d53e5e3af787d468a4136a16c50351952fe6a3e3f83cc8f9e6",
+          "parent_occurrence_id": "occ_32ac269ec378ec2610048c5ab5928efc5d0c7319adbf0b1e2d91d756912f3d13",
+          "logical_path": "Contents/Resources/3DModelVariants/ipadpro11m4/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 1134,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_64ced0571bf65d7a1b2e4d1bd54a7a17f759f09bc592df8185a0cda38493a75c",
+        "kind": "occurrence",
+        "subject": "occ_5ad7d73d8417489587414928571d34d700ea81617bf1a20396e0a197b35ec862",
+        "value": {
+          "occurrence_id": "occ_5ad7d73d8417489587414928571d34d700ea81617bf1a20396e0a197b35ec862",
+          "artifact_id": "art_7ef2c90e573117e516069fb83bf4979b8ba3ae6d5a6e335c523424db00bcb3b5",
+          "parent_occurrence_id": "occ_32ac269ec378ec2610048c5ab5928efc5d0c7319adbf0b1e2d91d756912f3d13",
+          "logical_path": "Contents/Resources/3DModelVariants/ipadpro11m4/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 10493,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_7cebb72a914b44c45aa63ecf5c6b64afe916018d4f7fd1efbc69e184820011b9",
+        "kind": "occurrence",
+        "subject": "occ_614c334d8e28db4093a94c696839fbc6b480dbe8841f506c098e47518a739e48",
+        "value": {
+          "occurrence_id": "occ_614c334d8e28db4093a94c696839fbc6b480dbe8841f506c098e47518a739e48",
+          "artifact_id": "art_68e56f183184b0e9efc49d5040be9b69aa298a100e39f05f276052cbbad2b987",
+          "parent_occurrence_id": "occ_24f9e4aaa003c8c31da553ae3a11ec6f412d03d1ce00419b27593bf9f4039826",
+          "logical_path": "Contents/Resources/3DModelVariants/ipadpro13m4/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 1116,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_0ee802e569f64ea138259b2a021f92876d76cf60914e9c8a412bf6ae004f1fd4",
+        "kind": "occurrence",
+        "subject": "occ_20c52ceb47aa9ecacc62406b596a9416a4213b1d60635a68289cf1884b445973",
+        "value": {
+          "occurrence_id": "occ_20c52ceb47aa9ecacc62406b596a9416a4213b1d60635a68289cf1884b445973",
+          "artifact_id": "art_7ef2c90e573117e516069fb83bf4979b8ba3ae6d5a6e335c523424db00bcb3b5",
+          "parent_occurrence_id": "occ_24f9e4aaa003c8c31da553ae3a11ec6f412d03d1ce00419b27593bf9f4039826",
+          "logical_path": "Contents/Resources/3DModelVariants/ipadpro13m4/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 10493,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_6ebe8f052440ff14ae8e0b8df88f753eecb83803d01b9f45cd381c7dd52ccf9c",
+        "kind": "occurrence",
+        "subject": "occ_0d05a215e7a064d473d3752e385d32c1d43e1022d332727f38b8c76f51d18771",
+        "value": {
+          "occurrence_id": "occ_0d05a215e7a064d473d3752e385d32c1d43e1022d332727f38b8c76f51d18771",
+          "artifact_id": "art_b8a89111d06cb2219397aa7c133c4f2ab782433ef0fed2fa3ad5915f6c712b64",
+          "parent_occurrence_id": "occ_777f13c7f544b0f2694b9615f31aa5fc2751dabb6b00f68215a5bc0d18ce9615",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone17/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 7851,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_0a04be26a5dd1b048580e19400d69b8c4c6cb6a8db3b1cfb8ff1b65c8eb87fb1",
+        "kind": "occurrence",
+        "subject": "occ_59a90570d3851660ed97cb4bc1525b0c433bea383afb8985069ad58c6713b2f0",
+        "value": {
+          "occurrence_id": "occ_59a90570d3851660ed97cb4bc1525b0c433bea383afb8985069ad58c6713b2f0",
+          "artifact_id": "art_37b576d56209e625c5799df36ebb1cb4bd8a1b36f61b760c0e8ab53af8c9c964",
+          "parent_occurrence_id": "occ_777f13c7f544b0f2694b9615f31aa5fc2751dabb6b00f68215a5bc0d18ce9615",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone17/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 9156,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_87cc1a062e8cd9dc193c5f5cd745d9a2424f90a182f00bf0d610232d1369e756",
+        "kind": "occurrence",
+        "subject": "occ_ceafc15bef363332b4a712e13cdaeb8525ade10ebb4c504111c8bf42fd85bbcf",
+        "value": {
+          "occurrence_id": "occ_ceafc15bef363332b4a712e13cdaeb8525ade10ebb4c504111c8bf42fd85bbcf",
+          "artifact_id": "art_1200787afee38b58c8d1822c3d77f931a09e1e35c286f25be56433c0d3187b29",
+          "parent_occurrence_id": "occ_79b7e4737e24c1f0da2c745e543cce391b46a6e81772f9d617a62a48315ddfc5",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone17pro/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 5038,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_51f6986cc939ae4bd1f6d172f53c49da3af6219d1860934f4317d535c3d6b10f",
+        "kind": "occurrence",
+        "subject": "occ_835d7edd478812d1e566ca8040e4963d5a82d668969aaa32138fda3eec38be99",
+        "value": {
+          "occurrence_id": "occ_835d7edd478812d1e566ca8040e4963d5a82d668969aaa32138fda3eec38be99",
+          "artifact_id": "art_4e0d8a4d610de25de0c0400fd2da3b027f223fa74e956190317939241761d238",
+          "parent_occurrence_id": "occ_79b7e4737e24c1f0da2c745e543cce391b46a6e81772f9d617a62a48315ddfc5",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone17pro/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 7150,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_4e3258813ea92c275cdce4071312a28bf787f4e9b6d92bded8b14adb934c5cfa",
+        "kind": "occurrence",
+        "subject": "occ_60cd3aa23204eeb3fe6ebbfae954b43fd7a97106101b15ac1b87d84ee1a78403",
+        "value": {
+          "occurrence_id": "occ_60cd3aa23204eeb3fe6ebbfae954b43fd7a97106101b15ac1b87d84ee1a78403",
+          "artifact_id": "art_654ca9124ca980ed45d01d058601e85f56874689409363d8184ab3aa40537684",
+          "parent_occurrence_id": "occ_78be6fd6bd0adb9cc3a8fc4c379a7743d26e80a84c1ea70494eea231b14f3d17",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone17promax/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 5045,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_f5df2b861729f960177f7665b786d82017ebcb70bbb2690e107fe063c7dc21e4",
+        "kind": "occurrence",
+        "subject": "occ_c0e1c117606f2d5ce12fb350c43876456b6906412a3c9a14662680e9f2200382",
+        "value": {
+          "occurrence_id": "occ_c0e1c117606f2d5ce12fb350c43876456b6906412a3c9a14662680e9f2200382",
+          "artifact_id": "art_d51984bc8dafb1a510c0f079690c345ddf754abba4bd0cab310b28e16f405832",
+          "parent_occurrence_id": "occ_78be6fd6bd0adb9cc3a8fc4c379a7743d26e80a84c1ea70494eea231b14f3d17",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone17promax/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 7150,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_98fcc7a6aa4ab6591e8d46df0b6fcd42261184cb7d9aa81437df38075fa82998",
+        "kind": "occurrence",
+        "subject": "occ_94073cd820473c9e8e4fd70de794a83325ccf86df30365e93e2d3605060412dc",
+        "value": {
+          "occurrence_id": "occ_94073cd820473c9e8e4fd70de794a83325ccf86df30365e93e2d3605060412dc",
+          "artifact_id": "art_771834ca2757e1cfa0b0dcb98bb8e212f8c54f8974143fc6bbcdbf4b29e035b4",
+          "parent_occurrence_id": "occ_d4cd9c9af0223254d72500b17d5cdf401a262219599514e886440d4f3f3ac1b5",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone18pro/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 5860,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_c2f15e12601a8f5f8eeaa8ac8b3a28803a1ba61f2dd7ee7e8916d2fe006ee822",
+        "kind": "occurrence",
+        "subject": "occ_dc474a19c3b4e47dc79a9a66f0e4b54c230e66bc09ddd257242a1f8638606177",
+        "value": {
+          "occurrence_id": "occ_dc474a19c3b4e47dc79a9a66f0e4b54c230e66bc09ddd257242a1f8638606177",
+          "artifact_id": "art_0cc9feb78abae9cb688cf90168a40fe88569d29913cade0aa733daaeee41e9d8",
+          "parent_occurrence_id": "occ_d4cd9c9af0223254d72500b17d5cdf401a262219599514e886440d4f3f3ac1b5",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone18pro/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 11121,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_6d1d80a044a8c70435f13ac30ca5a8d127ab4f66a963407f58eec186a15a6d93",
+        "kind": "occurrence",
+        "subject": "occ_3318273dbab0662f80baa006a4d044892cd8d76be99ac85ab94df6e5554182f0",
+        "value": {
+          "occurrence_id": "occ_3318273dbab0662f80baa006a4d044892cd8d76be99ac85ab94df6e5554182f0",
+          "artifact_id": "art_7c79bb8040abc3c6e79ea27142701e912625670b12a655c623759fdfc1df9719",
+          "parent_occurrence_id": "occ_511503f575f04310dfe4efd0a207c2c8387cff973a86eebfd134b1ae5869f5be",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone18promax/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 5866,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_2e0f1aae2e02a94cfb39b571cc705b6f2505eac8846aff64c4ca5bde66a71081",
+        "kind": "occurrence",
+        "subject": "occ_fd7472218f56d93e367b271d6c94aa79a99d5d96f4e70e5a00e3aa2a13ab0480",
+        "value": {
+          "occurrence_id": "occ_fd7472218f56d93e367b271d6c94aa79a99d5d96f4e70e5a00e3aa2a13ab0480",
+          "artifact_id": "art_4324c5a74e140ffb4020e883e0cdaa984498f2d986a10a0d73c86a4195309344",
+          "parent_occurrence_id": "occ_511503f575f04310dfe4efd0a207c2c8387cff973a86eebfd134b1ae5869f5be",
+          "logical_path": "Contents/Resources/3DModelVariants/iphone18promax/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 10879,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_77704f96e5b40145620ffe1b4082c24e5bad1ef693d4f7ff2c8afb1328ff69ee",
+        "kind": "occurrence",
+        "subject": "occ_2816546f297a5c46fdf1d522b7ea650c1e87e6ea3d926faab45c344cf70ed349",
+        "value": {
+          "occurrence_id": "occ_2816546f297a5c46fdf1d522b7ea650c1e87e6ea3d926faab45c344cf70ed349",
+          "artifact_id": "art_3ee7fd8b51b77a0ee2170f42b1d4de9f14aaa99fbb0cb9914754ddf6f3ee7049",
+          "parent_occurrence_id": "occ_4a5907219b91f69bbfe78a657427b0705b676c629c849b350128682792b62f92",
+          "logical_path": "Contents/Resources/3DModelVariants/iphoneair/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 6842,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_b51e38baf9a6d6b7dff8faad1de62625e722d203d6cd10e2575b4d8582787c15",
+        "kind": "occurrence",
+        "subject": "occ_c6a01ffa778052cc183675dd92bd1a02ab42927683c3ab7f5698ce8e19ca5e4f",
+        "value": {
+          "occurrence_id": "occ_c6a01ffa778052cc183675dd92bd1a02ab42927683c3ab7f5698ce8e19ca5e4f",
+          "artifact_id": "art_f97ba4555ea75ae551ff217bcc11a9f363567ee4bf6cde7931f3e6c980511a5a",
+          "parent_occurrence_id": "occ_4a5907219b91f69bbfe78a657427b0705b676c629c849b350128682792b62f92",
+          "logical_path": "Contents/Resources/3DModelVariants/iphoneair/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 8406,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_984e6ddbaba71a80b7c7fd7a4203885ae24a953f771ed4ef5b796073ec388636",
+        "kind": "occurrence",
+        "subject": "occ_9f7b23f230588e4674bb6ea5cd6ec42ffa119e434d47e1910c43c3102cdf064f",
+        "value": {
+          "occurrence_id": "occ_9f7b23f230588e4674bb6ea5cd6ec42ffa119e434d47e1910c43c3102cdf064f",
+          "artifact_id": "art_f45230756cf5af09d9c2b7df8d3deb00a099261504c4bcc707074f5e341ca8de",
+          "parent_occurrence_id": "occ_fe4c2ea8026f66798b619ec12f9acab33737b2f293fe7af70473fc27715184bf",
+          "logical_path": "Contents/Resources/3DModelVariants/iphoneduo/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 2644,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_f4499fd50ae41fd1268e5b15d1fd4aed7280cfc9c8038922866b18560d8abff0",
+        "kind": "occurrence",
+        "subject": "occ_e62738f3a549b6e77a55497e0e8b0bf0cc62b648b365416fdaff9b75333467fe",
+        "value": {
+          "occurrence_id": "occ_e62738f3a549b6e77a55497e0e8b0bf0cc62b648b365416fdaff9b75333467fe",
+          "artifact_id": "art_c71d7a2eca39b153861542fc174b52da46659bb72a66a931b2a063595368da28",
+          "parent_occurrence_id": "occ_fe4c2ea8026f66798b619ec12f9acab33737b2f293fe7af70473fc27715184bf",
+          "logical_path": "Contents/Resources/3DModelVariants/iphoneduo/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 11744,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_6809c3d7e38170640e7dacfe041d83bbea3974fa5a2c5d30bae23ca0c5759e12",
+        "kind": "occurrence",
+        "subject": "occ_2105b10e61524f21d8d1e1b2569db9badd95c190501244ddceb1cba694a4cc58",
+        "value": {
+          "occurrence_id": "occ_2105b10e61524f21d8d1e1b2569db9badd95c190501244ddceb1cba694a4cc58",
+          "artifact_id": "art_f1576050fdead84a8ae075228d49097abc2238c874e7533d03c3aa5778504492",
+          "parent_occurrence_id": "occ_dda335ee3ec5e0e362c67b5928196b5ba8ca758bb49774849c6b816a347ac141",
+          "logical_path": "Contents/Resources/3DModelVariants/macbookpro14m4/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 431,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_589373c12b68ce6958fac5c9957367ba22ad18f8f68d17def742f713e59c3932",
+        "kind": "occurrence",
+        "subject": "occ_6ec8cb0e4847d63d784c39f036d5e1987bc04dea38c73a18cb82a994e675badb",
+        "value": {
+          "occurrence_id": "occ_6ec8cb0e4847d63d784c39f036d5e1987bc04dea38c73a18cb82a994e675badb",
+          "artifact_id": "art_c2430727368205d68269f1089ce390d5dc1899c91bd5e2304c3affd3b4cdc4a8",
+          "parent_occurrence_id": "occ_dda335ee3ec5e0e362c67b5928196b5ba8ca758bb49774849c6b816a347ac141",
+          "logical_path": "Contents/Resources/3DModelVariants/macbookpro14m4/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 5498,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_676190b85ef4263130aee89b58dc0458eae48632f1a468881fbbe045e14bd44a",
+        "kind": "occurrence",
+        "subject": "occ_e5bdef64786754fc67a6c7e3ebf9739e92b966cfb0854a779a1f3b4073919061",
+        "value": {
+          "occurrence_id": "occ_e5bdef64786754fc67a6c7e3ebf9739e92b966cfb0854a779a1f3b4073919061",
+          "artifact_id": "art_e15c9eb993f6013332167563099a4b91a8d544a23085ec44cefaee8e4a6f1f23",
+          "parent_occurrence_id": "occ_6ba08a67fe9c5fc67330e2b04d0aab948991f354c7cc67bc193abf2ae46f1b43",
+          "logical_path": "Contents/Resources/3DModelVariants/macbookpro16m4/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 441,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_33f1c448a7a4448af6107a1294da3dfa6475fb5e502d5c3d6e53b975406c0550",
+        "kind": "occurrence",
+        "subject": "occ_cee370a6adf0f2f7eca4afecc068585159bb68fbc7cfca5b9f163f20ae71a11e",
+        "value": {
+          "occurrence_id": "occ_cee370a6adf0f2f7eca4afecc068585159bb68fbc7cfca5b9f163f20ae71a11e",
+          "artifact_id": "art_079f8243092528a4e1a61a404c603f4accdbdd699891609e770eac62f4326b1f",
+          "parent_occurrence_id": "occ_6ba08a67fe9c5fc67330e2b04d0aab948991f354c7cc67bc193abf2ae46f1b43",
+          "logical_path": "Contents/Resources/3DModelVariants/macbookpro16m4/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 5498,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_e6765fe86ffd79c1a852c688b95a4c884cc6e4b677cebf0a9aa6eee7386854f8",
+        "kind": "occurrence",
+        "subject": "occ_9940a6107bedfa1efe49b582925a34341672ea76b34bdf51551c43175f8629ee",
+        "value": {
+          "occurrence_id": "occ_9940a6107bedfa1efe49b582925a34341672ea76b34bdf51551c43175f8629ee",
+          "artifact_id": "art_954fdc6f41566ea61dc516b991fab8a4a395c208579afc969ac0fe6884a0767b",
+          "parent_occurrence_id": "occ_06eba2ec62b8ff49aface46ad6a215ae8469de2a474e1c808db46be420c077bd",
+          "logical_path": "Contents/Resources/3DModelVariants/README.md",
+          "entry_kind": "file",
+          "declared_size": 6035,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_18e0694a9d9e2ed22bce7c426a4966ce3010c7ba90e94f6d11cea2e9d17c2d05",
+        "kind": "occurrence",
+        "subject": "occ_e5bc9dd7ad1316f1bab8822377399788c27332059286c4c985d5c96a16438663",
+        "value": {
+          "occurrence_id": "occ_e5bc9dd7ad1316f1bab8822377399788c27332059286c4c985d5c96a16438663",
+          "artifact_id": "art_11d3f84ef1b8a6a8e327038da5144cb674e5ef69debb2bc23a5f8889124ba2a9",
+          "parent_occurrence_id": "occ_3d4361701681e413528b073c7da34ac449593b7dbbbbaa1d103d9afd4bcde4d2",
+          "logical_path": "Contents/Resources/3DModelVariants/studiodisplayxdr/manifest.json",
+          "entry_kind": "file",
+          "declared_size": 321,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_c1406a69378d3e15a42c3c3020eae9a6404f2f550d781b69c8fc740a79d58f0f",
+        "kind": "occurrence",
+        "subject": "occ_f58d85aaba21192d27a4e9350ccd2c00ee525b2bf80f3ac9105081c864a2c83d",
+        "value": {
+          "occurrence_id": "occ_f58d85aaba21192d27a4e9350ccd2c00ee525b2bf80f3ac9105081c864a2c83d",
+          "artifact_id": "art_f89c04ab3e4d79911af4469a7452a51c3fe1bce5db00dad12e299e8400a5597d",
+          "parent_occurrence_id": "occ_3d4361701681e413528b073c7da34ac449593b7dbbbbaa1d103d9afd4bcde4d2",
+          "logical_path": "Contents/Resources/3DModelVariants/studiodisplayxdr/material-index.json",
+          "entry_kind": "file",
+          "declared_size": 5913,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_d308d1d11f705903efad5bfa34ad3ce272a9c4804f25413772fedc406f6956cc",
+        "kind": "occurrence",
+        "subject": "occ_09b76690fcd87dee835634d44a363e30e74732344404e9bb77b85a0d5bd4d979",
+        "value": {
+          "occurrence_id": "occ_09b76690fcd87dee835634d44a363e30e74732344404e9bb77b85a0d5bd4d979",
+          "artifact_id": "art_c45a684440528a96a410c21f8e5e417c76bbf490e1ed94b43b72e13700d9701e",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/BrandingMaterials.txt",
+          "entry_kind": "file",
+          "declared_size": 12982,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_25ce84c65e2c51d0fbc67bfd3f41be65188357d251830e132ac1638d0ad336fa",
+        "kind": "occurrence",
+        "subject": "occ_fcbed923ae9c0cca0206114f158c416dd797da1e8a5976d8ebfc00bdb969172d",
+        "value": {
+          "occurrence_id": "occ_fcbed923ae9c0cca0206114f158c416dd797da1e8a5976d8ebfc00bdb969172d",
+          "artifact_id": "art_38aea3f7e6d06b272e839512c182e9c5fc273f4bb87d3625d531b21c6d432891",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/CodeClipCanvas.js",
+          "entry_kind": "file",
+          "declared_size": 78845,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_2f66955764eef700be4badc7a79ebacf4b2f58cef6a18df195ec895f1f8781c4",
+        "kind": "occurrence",
+        "subject": "occ_5dbfbf4f9d6469a871fbf85ee11e2e3065883178e711635068a66c089d45c5f3",
+        "value": {
+          "occurrence_id": "occ_5dbfbf4f9d6469a871fbf85ee11e2e3065883178e711635068a66c089d45c5f3",
+          "artifact_id": "art_862112f50a7b874c7afc77b3313b09dfafede7ed456f1bc8d7c08fb7c343fb69",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/CodeClipHelpers.js",
+          "entry_kind": "file",
+          "declared_size": 26518,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_83f6c40e226273793aa3d7cd0621099adeb957f251bd5a49698a22993697b07a",
+        "kind": "occurrence",
+        "subject": "occ_2a93fda462a745740076e66d31a6a75308846295068adb99fadacf3c00282975",
+        "value": {
+          "occurrence_id": "occ_2a93fda462a745740076e66d31a6a75308846295068adb99fadacf3c00282975",
+          "artifact_id": "art_0e6ef260c4e9f344f78e4a3ea927c5fbd423532a81946c0bba404b1b3532dac6",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/CodeClipTemplate.js",
+          "entry_kind": "file",
+          "declared_size": 2336,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_35ad73f229761348d9f7f50c9422e7debe899e1afb5dbe1c21314304ae7796e9",
+        "kind": "occurrence",
+        "subject": "occ_402f022d0af785dc47188b5c20d695f54bd1ebc1aa0e8ea3e5e72f49c816c6df",
+        "value": {
+          "occurrence_id": "occ_402f022d0af785dc47188b5c20d695f54bd1ebc1aa0e8ea3e5e72f49c816c6df",
+          "artifact_id": "art_95fd7005b1ef82e09b25ad3b5ec000b940ffc0edc77f7eb33fe317608296cfd7",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/CraftGuide.md",
+          "entry_kind": "file",
+          "declared_size": 85192,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_95368e0ba08bbe51b2c996045de74eff453bea8025444b62ca13b9b04a03288c",
+        "kind": "occurrence",
+        "subject": "occ_c5c4b4cf01de02f81db033c9537c209df84760ae74ad29ef9f1c990e89921d98",
+        "value": {
+          "occurrence_id": "occ_c5c4b4cf01de02f81db033c9537c209df84760ae74ad29ef9f1c990e89921d98",
+          "artifact_id": "art_817eb0a5c2f745cad0a47c31e2de7085e45f8d2e5f82f47ebe005ef3dc7db792",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/default.metallib",
+          "entry_kind": "file",
+          "declared_size": 552828,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_43e78418c81281ba474c690352293c0e0d7f4554780525b459c7d04a0c784b49",
+        "kind": "occurrence",
+        "subject": "occ_83ae2aebcc437922b905ec3d3ec5679aa0c2f6afe744ddb3fa37a88b68dd90a0",
+        "value": {
+          "occurrence_id": "occ_83ae2aebcc437922b905ec3d3ec5679aa0c2f6afe744ddb3fa37a88b68dd90a0",
+          "artifact_id": "art_5d24d22f96e0dc401655e951d5c9d2162550dcb93917ff908932c73adb800bb2",
+          "parent_occurrence_id": "occ_4780f7cf62065897e90048ad465187e35b9a9a2a501362dcba717cfd6378872b",
+          "logical_path": "Contents/Resources/Presets/0C5EB552-D833-414F-B306-D45877139735.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2152,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_eadc343d117cf7e12bbf2bd3c8c9d897101cf9e6af5fabbffe280adbf696f7e8",
+        "kind": "occurrence",
+        "subject": "occ_1f2d094c2ab59351466d9dd1a5a5f6a5df5c99ee38e81c792666ab07f582bba8",
+        "value": {
+          "occurrence_id": "occ_1f2d094c2ab59351466d9dd1a5a5f6a5df5c99ee38e81c792666ab07f582bba8",
+          "artifact_id": "art_8360786d6ea7edc07a1f31353499cf15b258b981d8e3c82ad5fb2b02bcaa3e54",
+          "parent_occurrence_id": "occ_564bfe2c300f3a56293bd6c745bd6684d868a850e5b497db137fc374b2d67ee5",
+          "logical_path": "Contents/Resources/Presets/15439744-6C98-4F74-9B2B-74BD4AB61AD8.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 704,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_5c357be5f42b8301134149dbbdbb78af15121ee3d4842ebf0ba0bc43762eb271",
+        "kind": "occurrence",
+        "subject": "occ_12eb17ab84d1e4557db12e0a5d1c5977758ea974fb9e02fd642f4d22ba152fa7",
+        "value": {
+          "occurrence_id": "occ_12eb17ab84d1e4557db12e0a5d1c5977758ea974fb9e02fd642f4d22ba152fa7",
+          "artifact_id": "art_e0144aca54058ca822faa406e2840008cd12ae9de8de2ac91f9a2d0783e0ec9b",
+          "parent_occurrence_id": "occ_e5cca81de12c2119acfb4693c8ea555cc24489cc7324e7c51035cd9f085f3639",
+          "logical_path": "Contents/Resources/Presets/1A9079DF-3AD0-4F76-939D-B9630ABFC846.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4502,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_59000bbded0d42d6e7987aa5a0a5545d8d6d75d3133637a8cf760444604f5e01",
+        "kind": "occurrence",
+        "subject": "occ_619d1fdd45fb0b2b5edad660a0ac09fab1724da389d4a50f0beb06f78b85f320",
+        "value": {
+          "occurrence_id": "occ_619d1fdd45fb0b2b5edad660a0ac09fab1724da389d4a50f0beb06f78b85f320",
+          "artifact_id": "art_0b6180c557e160803eb8d44569969a95c0f27a841f732a5fe09c67d47d17a4bc",
+          "parent_occurrence_id": "occ_1dce0d2d61525feebdca707879f0d7623746c6b07543c61285d7b1fea77ec528",
+          "logical_path": "Contents/Resources/Presets/1B0B42DC-8747-4FC7-A813-9CA271A1DF5B.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 5049,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_d4c92bf13cdb25e524e60b8480bde94fce9a166bba842b6a499a340b524fcf21",
+        "kind": "occurrence",
+        "subject": "occ_0768e82dd50bc2471e734911969526a1971f376977ae63ffd39831777d26081e",
+        "value": {
+          "occurrence_id": "occ_0768e82dd50bc2471e734911969526a1971f376977ae63ffd39831777d26081e",
+          "artifact_id": "art_e5750003dabb81d8a1235a3f82277b0bbb88f72fa7f9e37d647c9f3f6bab0dd6",
+          "parent_occurrence_id": "occ_5d8f2b49307d2f75c1b427ad956b880e0617d4eb794e67552eb27016d9fdaab2",
+          "logical_path": "Contents/Resources/Presets/230C8B8F-5CC0-434B-92C6-8D417E3E31EC.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2939,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_73b53fdd85a95a4ba4bd741931fd4901b83b2d327931e81907d3f7663147f89b",
+        "kind": "occurrence",
+        "subject": "occ_9ceb286c76dbfa62084fe62a3985545ebad341254ad61cc94a2b4123b8a4cb97",
+        "value": {
+          "occurrence_id": "occ_9ceb286c76dbfa62084fe62a3985545ebad341254ad61cc94a2b4123b8a4cb97",
+          "artifact_id": "art_fe35dcb900d88e35898d0c57610b2cdb7bc016725b327e5d08b7c77915bea010",
+          "parent_occurrence_id": "occ_a21b0566ff913aa45632a528bc659be502f1a7992240c4777133275ca65abcfe",
+          "logical_path": "Contents/Resources/Presets/2677641E-B446-4042-8075-7FA56AD3F6E3.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 3272,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_e547e6123808d1334c79c8af444c7314c04e425619292233d588e4b60546fea4",
+        "kind": "occurrence",
+        "subject": "occ_9e3de723c45abffbde2747ea6ab9d076ae8956fc909aac77ef3a9ea513631081",
+        "value": {
+          "occurrence_id": "occ_9e3de723c45abffbde2747ea6ab9d076ae8956fc909aac77ef3a9ea513631081",
+          "artifact_id": "art_96514f53c8c89e25c62133f25a449c25de5e60c55ac0803782544f7efc053df1",
+          "parent_occurrence_id": "occ_54948ce91335a5b391038093bfd8be93f20cee5b441c0e0e708ac807fa4ee997",
+          "logical_path": "Contents/Resources/Presets/26B1971C-F49E-48D4-A1D9-574F4DD992A7.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2954,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_62e7f2d010153a0ee8c0864e4f15cd160a7a8c4b185a3bacdcfbe13d2cc157f3",
+        "kind": "occurrence",
+        "subject": "occ_43120277005f85255375f03186020df8e576114cbb44bb24bc0a21ec07ea7b9a",
+        "value": {
+          "occurrence_id": "occ_43120277005f85255375f03186020df8e576114cbb44bb24bc0a21ec07ea7b9a",
+          "artifact_id": "art_137bb6c0bafadf0fd4fca90cbb98747e717aff4f46f697a20f32310ad5f10d3f",
+          "parent_occurrence_id": "occ_7557570cadd3bcf3f611522e1ec173b157861171f7c4d9461aa46bdb7e048367",
+          "logical_path": "Contents/Resources/Presets/2BED6853-D772-407A-8D76-4FDCF2F345C1.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 10022,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_2218aa99840e31561216edfff3263b7b03e9727e1cbad91c146621a9beadedc1",
+        "kind": "occurrence",
+        "subject": "occ_17b312f10b2c6e21839319864c202dac4010b17c0199853b68d2639c70dbd24f",
+        "value": {
+          "occurrence_id": "occ_17b312f10b2c6e21839319864c202dac4010b17c0199853b68d2639c70dbd24f",
+          "artifact_id": "art_7b71aae4b11c41620bdc086f99d51a65ff9e0f074c1d33955816625db73d201f",
+          "parent_occurrence_id": "occ_d011687106819c38788c49ceefd9f9fc2f9bf84b91d505b9f244cd72927eec06",
+          "logical_path": "Contents/Resources/Presets/2D532548-4B67-4012-822A-B0E406E3EEA3.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 748,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_e740c8dfab88d7019b7afefeb1722991ae462ca4eb300a6c0e80069752d804a8",
+        "kind": "occurrence",
+        "subject": "occ_4c3d8892a0e74d70d7f3efd8e72ee5496da2fab7481df97c1cccee1c6c2a45d6",
+        "value": {
+          "occurrence_id": "occ_4c3d8892a0e74d70d7f3efd8e72ee5496da2fab7481df97c1cccee1c6c2a45d6",
+          "artifact_id": "art_2e4a1aea2c75a9fe18bacd31b17e86d028bfed59a4e10aa9140a41083eb79482",
+          "parent_occurrence_id": "occ_383090293d46d03cc1ce2bfe7437cb64db3246bdd1c8b352dcce25f9bc67eb8f",
+          "logical_path": "Contents/Resources/Presets/3446BC9C-64CB-4E61-80C4-D6F7951BB2DB.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 12096,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_88b33c8de5213c6c41f2ca0387ac18280f7e3e052fbfcbb5f8607e2e1a97c5e6",
+        "kind": "occurrence",
+        "subject": "occ_374e89d2275f28951d5f21f5ac38daef5093222bf87e899d50a1c51a8bd8e080",
+        "value": {
+          "occurrence_id": "occ_374e89d2275f28951d5f21f5ac38daef5093222bf87e899d50a1c51a8bd8e080",
+          "artifact_id": "art_ea08848465cac822e62c9953f011fd63581bdfe41c2cb4916469c43a645066e0",
+          "parent_occurrence_id": "occ_0278e2c8560d125209e3ca1f36170e186cdfbacf92927a8c587d6ec2a9f25c16",
+          "logical_path": "Contents/Resources/Presets/35F791D0-00D1-4EB9-A709-31C3B816149D.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 3235,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_652fc4f5a85c6b9f88e5a50c49bd87b128bdc03c87e45473a40d05be1827a806",
+        "kind": "occurrence",
+        "subject": "occ_5888bdd6457bac9a2d44cabd4c270d71d2b281ff2c83344ad15bb7f13debe254",
+        "value": {
+          "occurrence_id": "occ_5888bdd6457bac9a2d44cabd4c270d71d2b281ff2c83344ad15bb7f13debe254",
+          "artifact_id": "art_8bd87c1c1826413dae8f0526aeddfd05a83a429a719474889b95bdbc80f7a5e8",
+          "parent_occurrence_id": "occ_7e4bbe382a79d2e2d5be697a0b96447ff8d100d3a45662c244dab299c974ab69",
+          "logical_path": "Contents/Resources/Presets/442F4A7B-12C7-4D06-8174-8CF92641790B.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4742,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_99e879f52259ee62b6a97690abcb4aa94cce8952730bb10106cf71a8da5fc446",
+        "kind": "occurrence",
+        "subject": "occ_d484376db26e07e7d3ad83250c97e10d6a5fa1a43a52b01eb02d80920cf80516",
+        "value": {
+          "occurrence_id": "occ_d484376db26e07e7d3ad83250c97e10d6a5fa1a43a52b01eb02d80920cf80516",
+          "artifact_id": "art_8613e705a703412e07f796ec837681ed20eca1af1be034d1b9277896e05cd9c0",
+          "parent_occurrence_id": "occ_c2ad0d1cc1c3aa5dc8782e8a28547bcb46eb3fd283eec5d90452487da861b64d",
+          "logical_path": "Contents/Resources/Presets/4539CF6F-4CFD-4FE2-AE27-EDE3AEB1915D.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 5044,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_7d2a7487ad25da2eb6fe2b2bb26da12a0ff1560abf44609313584f5396ca549b",
+        "kind": "occurrence",
+        "subject": "occ_b0d04f6412ae47c9103111120047bf7ea21f5400b1170684f4b1a9522f2b7e53",
+        "value": {
+          "occurrence_id": "occ_b0d04f6412ae47c9103111120047bf7ea21f5400b1170684f4b1a9522f2b7e53",
+          "artifact_id": "art_ca02a2248ab440532d1b63d1bc8ff6ec559342076ae306d024ce1978316ee762",
+          "parent_occurrence_id": "occ_f1d5bd658cbbb564934e14560ba70822fd482e767627a0e862a4ab75a5b0ed31",
+          "logical_path": "Contents/Resources/Presets/4B0B9CEB-4B0B-440A-ABAB-9B3ADFB925E9.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4784,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_8fbf7430cb146f9c52096f09f732cd4cb805defcd0f8c44f2bdf31b6b3d300cc",
+        "kind": "occurrence",
+        "subject": "occ_b059c98579ca6aeb24b4da81e336dd52dc7b65971b756e50aa65c9bd2c691156",
+        "value": {
+          "occurrence_id": "occ_b059c98579ca6aeb24b4da81e336dd52dc7b65971b756e50aa65c9bd2c691156",
+          "artifact_id": "art_47f79d45bc09ed7b4009327b2f90beb7afa342f6dd824e5761f462b072cde7c2",
+          "parent_occurrence_id": "occ_5ec0b5a2e0447a4dded29d36469c93bc1d7cb89e567af44ab6c5cc4d7f16ac5c",
+          "logical_path": "Contents/Resources/Presets/4D9B1F10-84AE-471C-8D0B-F9506A9157E4.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 10060,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_765576ca21725394195818a0b7ee8245e7a2ff407742caef3f66fdd1121f6ecc",
+        "kind": "occurrence",
+        "subject": "occ_7dcaa0cc230895e500d4f6ac45b5212a7b905df4004ef6021b00d29de937d630",
+        "value": {
+          "occurrence_id": "occ_7dcaa0cc230895e500d4f6ac45b5212a7b905df4004ef6021b00d29de937d630",
+          "artifact_id": "art_4000cb7cb0ab4a6a9897abadbdc0e6d9d09d030c029662c969068efe23e271ca",
+          "parent_occurrence_id": "occ_85d754f6a3f81d81e265a6e4c2b3c32a7c737739698b0424cd59263eac856640",
+          "logical_path": "Contents/Resources/Presets/5E14E98D-617F-4164-B33F-FDF31E912011.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 7333,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_7440984c518e9be749cdeb797786459f6f8b0c61d9ba2edcc3f17b65ac177bde",
+        "kind": "occurrence",
+        "subject": "occ_99c8cf680d88faf5f7b5766da980aa52f7b9f9b46013880578beabee03707feb",
+        "value": {
+          "occurrence_id": "occ_99c8cf680d88faf5f7b5766da980aa52f7b9f9b46013880578beabee03707feb",
+          "artifact_id": "art_5483d992e518b7aa327c7fadaa8bd0f19d689d98f7e1e426f905a13404ba13f1",
+          "parent_occurrence_id": "occ_d4a23c4c81985adc38e8c62573c7cf05219523fc4857396d4b7db649a4322bba",
+          "logical_path": "Contents/Resources/Presets/5E34A759-D8EE-479A-89C2-53BC327F6F56.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2149,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_3c289c942d560e6cf76c5b2f5914ff67684c637bedca460dca3c6874703fd9f5",
+        "kind": "occurrence",
+        "subject": "occ_7c3d272181b505f64f336caa2ecaf1b9fa1dd37e0d82e7d7585e3c72b44a61db",
+        "value": {
+          "occurrence_id": "occ_7c3d272181b505f64f336caa2ecaf1b9fa1dd37e0d82e7d7585e3c72b44a61db",
+          "artifact_id": "art_b92db1b5f3a3698b5ad3cdfb43cab38091bf293e83dd2d1cb77706957ab55feb",
+          "parent_occurrence_id": "occ_2aa9f2df1c67dea2294bd78892b98a08a66a863bfba0070c22cb86deef35406f",
+          "logical_path": "Contents/Resources/Presets/5EABB2FF-B4B0-41AC-A314-066FD0FEA08B.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 3604,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_fe2af813e387eb62f44127a6e6037eee1f97ce0d613fe78e04abd31ef08769b1",
+        "kind": "occurrence",
+        "subject": "occ_3762b956fef9256565a058db180ce0094e02b18a864107c34b87f1d1d05eab90",
+        "value": {
+          "occurrence_id": "occ_3762b956fef9256565a058db180ce0094e02b18a864107c34b87f1d1d05eab90",
+          "artifact_id": "art_78cb82bfb6901a06ffd9e86f1ddde486d3dc494d8ab19c66f11709d606e742fe",
+          "parent_occurrence_id": "occ_ed12c01d22a02d894e66f95dc26a1c160c92135f9f895151ff7bd48c3d22670d",
+          "logical_path": "Contents/Resources/Presets/692A7EEB-BD70-40A5-935A-D70300998174.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2158,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_0e0d5207eaa67c48d31b923017f45d9677321f4c9bad01349a91f98c2c3a42d5",
+        "kind": "occurrence",
+        "subject": "occ_7f5ee7e990d8509b44297e1b63d2419f8e17ff4146870cf0aafc040909219f51",
+        "value": {
+          "occurrence_id": "occ_7f5ee7e990d8509b44297e1b63d2419f8e17ff4146870cf0aafc040909219f51",
+          "artifact_id": "art_ac7ed94daa6cb138b04c4d7d06d268748c077bbf2444a829c8f218b8710379e6",
+          "parent_occurrence_id": "occ_ca9eb0fad7ded30885be2b60f491a9272b154c95768067e6f2439c725e8468e4",
+          "logical_path": "Contents/Resources/Presets/6978E6B1-9B3D-4BA4-B544-63400F2CC36D.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2154,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_9bb281d139c36016be25c7fadb25b7d3130850bcae056008fb42efda1b0e0b20",
+        "kind": "occurrence",
+        "subject": "occ_73cf12e4484faebb5f0f1dfa33a0c47028f2976194be08d182229f0e57eaaa8d",
+        "value": {
+          "occurrence_id": "occ_73cf12e4484faebb5f0f1dfa33a0c47028f2976194be08d182229f0e57eaaa8d",
+          "artifact_id": "art_de922491cdf9942e2aaa9a20c47ee856ec99bc83af95945e0a90981db96ac0d7",
+          "parent_occurrence_id": "occ_9adaa3438a37c0cd3c61f2e4f5c4139b970378a164a122421580dd34795003e0",
+          "logical_path": "Contents/Resources/Presets/6F53B2D7-0EE4-47F4-B0D9-C04CD686A799.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4271,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_87a6c5ea4d7a2088bd18ae15dc77f804c7743dd83c379984ab78f6fd3006a981",
+        "kind": "occurrence",
+        "subject": "occ_61fa4c7d74d93a0c1f61790ba69732a371d76fc830831027df584c6dde50b033",
+        "value": {
+          "occurrence_id": "occ_61fa4c7d74d93a0c1f61790ba69732a371d76fc830831027df584c6dde50b033",
+          "artifact_id": "art_6e58c769b7bc685aa40ed548bfb5217993581a6c4be1a2415c0e3be05302cf03",
+          "parent_occurrence_id": "occ_a0796c97d88b2011ee0c1d586e4f747c5b240ed51a77bf51f3776478227ecd74",
+          "logical_path": "Contents/Resources/Presets/70BE6ED3-3629-451B-B45C-07AEE11F7C75.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 8065,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_793f6a8288507484276198a972003811ee90aed34a629ee62cf8b751b89299fa",
+        "kind": "occurrence",
+        "subject": "occ_44c9e9e1c9292164ecc18c5714bf58309802b3dd6b0150c0fc60a3b57d46fb89",
+        "value": {
+          "occurrence_id": "occ_44c9e9e1c9292164ecc18c5714bf58309802b3dd6b0150c0fc60a3b57d46fb89",
+          "artifact_id": "art_11378cdd42826baa6bfe307eeb40dcc86b2e153474e7f1c700b87169cfc67afb",
+          "parent_occurrence_id": "occ_793c889f19ed6c38f728a0a213170e3a513c8d30b99fafb7d0848ae4d31f8704",
+          "logical_path": "Contents/Resources/Presets/7397E4AF-550F-48DC-85A6-B0F77833A2C3.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 5120,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_4c024a47f0b75e3700d7c13a6fc91e44ebb02c4b0aba3256788224ca5689f964",
+        "kind": "occurrence",
+        "subject": "occ_c47a8406f342e347c2e3bd3197116395a48dfa72164de66f2ec49cc0951a9f82",
+        "value": {
+          "occurrence_id": "occ_c47a8406f342e347c2e3bd3197116395a48dfa72164de66f2ec49cc0951a9f82",
+          "artifact_id": "art_4e2f2565fdeea78db1e2e2a615b0666ea263644dc43dc5bf6c2df3833d34fba1",
+          "parent_occurrence_id": "occ_28edec26f184592df3654e1307517393a20838ef1d51c0c75c495e4162915c4c",
+          "logical_path": "Contents/Resources/Presets/765C13F6-2646-4A7B-B1B4-0B8F3CC401CE.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2898,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_8e43383b10712bcccad982a1112aa17da0b6cb7268ef2642a75ab8850705083b",
+        "kind": "occurrence",
+        "subject": "occ_e7659b7208ddfe32de233549351a54951aebfc2233e3e5eca234945c20bc186e",
+        "value": {
+          "occurrence_id": "occ_e7659b7208ddfe32de233549351a54951aebfc2233e3e5eca234945c20bc186e",
+          "artifact_id": "art_c136d1e46a4ef831bd00deddfc2f77f2e91b74f792a9cf40e14edd6d81a69e96",
+          "parent_occurrence_id": "occ_61774fe5b838f7aa427196dfb6504389b182022d42786a17a70f4fc9b5b11c2c",
+          "logical_path": "Contents/Resources/Presets/78E4AF93-34CF-405E-ABD9-095164B1800A.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4737,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_8980297bb7d3268bae2d54cb5da4d9c2956e8f739250e73ee19d71d8e80a2b72",
+        "kind": "occurrence",
+        "subject": "occ_09b7dedd7c891dc664af71e81b3164259b5f33155da32e298f33b1927e6d2e84",
+        "value": {
+          "occurrence_id": "occ_09b7dedd7c891dc664af71e81b3164259b5f33155da32e298f33b1927e6d2e84",
+          "artifact_id": "art_ae293b14be60c56c6a3e2f2c80503b1d169d66676f0689db270e05b65d041dba",
+          "parent_occurrence_id": "occ_8b48b246532805c64601ab4432d44f578ef3d5fe38b1183c2fcadce2fa1e304b",
+          "logical_path": "Contents/Resources/Presets/79F5860E-81B9-4309-AF89-D0D8D140206F.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 5168,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_aeb7f386429c70c0342c744541514de9813dd1c0a1f6e073090954b8e957437f",
+        "kind": "occurrence",
+        "subject": "occ_03e8d27081a1dd7f4952edfa391afe713a83a91720d3074f72d546a75187f974",
+        "value": {
+          "occurrence_id": "occ_03e8d27081a1dd7f4952edfa391afe713a83a91720d3074f72d546a75187f974",
+          "artifact_id": "art_4bd505d5721cda14d73a8d4ac7daaa6d6b35317a47389f1297ba3bd6903c5513",
+          "parent_occurrence_id": "occ_a32f670baea07aa4b062800045bb3217e5423323fdbb65f3511b8c3263dfc425",
+          "logical_path": "Contents/Resources/Presets/7BB2B618-3A7A-4356-94B5-DF367CC3B77D.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4446,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_90914f0442e6c6459b71b4616c2a39574b8b5608740f636790f8fd8424ee7883",
+        "kind": "occurrence",
+        "subject": "occ_403b01311521c234a7838fb597100654cefb5a6b00edef6e5c06e3eabfb54fc5",
+        "value": {
+          "occurrence_id": "occ_403b01311521c234a7838fb597100654cefb5a6b00edef6e5c06e3eabfb54fc5",
+          "artifact_id": "art_2a3d39a3263759c450c683a652018f6856cc6f1f3f9f4059962539154809e317",
+          "parent_occurrence_id": "occ_97d982c975786f30391532b04c801a93970f7889ac198008a3f470fff3499b74",
+          "logical_path": "Contents/Resources/Presets/7DA18746-ABC8-48B5-8284-95A6B0221D9E.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 5267,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_1b849f190488b23fc9897f594a0152b145ae52fbbb5cbd96a9718499ff2340be",
+        "kind": "occurrence",
+        "subject": "occ_232e1e6cde859d404dc828a551d985a188716c1563ee01710161e715198fd626",
+        "value": {
+          "occurrence_id": "occ_232e1e6cde859d404dc828a551d985a188716c1563ee01710161e715198fd626",
+          "artifact_id": "art_cf740ea5d47601d5f630aac501f145308a8ff1786b01748466b8c6a58fe39057",
+          "parent_occurrence_id": "occ_e0fe398d0c3d38d15495351e041080c63a5102aacb14b18e4b02c57b2736bbf3",
+          "logical_path": "Contents/Resources/Presets/87425E43-9858-4E93-A079-264609695078.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2155,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_d527c5c24a54d760f55f8c5185d81ed2c92787c1881db3602d3bf5022df7d6fc",
+        "kind": "occurrence",
+        "subject": "occ_4013f61467894f7b9fe319b539f3745a28d2773a1012ed375a07a0c371802f45",
+        "value": {
+          "occurrence_id": "occ_4013f61467894f7b9fe319b539f3745a28d2773a1012ed375a07a0c371802f45",
+          "artifact_id": "art_a117782eafb9b14f5b565721e205da7fddeb9f829c824b69c52bfcde66a04d54",
+          "parent_occurrence_id": "occ_14f4e11bc6ac58b1188f79bad052ba8542897d085fbba13c2df4124657c98695",
+          "logical_path": "Contents/Resources/Presets/8C6845C7-CB88-435A-B0F1-1B75991E37AF.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4780,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_3f2ecd14b6c84c32899b6fdb1fb4a5e1b6322830e3f7bbd9b6685cbd5cecd224",
+        "kind": "occurrence",
+        "subject": "occ_971bffb5f3ccd5ebe96b1c37c6e15884c4c124a39aa9ab9887d0b6cad922e4d0",
+        "value": {
+          "occurrence_id": "occ_971bffb5f3ccd5ebe96b1c37c6e15884c4c124a39aa9ab9887d0b6cad922e4d0",
+          "artifact_id": "art_55f3e255b9d8de107aab11e9f3b5fc111202a5998de07019c92e5dfca2e5b9e8",
+          "parent_occurrence_id": "occ_fdea914d524d655f689af3e7393bf0cf514e45cbcadb8c55f765e290c7e72d71",
+          "logical_path": "Contents/Resources/Presets/9305974D-C726-47B2-9352-3C9724219BA2.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 670,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_0584809acf289361f736619ebeb2d50d4f51d6f11fc6d835c4b325453fb22282",
+        "kind": "occurrence",
+        "subject": "occ_11799ba73a6241211ce72ed7e3b90d525a234983c245acf44c1f3c0c1625d8bf",
+        "value": {
+          "occurrence_id": "occ_11799ba73a6241211ce72ed7e3b90d525a234983c245acf44c1f3c0c1625d8bf",
+          "artifact_id": "art_15e80fbaa3b59f843741371984b8778c99b2e7b1f7c10a93b97b3ca12f85f7a6",
+          "parent_occurrence_id": "occ_b90af28189dd683ce534111050009e1c944f2163a0f580e317937aa7ea2c4db8",
+          "logical_path": "Contents/Resources/Presets/9523C8CD-FA80-4F50-9578-2074178496A1.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 678,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_4619b1d54da310d143df0d5eafefb85d5f9de924a3170cc50d89199b3ad74929",
+        "kind": "occurrence",
+        "subject": "occ_97075be7d0ecad3e404ddb90e8e3e5726af73241bfb08a99dfef6a56d6eed7c0",
+        "value": {
+          "occurrence_id": "occ_97075be7d0ecad3e404ddb90e8e3e5726af73241bfb08a99dfef6a56d6eed7c0",
+          "artifact_id": "art_fdb8f846879760db786bb8e4a3a026ee7e932a61493c247944cd6892f2afe7e1",
+          "parent_occurrence_id": "occ_181172e165763268e51a70c26959f8774a0eb9e0bb40a14464b34f9ad2dbb97c",
+          "logical_path": "Contents/Resources/Presets/960FC044-A798-4621-BFA5-36BEA9A680A0.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 3007,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_c13096e08cb9ca1e33501eaa93b1ef572ec65d25c10711da4aa4694e95752906",
+        "kind": "occurrence",
+        "subject": "occ_28e1950be631ce9d4df6decd8369ed22e9502d4a233b5234a8552e082877f867",
+        "value": {
+          "occurrence_id": "occ_28e1950be631ce9d4df6decd8369ed22e9502d4a233b5234a8552e082877f867",
+          "artifact_id": "art_07fc7d7c1c40eac2903c7e9c00a5839772f15733a262fa481c6a6a578ec47f13",
+          "parent_occurrence_id": "occ_33de5d3d4f7ea2f37b42cc93a5e585cf6e0eb4c59af529150a6363bfe638050f",
+          "logical_path": "Contents/Resources/Presets/96CB6C87-9EB5-46C9-B97C-965936657B01.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2763,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_29275ef6414a2a2afb170412d1f18ca9fe5fb14a32699a2873cc038bccb947e1",
+        "kind": "occurrence",
+        "subject": "occ_8894bdf4becf230f8a00cdb321ee155c76d1430792d40360e600eba83f29b9e9",
+        "value": {
+          "occurrence_id": "occ_8894bdf4becf230f8a00cdb321ee155c76d1430792d40360e600eba83f29b9e9",
+          "artifact_id": "art_ee57cde10c52e8602b21368ee54fc54598bc217deff1099df6bd4439ad2c5063",
+          "parent_occurrence_id": "occ_4a1b814df03aa89ed1cc661d11e29d5f9e6c78ba45a4615063afeb7e47bbe12c",
+          "logical_path": "Contents/Resources/Presets/9D767F2A-868C-4C65-83BB-5039FF3EF59C.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2130,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_a67d2f3e5ca821d225649a1614b84d4eac0d12a715dc9fc2dd1a59b04e606411",
+        "kind": "occurrence",
+        "subject": "occ_59683e394fe644cbb1da93b4d23b0bed21b53a12e41d9c9d8cd01237fa483194",
+        "value": {
+          "occurrence_id": "occ_59683e394fe644cbb1da93b4d23b0bed21b53a12e41d9c9d8cd01237fa483194",
+          "artifact_id": "art_479e1bce212f5f43ed21a42d924001857329b39c9f832e00ed7eac01acf90e07",
+          "parent_occurrence_id": "occ_750a5b853174686e1decc3c3dddc45344b0262a9cdb4c372430cd8ca7bca0b1c",
+          "logical_path": "Contents/Resources/Presets/9DDB50FE-F096-492E-A50C-30A80EFA1F06.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2166,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_1d0b23cf6b4b24238db94b7aaa2d4c7aa739c40558d0caec8a2ee18a24849c88",
+        "kind": "occurrence",
+        "subject": "occ_996a0b0ac29f1c05a3fc00283f2c895dfa93427ce360b92bad4cd8236310253a",
+        "value": {
+          "occurrence_id": "occ_996a0b0ac29f1c05a3fc00283f2c895dfa93427ce360b92bad4cd8236310253a",
+          "artifact_id": "art_36e720aa52cd7dec8d94856271818294bd967b4a9094bf0f7cc1d3293f529dad",
+          "parent_occurrence_id": "occ_58eaa7f7dca5681a54d2cff58ae73f6c6f396e855c2d62e10a24c727b2a16530",
+          "logical_path": "Contents/Resources/Presets/9DF92B97-43B8-4943-A989-82A22C567AF3.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2894,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_1b083cfef67e220dd850d60df13e81553c0e136d8fcd316b5a81a7dd9551e161",
+        "kind": "occurrence",
+        "subject": "occ_a33fca83559ee42b6069f121ed9d3de5cad8eaa59ccb5dd0253827c34379ef66",
+        "value": {
+          "occurrence_id": "occ_a33fca83559ee42b6069f121ed9d3de5cad8eaa59ccb5dd0253827c34379ef66",
+          "artifact_id": "art_79291055480ce276d3c86f656bf12fe2bd0e8afe53273b7c84931ffcbb5f2f93",
+          "parent_occurrence_id": "occ_256902f489dc24bde43560461fc83c1dafe3fa50e0eec1126dd73aa98e7ff120",
+          "logical_path": "Contents/Resources/Presets/9F8D8FE7-0A91-4412-AAC6-EBFD1A5F983B.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2909,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_f5d12b8f765b6e1665e40c1e02fe2fc693bc72621af0ab4ac773e41bb336185b",
+        "kind": "occurrence",
+        "subject": "occ_2077c64a4b8a7e804336a45f0da99eb4858cae809b3f3afd61557ee1656264cb",
+        "value": {
+          "occurrence_id": "occ_2077c64a4b8a7e804336a45f0da99eb4858cae809b3f3afd61557ee1656264cb",
+          "artifact_id": "art_3f5c0dbd26ff364e74f8711d54141fbd72f639fd397893eea6a7228a7e078513",
+          "parent_occurrence_id": "occ_bca4d76955bb5c17be40f9277b233701603764ade481a09169a292e4a2c28040",
+          "logical_path": "Contents/Resources/Presets/A9B6E2A8-5F31-4635-8700-8ED02550EAE7.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 5186,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_1d0e9f4c0d364533f9d3c0cc308b8e20b20f60a7aedefc0823e6dd2f80c14fa5",
+        "kind": "occurrence",
+        "subject": "occ_bf3628cdbbbbc07d1c06b47ec60c21cf50185e62bdf8a64544a2f0aeb1515b4d",
+        "value": {
+          "occurrence_id": "occ_bf3628cdbbbbc07d1c06b47ec60c21cf50185e62bdf8a64544a2f0aeb1515b4d",
+          "artifact_id": "art_b3650d061b2143f8f978d39bf81d9515f76824482ecf8998400a13729bf49708",
+          "parent_occurrence_id": "occ_f93bbe986167d581ed6dd73e1cd5c560a9a41e6cff70b334e87701235dc83983",
+          "logical_path": "Contents/Resources/Presets/AA811EFC-2C14-4248-9254-77FFA2F90386.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 3782,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_2ac102da1c37cbef2e80eb6ecabcb2e37ff3592793935e126e73e7c7060a0bfd",
+        "kind": "occurrence",
+        "subject": "occ_ead14b6bcf7eb0c51413506d13aa78edba5bd63f4c163574c4c73190f33876f5",
+        "value": {
+          "occurrence_id": "occ_ead14b6bcf7eb0c51413506d13aa78edba5bd63f4c163574c4c73190f33876f5",
+          "artifact_id": "art_f8fd23da7985bb8a6cbf120f87ac682e88ae12a5c3f662d6e046fab042df8c09",
+          "parent_occurrence_id": "occ_1350cc7c147a2df77404a9687aca3356e3a588d44eb80598d9dc08813360edbe",
+          "logical_path": "Contents/Resources/Presets/AF5C1D3B-9246-4F28-A03F-E97A0FF266A0.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 3167,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_f84784b79ddf09e1344b68e39fc8c4bafd1ba2990232f8a16eb19b348cee58ca",
+        "kind": "occurrence",
+        "subject": "occ_8971f1b5efedee5bb6db4d9ac69bd66220ee38aae21bce5fb7dcd560b5cbc5e6",
+        "value": {
+          "occurrence_id": "occ_8971f1b5efedee5bb6db4d9ac69bd66220ee38aae21bce5fb7dcd560b5cbc5e6",
+          "artifact_id": "art_109c148ce1d64e336157d8d41b954e3361a8375264c9f4876303277acaf41b05",
+          "parent_occurrence_id": "occ_6cc09c76fb475c736318143d9ae640c8e24c38e26005845ddb4005642d963a2e",
+          "logical_path": "Contents/Resources/Presets/B17EA65C-C327-4AF6-8CD7-7C9FEABBF960.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 3916,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_dcfd4ceefab2ae2c2533c852011c6b7805198ee3db0bcded49c44f8825880c5e",
+        "kind": "occurrence",
+        "subject": "occ_b5c138d680eb541383dac684230245ff7c2e3b25cbbd7da0afd42a673986cd53",
+        "value": {
+          "occurrence_id": "occ_b5c138d680eb541383dac684230245ff7c2e3b25cbbd7da0afd42a673986cd53",
+          "artifact_id": "art_3833d40a9099515cc21fe0ba53c87a324793849d74e739a8dcd7bdab349fb4c0",
+          "parent_occurrence_id": "occ_8f0a7e331dcd38f1f88b0e96dbce026ae3406becf7ac3b891ae3558233eb862c",
+          "logical_path": "Contents/Resources/Presets/C1FCDA3C-E975-47F5-81E8-5368C64E4973.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4765,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_d7576493991b5fc4d876b37e09f20b0e4a810952c9dd562a420d8e190b3d337f",
+        "kind": "occurrence",
+        "subject": "occ_6056f35de179a79040983124a540f2d51b0de63610836da2dc9ca41c4f3b4dff",
+        "value": {
+          "occurrence_id": "occ_6056f35de179a79040983124a540f2d51b0de63610836da2dc9ca41c4f3b4dff",
+          "artifact_id": "art_53bd1744d52e513c46a4957f7adf753a1bed5cb35111e4ae9cfca1559b2a6c99",
+          "parent_occurrence_id": "occ_a357c6639fd870a5075ac7c7924d0cba6536ec75017eb3eb5646a966248826c2",
+          "logical_path": "Contents/Resources/Presets/C8151843-8344-43D5-8D7E-9E0C0C28FF60.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 6580,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_e1f46f45f978c282f28814d18f80c2279c20715d1638ee86c5b3e10b423467b6",
+        "kind": "occurrence",
+        "subject": "occ_5a88dfeee7041d55d8cfb039f3422a3c59ce991187e985a60e936a0a9a37907e",
+        "value": {
+          "occurrence_id": "occ_5a88dfeee7041d55d8cfb039f3422a3c59ce991187e985a60e936a0a9a37907e",
+          "artifact_id": "art_997dc2892ef05dfd03573ccf72990310ea6d1b7271da5cbdaeb147a0d99e926f",
+          "parent_occurrence_id": "occ_fe2348863d30b329f4dfaff3c0acd1ad385376d8e687a1b2033524c1144c5172",
+          "logical_path": "Contents/Resources/Presets/CE0DA1E8-8523-4475-B3D4-D49D955886A4.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 8871,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_c1dac346172742183466d2658e54933e2e9b80256f19ee010970871fd4453315",
+        "kind": "occurrence",
+        "subject": "occ_da0b836285c84b9f3a6fd8cdc100f3c35196b0b77efdc747256ede1ac672ee13",
+        "value": {
+          "occurrence_id": "occ_da0b836285c84b9f3a6fd8cdc100f3c35196b0b77efdc747256ede1ac672ee13",
+          "artifact_id": "art_7476fb11cf4dd1934b89bf14e6dad5f84628a794efecd79e821cb5159186f9b6",
+          "parent_occurrence_id": "occ_37a2640703237d979c00c4c08870b88f2a52bc8e6bfab8a0da711984835099c4",
+          "logical_path": "Contents/Resources/Presets/D772C1B7-A421-4426-AD13-FBE7ECB9968F.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4921,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_9d5150e318bed0b2a2fe45ca1e212a6b90411211c39f49708575c0ce9e278500",
+        "kind": "occurrence",
+        "subject": "occ_10afb4c5746e74ad2c300d0d5db2e907fc12cb99525fc337a62d8646def668e5",
+        "value": {
+          "occurrence_id": "occ_10afb4c5746e74ad2c300d0d5db2e907fc12cb99525fc337a62d8646def668e5",
+          "artifact_id": "art_fa7b057dbbcd10f9a9cd8605d2157b25d47c574c295e8e33d7cebe634948021b",
+          "parent_occurrence_id": "occ_305266322e82ecf693461c44acc7a04bf788dd92d48d180e67f3b37602c78791",
+          "logical_path": "Contents/Resources/Presets/DD12EADE-30E2-4308-9FFA-4932E811D943.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 6526,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_3673ed961935dd66d863a3f6ff7643c9129e311b1abe33f782cb00069fe47647",
+        "kind": "occurrence",
+        "subject": "occ_9cc935c59ec1f16e39eb45dd7e691112416e1b8c9b8b95f02add3456e41fb5b6",
+        "value": {
+          "occurrence_id": "occ_9cc935c59ec1f16e39eb45dd7e691112416e1b8c9b8b95f02add3456e41fb5b6",
+          "artifact_id": "art_ebd875c03f3e82462ee4a27a4d76fbde2c17cf214daaa44f42fa85ecd295a69e",
+          "parent_occurrence_id": "occ_97a7cfefdbaa760dbb2d35e1da346201081e3a79657dceb95ec4707f3f60a1af",
+          "logical_path": "Contents/Resources/Presets/DF5CFBC9-683C-4A5E-B37C-D95448352D39.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2698,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_f2c3619a88da7808ee9ccf484dc70cc98904390a8be2951eafbe590ba06795c3",
+        "kind": "occurrence",
+        "subject": "occ_83ad5bd35d92956025852361f54933a7bda55346d08a15faab454c3deb484dca",
+        "value": {
+          "occurrence_id": "occ_83ad5bd35d92956025852361f54933a7bda55346d08a15faab454c3deb484dca",
+          "artifact_id": "art_2421e81241457b67b5ed826c1065c5134438ace9aa22d85bbc9cb79f2c60df4c",
+          "parent_occurrence_id": "occ_6e55cd10bd9e2334078682692a465b2e38c0a44e2c5366465d0b5fcf407ee415",
+          "logical_path": "Contents/Resources/Presets/E0443B22-556F-4334-874D-0FC85147EAE4.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 7772,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_70751f47395d6ec04428a93cea1ef5415a225ca687371f0099abf7b3aaf4fe42",
+        "kind": "occurrence",
+        "subject": "occ_1f63392b1f69d7c72324d754703a631f916edd050b42ce07fe1e5488991f4cad",
+        "value": {
+          "occurrence_id": "occ_1f63392b1f69d7c72324d754703a631f916edd050b42ce07fe1e5488991f4cad",
+          "artifact_id": "art_1461dbf791c09de9a08cda868c41f3c550798d38b87f98c742a3d57dff4a2bfe",
+          "parent_occurrence_id": "occ_7ba864918da6ba51e1c1945be3673d4336a496bfc598c15faa7ff835b79a6d7e",
+          "logical_path": "Contents/Resources/Presets/E3D59E53-81AB-4856-B1CC-1D8729BC5CDF.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 10053,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_a36ef8b1fb706ec11f6213a93ea3ec85d15a184429cdefa8fc6e4044bff81789",
+        "kind": "occurrence",
+        "subject": "occ_2cbd6d99c7c38f793bdd33ea023f539c304e8f7ac5a2a9a28017c2661d4b41f5",
+        "value": {
+          "occurrence_id": "occ_2cbd6d99c7c38f793bdd33ea023f539c304e8f7ac5a2a9a28017c2661d4b41f5",
+          "artifact_id": "art_2047f368373d65c5718c480db04ca80c5c6992e65805a6395924e7662135f710",
+          "parent_occurrence_id": "occ_23b1703e1ef882d63391104c6313f57c48f5ce31d39af2ef26bd865098d39ef7",
+          "logical_path": "Contents/Resources/Presets/E6671F3B-67D4-491C-8673-93CCC70DA7A1.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2923,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_2b052abe641cd7b2f4babf54664ce738bde92abc0cf1c7e45d92db6a36f82e3c",
+        "kind": "occurrence",
+        "subject": "occ_90e316151e699af59ba7ab90f3f794d33dc725b0c688a2c2940ac3469b0844b8",
+        "value": {
+          "occurrence_id": "occ_90e316151e699af59ba7ab90f3f794d33dc725b0c688a2c2940ac3469b0844b8",
+          "artifact_id": "art_c6a7b2f315c450b280fa658fc4a23ac6be72e9d0bf865983e61e453bdd38c324",
+          "parent_occurrence_id": "occ_86ce6b91bab6df121126569affd0a57995e81990b08f73d5abf10ab3fe0cad47",
+          "logical_path": "Contents/Resources/Presets/E9145EFC-86D0-462D-959F-EDA56962F3E8.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 4783,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_0493c295614e8df380cf5c40b2cf53af522d4ec51f82d41b5d146c63ef19ed32",
+        "kind": "occurrence",
+        "subject": "occ_815ef3081c957116d93b88141967b73acbb3cc3c59d05e684f3852273406a15f",
+        "value": {
+          "occurrence_id": "occ_815ef3081c957116d93b88141967b73acbb3cc3c59d05e684f3852273406a15f",
+          "artifact_id": "art_ea05a23c974833a7f81514b95131964e7f5b56b096565aa7e11d9b4bdc8a8d68",
+          "parent_occurrence_id": "occ_2ed4cc53d393cf02edaaac76b44592a98cbc0d3303a9d69606c7cba7cd106217",
+          "logical_path": "Contents/Resources/Presets/EB83A2FA-3C9C-42FC-94E1-341BEF0B3B8B.mattepreset/preset.json",
+          "entry_kind": "file",
+          "declared_size": 2147,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_11548c817c36bf687db8c2108b35f0d3525dc0fd0a60bdd3a4e79249c367e791",
+        "kind": "occurrence",
+        "subject": "occ_205c0121df46ee9979c992f99f2d69277403ac78f51a882d7877c0da274185c6",
+        "value": {
+          "occurrence_id": "occ_205c0121df46ee9979c992f99f2d69277403ac78f51a882d7877c0da274185c6",
+          "artifact_id": "art_d0937026a77f64250e76b9b3f92bc30730281e6be37b438e5f3ee9866b0d07fc",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/Studio01.hdr",
+          "entry_kind": "file",
+          "declared_size": 1266417,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_0c9908b81a85a713009b56a6c3670fec3b745a020b53111774152885771d3a6e",
+        "kind": "occurrence",
+        "subject": "occ_45f8eadf7f89ab67eacc673e231880bf83a1a9e18c9aaaf00635bc4f4bc5dd0f",
+        "value": {
+          "occurrence_id": "occ_45f8eadf7f89ab67eacc673e231880bf83a1a9e18c9aaaf00635bc4f4bc5dd0f",
+          "artifact_id": "art_5ab20ab5a44c6312a68e731f117f32acb220d226bd5a02dd0144b4da4f259582",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/Studio02.exr",
+          "entry_kind": "file",
+          "declared_size": 4824893,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_e229b0bf70442ac3f4056692e8a2e7120c65db9e8ed78cb22cc80489ca89a933",
+        "kind": "occurrence",
+        "subject": "occ_ea6da2d3b7d3a591e8227e569ce92e53919857d2b540bdb37d3731a0aa7d2c9e",
+        "value": {
+          "occurrence_id": "occ_ea6da2d3b7d3a591e8227e569ce92e53919857d2b540bdb37d3731a0aa7d2c9e",
+          "artifact_id": "art_86646218ab5c538c0503f14cff32704c754b8916ac57b91de756a2f76168a423",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/Studio03.exr",
+          "entry_kind": "file",
+          "declared_size": 5047043,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_b7f5baf25d5cab9beb9562fdbdd0e9b45827de6fd5ac039b28edceec554a91e5",
+        "kind": "occurrence",
+        "subject": "occ_32481406809383bfe9a49d0fc7adaae4c4ba86c7f14f385c76e73b1c02ee5616",
+        "value": {
+          "occurrence_id": "occ_32481406809383bfe9a49d0fc7adaae4c4ba86c7f14f385c76e73b1c02ee5616",
+          "artifact_id": "art_d0c419cc4bd419d6063a8f487a32ef66b513aae82d4b540fe85368090b2563f9",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/Studio04.exr",
+          "entry_kind": "file",
+          "declared_size": 5202554,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      },
+      {
+        "observation_id": "aio_bbcfc48ab39819372c2733afbf6a588d8b9a5f8e3f383c54153756fd3a4e3ae0",
+        "kind": "occurrence",
+        "subject": "occ_5a32b7a12fdbe756beca2d9234885aa0969250e7d8286df8e07d4e321fe26165",
+        "value": {
+          "occurrence_id": "occ_5a32b7a12fdbe756beca2d9234885aa0969250e7d8286df8e07d4e321fe26165",
+          "artifact_id": "art_f1fb7761818e84e9aa84361b4bb2bc9d07f166f4fb1e51ce93c60dbc7c700dcd",
+          "parent_occurrence_id": "occ_87dcc4ac5ea92b1fc91ea96c5671c65165bbfc3b5f8a73df8fea36947cf111f7",
+          "logical_path": "Contents/Resources/Studio05.exr",
+          "entry_kind": "file",
+          "declared_size": 3000320,
+          "compressed_size": null,
+          "executable": false,
+          "encrypted": false,
+          "hash_status": "verified",
+          "source_location": null,
+          "limitations": []
+        },
+        "evidence_id": "ev_90399b3ee1f92db9c2c59a5feea6c90dc9b2ef0fd02f9a4e952637d945e661e3"
+      }
+    ]
+  },
+  "native_macho": {
+    "evidence_id": "ev_0957334f0e6a9249cfa8188d9666d33a81d38f3d0ff98081dfd3c28d55116e61",
+    "architecture": "arm64",
+    "dependencies": {
+      "items": [
+        {
+          "path": "/usr/lib/dyld",
+          "kind": "LC_LOAD_DYLINKER",
+          "current_version": null,
+          "compatibility_version": null
+        },
+        {
+          "path": "/System/Library/Frameworks/AppIntents.framework/Versions/A/AppIntents",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "301.0.51",
+          "compatibility_version": "0.0.0"
+        },
+        {
+          "path": "@rpath/Sparkle.framework/Versions/B/Sparkle",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "2.9.1",
+          "compatibility_version": "1.6.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "5027.0.69",
+          "compatibility_version": "300.0.0"
+        },
+        {
+          "path": "/usr/lib/libobjc.A.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "228.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/libSystem.B.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1359.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/AVFAudio.framework/Versions/A/AVFAudio",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "2.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/AVKit.framework/Versions/A/AVKit",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "4.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "2775.10.103",
+          "compatibility_version": "45.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "66.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1000.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/Combine.framework/Versions/A/Combine",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "3023.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "5027.0.69",
+          "compatibility_version": "150.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "2050.0.0",
+          "compatibility_version": "64.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreImage.framework/Versions/A/CoreImage",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "7.0.0",
+          "compatibility_version": "1.0.1"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreML.framework/Versions/A/CoreML",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "3350.77.5",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreMediaIO.framework/Versions/A/CoreMediaIO",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "0.0.0",
+          "compatibility_version": "0.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1226.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "904.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "758.27.0",
+          "compatibility_version": "1.2.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/CryptoKit.framework/Versions/A/CryptoKit",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "275.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/IOSurface.framework/Versions/A/IOSurface",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/ImageIO.framework/Versions/A/ImageIO",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/JavaScriptCore",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "625.1.29",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "382.5.3",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/MetalKit.framework/Versions/A/MetalKit",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "174.4.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/MetalPerformanceShaders",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "130.0.19",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/NaturalLanguage.framework/Versions/A/NaturalLanguage",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "114.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/Network.framework/Versions/A/Network",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "6681.1.1",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1223.2.2",
+          "compatibility_version": "1.2.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/SceneKit.framework/Versions/A/SceneKit",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "612.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/ScreenCaptureKit.framework/Versions/A/ScreenCaptureKit",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "62460.1.2",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/SwiftUI.framework/Versions/A/SwiftUI",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "8.0.84",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/Symbols.framework/Versions/A/Symbols",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "204.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "3350.77.5",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/libcompression.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftAVFoundation.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "2450.77.5",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftAccelerate.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "82.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftCompression.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "18.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftCore.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "0.0.0",
+          "compatibility_version": "0.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftCoreAudio.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "482.102.10",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftCoreFoundation.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "120.100.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftCoreImage.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "3.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftCoreMIDI.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "6.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftCoreMediaIO.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "5634.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftDarwin.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "428.0.10",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftDispatch.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1605.0.2",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftGLKit.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "1.1.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftIOKit.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftMetal.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "382.5.3",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftMetalKit.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "1.2.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftModelIO.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftNaturalLanguage.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "4.3.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftOSLog.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "10.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftObjectiveC.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "973.1.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftObservation.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "0.0.0",
+          "compatibility_version": "0.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftQuartzCore.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "5.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftSceneKit.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1.2.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftSpatial.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "1.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftUniformTypeIdentifiers.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "917.0.1",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftXPC.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "167.0.2",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswift_Builtin_float.dylib",
+          "kind": "LC_LOAD_WEAK_DYLIB",
+          "current_version": "0.0.0",
+          "compatibility_version": "0.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswift_Concurrency.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "0.0.0",
+          "compatibility_version": "0.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswift_StringProcessing.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "0.0.0",
+          "compatibility_version": "0.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftos.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "1090.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftsimd.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "25.0.0",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswiftCoreMedia.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "3350.77.5",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswift_errno.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "428.0.10",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswift_stdio.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "428.0.10",
+          "compatibility_version": "1.0.0"
+        },
+        {
+          "path": "/usr/lib/swift/libswift_signal.dylib",
+          "kind": "LC_LOAD_DYLIB",
+          "current_version": "428.0.10",
+          "compatibility_version": "1.0.0"
+        }
+      ],
+      "total": 76,
+      "exhaustive": true,
+      "limitations": []
+    },
+    "limitations": [
+      "Imports and exports combine dyld_info and nm; stripped or toolchain-hidden symbols may be absent.",
+      "vtool output is retained as provenance but only otool build metadata is normalized."
+    ]
+  },
+  "helper_replay": {
+    "evidence_id": "ev_0284046a6ab4a4afe8b202dccc40d3958e53122db75c1a4832f4f1ef7289d278",
+    "source_sha256": "51ccfff1e4b13bb002d3797e317ffab768012c0ac89cd4148939a9f079e59da8",
+    "result": {
+      "evidenceType": "controlled-replay-of-shipped-javascript-helper",
+      "path": "/Applications/Matte.app/Contents/Resources/CodeClipHelpers.js",
+      "sha256": "51ccfff1e4b13bb002d3797e317ffab768012c0ac89cd4148939a9f079e59da8",
+      "verified": [
+        "arriving-key-easing",
+        "endpoint-holds",
+        "geometric-scale-interpolation",
+        "arbitrary-time-spring-evaluation",
+        "seeded-random-repeatability",
+        "screen-coordinate-projection"
+      ],
+      "easingNames": [
+        "linear",
+        "inQuad",
+        "outQuad",
+        "inOutQuad",
+        "inCubic",
+        "outCubic",
+        "inOutCubic",
+        "inQuart",
+        "outQuart",
+        "inOutQuart",
+        "inExpo",
+        "outExpo",
+        "inOutExpo",
+        "inSine",
+        "outSine",
+        "inOutSine",
+        "inBack",
+        "outBack",
+        "inOutBack",
+        "outElastic",
+        "outBounce"
+      ],
+      "tweenAtHalf": 25,
+      "perceptualScaleAtHalf": 2,
+      "defaultSpringSamples": [
+        {
+          "t": 0,
+          "value": 0
+        },
+        {
+          "t": 0.1,
+          "value": 0.31899342055321045
+        },
+        {
+          "t": 0.2,
+          "value": 0.7299922327757546
+        },
+        {
+          "t": 0.3,
+          "value": 0.9520929862658669
+        },
+        {
+          "t": 0.6,
+          "value": 1.0133941306498255
+        },
+        {
+          "t": 1,
+          "value": 0.9994253437905369
+        }
+      ],
+      "random": [
+        0.6011037519201636,
+        0.44829055899754167,
+        0.8524657934904099,
+        0.6697340414393693,
+        0.17481389874592423
+      ],
+      "limitations": [
+        "Does not execute Matte native editor, native animation evaluator, renderer, or exporter.",
+        "Path2D is stubbed; drawing and font layout are not exercised.",
+        "Native preset spring curveParameter is a separate unverified mapping."
+      ]
+    },
+    "exit": {
+      "code": 0,
+      "signal": 0,
+      "reason": "exited"
+    },
+    "limitations": [
+      "Process trees are sampled and may omit short-lived descendants.",
+      "Filesystem observations are before/after snapshots, not syscall traces.",
+      "Inherited host environment variables are not recorded and may affect results.",
+      "No filesystem observation paths were selected; filesystem effects remain unknown."
+    ]
+  },
+  "native_decompiler_failures": [
+    {
+      "error": {
+        "code": "provider_timeout",
+        "category": "timeout",
+        "message": "Hopper timed out during startup before it started. Check binary_session for provider health, then retry.",
+        "retryable": true,
+        "remediation": {
+          "action": "Check binary_session for Hopper health, then retry the operation."
+        },
+        "details": {
+          "stage": "startup",
+          "timeout_ms": 120000,
+          "provider_state": "not_started"
+        }
+      }
+    },
+    {
+      "error": {
+        "code": "provider_timeout",
+        "category": "timeout",
+        "message": "Hopper timed out during startup before it started. Check binary_session for provider health, then retry.",
+        "retryable": true,
+        "remediation": {
+          "action": "Check binary_session for Hopper health, then retry the operation."
+        },
+        "details": {
+          "stage": "startup",
+          "timeout_ms": 120000,
+          "provider_state": "not_started"
+        }
+      }
+    },
+    {
+      "error": {
+        "code": "provider_timeout",
+        "category": "timeout",
+        "message": "Hopper timed out during startup before it started. Check binary_session for provider health, then retry.",
+        "retryable": true,
+        "remediation": {
+          "action": "Check binary_session for Hopper health, then retry the operation."
+        },
+        "details": {
+          "stage": "startup",
+          "timeout_ms": 120000,
+          "provider_state": "not_started"
+        }
+      }
+    }
+  ],
+  "limits": [
+    "Selected evidence index, not the entire REA graph.",
+    "No native function decompilation or editor/export runtime verification was completed.",
+    "Resource JavaScript analysis exceeded REA IPC frame limit; source inspection and bounded helper replay used instead."
+  ]
+}

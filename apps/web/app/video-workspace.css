@@ -62,7 +62,7 @@
 .unified-video-studio .video-inspector .source-quick-actions { gap:5px; }
 .unified-video-studio .video-inspector .source-quick-actions button { min-height:30px; font-size:9px; }
 .unified-video-studio .video-inspector :is(.video-camera-controls>p,.video-device-layers>p) { font-size:10px; line-height:1.5; margin:2px 0 5px; }
-.video-inspector-tools { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:2px; padding:8px 0; position:sticky; top:0; z-index:8; background:var(--surface); border-bottom:1px solid var(--line); }
+.video-inspector-tools { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:2px; padding:8px 0; position:sticky; top:0; z-index:8; background:var(--surface); border-bottom:1px solid var(--line); }
 .video-inspector-tools button { display:grid; justify-items:center; gap:5px; min-width:0; padding:6px 1px; color:var(--muted); background:transparent; border:0; border-radius:5px; cursor:pointer; font-size:8px; }
 .video-inspector-tools button:hover,.video-inspector-tools button:focus-visible { color:var(--editor-active-text); background:var(--editor-soft-line); }
 .unified-video-studio .video-inspector .slideshow-handoff h3 { font-family:inherit; font-size:15px; letter-spacing:-.02em; }
@@ -118,4 +118,11 @@
   .unified-video-studio .timeline-playback { flex-wrap:wrap; justify-content:center; gap:6px; }
   .unified-video-studio .timeline-playback label { margin-left:0; }
   .unified-video-studio .timeline-panel { padding:10px; }
+}
+
+.timeline-graphics-preview { position:absolute; inset:0; pointer-events:none; z-index:2; }
+.timeline-graphics-preview svg { display:block; width:100%; height:100%; }
+
+@media(max-width:1000px) {
+  .video-inspector :is(summary,button,input,select,textarea) { scroll-margin-block:140px 100px; }
 }

@@ -1,0 +1,27 @@
+[
+  {
+    "file": "iphone-15-pro-max.glb",
+    "author": "MpPower\u2122 (https://sketchfab.com/MG990)",
+    "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+    "source": "https://sketchfab.com/3d-models/iphone-15-pro-max-5b7b35513a154ac69619dc2b2fe15686",
+    "title": "iPhone 15 Pro Max",
+    "sha256": "382067e7b7815064a4e74daf1890b31ac89835aee9969b8c9110af0b73fc3309"
+  },
+  {
+    "file": "watch-ultra-2.glb",
+    "author": "polyman (https://sketchfab.com/Polyman_3D)",
+    "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+    "source": "https://sketchfab.com/3d-models/apple-watch-ultra-2-f33263c457664b43909200c5ed5e6fa2",
+    "title": "Apple Watch Ultra 2",
+    "sha256": "bcc19bbc3859d077144e40404c9eede30ecb03977d5a1b9f34d6856c443ab881"
+  },
+  {
+    "file": "galaxy-s25-ultra.glb",
+    "author": "mistJS (https://sketchfab.com/mistjs)",
+    "license": "CC-BY-4.0",
+    "source": "https://github.com/YUZU-Hub/appscreen",
+    "title": "Samsung Galaxy S25 Ultra",
+    "evidence": "appscreen README.md Credits",
+    "sha256": "16cb9edb80f39d9b7074540864e6a307aed987c47b38afbed442fc64fbaa07d7"
+  }
+]

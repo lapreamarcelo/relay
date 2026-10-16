@@ -1,5 +1,7 @@
 import type { DeviceFrame } from "@relay/core";
+import { normalizeVideoScene } from "./video-scene.ts";
 import { normalizeAnimationEasing, normalizeLayerAnimation } from "./video-animation.ts";
+import { deviceModels } from "./device-model-catalog.ts";
 
 export const defaultDeviceFrame: DeviceFrame = {
   device: "phone",
@@ -39,7 +41,34 @@ export function normalizeDeviceFrame(value: unknown, options: { allowMotion?: bo
   if (!deviceFrameDevices.includes(input.device as DeviceFrame["device"])) throw new Error(`Device frame must be ${deviceFrameDevices.join(", ")}.`);
   const result: DeviceFrame = { device: input.device as DeviceFrame["device"], background: hex(input.background), color: hex(input.color) };
   if (input.backgroundEnd !== undefined) result.backgroundEnd = hex(input.backgroundEnd);
-  const ranges = { x: [0, 1, .5], y: [0, 1, .5], scale: [.25, 1.5, 1], rotateX: [-60, 60, 0], rotateY: [-60, 60, 0], rotateZ: [-180, 180, 0], foldAngle: [0, 165, 0], motionDurationMs: [500, 60000, 4000] } as const;
+  if(input.renderMode !== undefined) {
+    if(!["vector","mesh","gpu"].includes(String(input.renderMode))) throw new Error("Device rendering must be vector, mesh or gpu.");
+    if(!options.allowMotion && input.renderMode !== "vector") throw new Error("3D devices are supported in video timelines only.");
+    result.renderMode=input.renderMode as DeviceFrame["renderMode"];
+  }
+  if(input.scene !== undefined) {
+    if(!options.allowMotion) throw new Error("Scenes are supported in video timelines only.");
+    result.scene=normalizeVideoScene(input.scene);
+  }
+  if(input.depth !== undefined) {
+    if(!options.allowMotion) throw new Error("Device depth is supported in video timelines only.");
+    if(typeof input.depth !== "number" || !Number.isFinite(input.depth) || Math.abs(input.depth)>2) throw new Error("Device depth must be between -2 and 2.");
+    result.depth=input.depth;
+  }
+  if(input.modelId !== undefined) {
+    if(!deviceModels.some(model=>model.id===input.modelId && model.device===result.device)) throw new Error("Choose a model for this device.");
+    result.modelId=input.modelId as string;
+  }
+  if(input.finish !== undefined) {
+    if(!["graphite","silver","gold","natural"].includes(String(input.finish))) throw new Error("Choose a device finish.");
+    result.finish=input.finish as DeviceFrame["finish"];
+  }
+  if(input.band !== undefined) {
+    if(result.device !== "watch" || !["woven","none"].includes(String(input.band))) throw new Error("Choose a Watch band.");
+    result.band=input.band as DeviceFrame["band"];
+  }
+  const rotationLimit=result.renderMode === "mesh" || result.renderMode === "gpu"?1080:60;
+  const ranges = { x: [0, 1, .5], y: [0, 1, .5], scale: [.25, 1.5, 1], rotateX: [-rotationLimit, rotationLimit, 0], rotateY: [-rotationLimit, rotationLimit, 0], rotateZ: [(result.renderMode === "mesh"||result.renderMode === "gpu")?-1080:-180, (result.renderMode === "mesh"||result.renderMode === "gpu")?1080:180, 0], foldAngle: [0, 165, 0], motionDurationMs: [500, 60000, 4000] } as const;
   for (const key of Object.keys(ranges) as Array<keyof typeof ranges>) {
     if (input[key] === undefined) continue;
     const [min, max, fallback] = ranges[key], value = input[key];
@@ -58,7 +87,7 @@ export function normalizeDeviceFrame(value: unknown, options: { allowMotion?: bo
   }
   if (input.animation !== undefined) {
     if (!options.allowMotion) throw new Error("Layer animation is supported in video timelines only.");
-    result.animation = normalizeLayerAnimation(input.animation, "device", result.device === "iphone-duo");
+    result.animation = normalizeLayerAnimation(input.animation, "device", result.device === "iphone-duo", result.renderMode === "mesh" || result.renderMode === "gpu");
   }
   if (result.device !== "iphone-duo" && ((result.foldAngle ?? 0) !== 0 || ["fold", "unfold", "fold-cycle"].includes(result.motion ?? "none"))) throw new Error("Folding requires the iPhone Duo frame.");
   return result;

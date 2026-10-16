@@ -40,7 +40,7 @@ async function range(input: Locator, value: number) {
 test("camera zoom, focus picking, presets and keyframes persist while scene labels stay steady", async ({ page }, testInfo) => {
   if (testInfo.project.name === "chromium") await page.setViewportSize({ width: 1280, height: 720 });
   const state = await editor(page), controls = page.getByRole("region", { name: "Camera & focus", exact: true });
-  const scene = page.locator(".unified-video-canvas > [data-camera-preview]"), labels = page.locator(".unified-video-canvas > .timeline-label-preview");
+  const scene = page.locator(".unified-video-canvas > [data-camera-preview]"), labels = page.locator(".unified-video-canvas > .timeline-label-preview:not(.timeline-back-label-preview)");
   const labelMarkup = await labels.innerHTML(), initialTransform = await scene.evaluate(element => (element as HTMLElement).style.transform);
   const beforeCanvas = await page.locator(".unified-video-canvas").boundingBox(), beforeTimeline = await page.locator("#video-timeline").boundingBox();
   await range(controls.getByLabel("Camera zoom", { exact: true }), 2);
@@ -89,13 +89,13 @@ test("bulk text preview carries the saved camera animation beneath labels", asyn
   await variants.getByLabel("Variant texts", { exact: true }).fill("See the details\nA new perspective");
   await range(variants.getByLabel("Variant preview playhead", { exact: true }), 5999);
   await expect.poll(()=>variants.locator("[data-camera-preview]").evaluate(element=>new DOMMatrix(getComputedStyle(element).transform).a)).toBeCloseTo(2, 2);
-  await expect(variants.locator(".timeline-label-preview")).toContainText("See the details");
+  await expect(variants.locator('[aria-label="Variant canvas preview"] > .timeline-label-preview:last-child')).toContainText("See the details");
   await variants.getByRole("button", { name: "Close text variants", exact: true }).click();
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   expect(state.project().timeline.camera.keyframes.length).toBeGreaterThan(1);
   await range(page.getByLabel("Timeline playhead", { exact: true }), 5999);
   await expect.poll(() => page.locator(".unified-video-canvas > [data-camera-preview]").evaluate(element => new DOMMatrix(getComputedStyle(element).transform).a)).toBeCloseTo(2, 2);
-  await expect(page.locator(".unified-video-canvas > .timeline-label-preview")).toContainText("A closer look");
+  await expect(page.locator(".unified-video-canvas > .timeline-label-preview:not(.timeline-back-label-preview)")).toContainText("A closer look");
   expect(state.errors).toEqual([]);
 });
 

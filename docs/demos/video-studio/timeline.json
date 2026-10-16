@@ -1,0 +1,433 @@
+{
+  "version": 1,
+  "aspectRatio": "9:16",
+  "background": {
+    "color": "#F3F1E7"
+  },
+  "clips": [
+    {
+      "sourceUrl": "https://media.demo.relay/fictional-screen.mp4",
+      "name": "Morrow — fictional UI",
+      "kind": "video",
+      "inMs": 0,
+      "outMs": 9000,
+      "sourceDurationMs": 9000,
+      "fit": "contain",
+      "x": 0.5,
+      "y": 0.5,
+      "zoom": 1,
+      "volume": 0,
+      "id": "phone",
+      "pointer": {
+        "events": [
+          {
+            "timeMs": 0,
+            "x": 0.91,
+            "y": 0.85,
+            "kind": "move"
+          },
+          {
+            "timeMs": 900,
+            "x": 0.7759259259259259,
+            "y": 0.5321428571428571,
+            "kind": "move"
+          },
+          {
+            "timeMs": 1600,
+            "x": 0.7759259259259259,
+            "y": 0.5321428571428571,
+            "kind": "down"
+          },
+          {
+            "timeMs": 1750,
+            "x": 0.7759259259259259,
+            "y": 0.5321428571428571,
+            "kind": "up"
+          },
+          {
+            "timeMs": 3000,
+            "x": 0.92,
+            "y": 0.8,
+            "kind": "move"
+          },
+          {
+            "timeMs": 5700,
+            "x": 0.8629629629629629,
+            "y": 0.7151785714285714,
+            "kind": "move"
+          },
+          {
+            "timeMs": 6500,
+            "x": 0.8629629629629629,
+            "y": 0.7151785714285714,
+            "kind": "down",
+            "screen": "outer"
+          },
+          {
+            "timeMs": 6650,
+            "x": 0.8629629629629629,
+            "y": 0.7151785714285714,
+            "kind": "up",
+            "screen": "outer"
+          }
+        ],
+        "style": "touch",
+        "display": "tap-only",
+        "color": "#C6DEA5",
+        "size": 33,
+        "smoothing": 120,
+        "idleMs": 900,
+        "fadeMs": 250
+      },
+      "deviceFrame": {
+        "background": "#F3F1E7",
+        "color": "#25362B",
+        "renderMode": "mesh",
+        "x": 0.5,
+        "y": 0.57,
+        "scale": 0.72,
+        "depth": 0,
+        "device": "iphone",
+        "animation": {
+          "keyframes": [
+            {
+              "timeMs": 0,
+              "x": 0.48,
+              "y": 0.66,
+              "scale": 0.6,
+              "rotateY": -20,
+              "rotateX": 5,
+              "rotateZ": -5
+            },
+            {
+              "timeMs": 900,
+              "x": 0.5,
+              "y": 0.57,
+              "scale": 0.72,
+              "rotateY": 12,
+              "rotateX": -3,
+              "rotateZ": 2
+            },
+            {
+              "timeMs": 9000,
+              "x": 0.51,
+              "y": 0.57,
+              "scale": 0.74,
+              "rotateY": -15,
+              "rotateX": 4,
+              "rotateZ": -2
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "layers": [],
+  "labels": [
+    {
+      "id": "eyebrow",
+      "text": "RELAY  /  VIDEO STUDIO",
+      "startMs": 0,
+      "endMs": 9000,
+      "x": 0.5,
+      "y": 0.045,
+      "width": 0.86,
+      "fontSize": 25,
+      "font": "modern",
+      "textColor": "#71816A",
+      "background": "light",
+      "backgroundColor": "#F3F1E7",
+      "style": "light",
+      "animation": {
+        "entrance": {
+          "preset": "fade",
+          "durationMs": 400,
+          "easing": "ease-out"
+        }
+      },
+      "height": 0.06
+    },
+    {
+      "id": "headline",
+      "text": "Bring your screen\nto life.",
+      "startMs": 0,
+      "endMs": 4600,
+      "x": 0.5,
+      "y": 0.14,
+      "width": 0.86,
+      "fontSize": 78,
+      "font": "modern",
+      "textColor": "#244A37",
+      "background": "light",
+      "backgroundColor": "#F3F1E7",
+      "style": "light",
+      "height": 0.115,
+      "animation": {
+        "entrance": {
+          "preset": "word-spring",
+          "durationMs": 600,
+          "staggerMs": 50,
+          "easing": "spring",
+          "curve": {
+            "stiffness": 150,
+            "damping": 20,
+            "mass": 1
+          }
+        },
+        "exit": {
+          "preset": "fade",
+          "durationMs": 300
+        }
+      }
+    },
+    {
+      "id": "headline-two",
+      "text": "One story.\nMore dimensions.",
+      "startMs": 4650,
+      "endMs": 9000,
+      "x": 0.5,
+      "y": 0.14,
+      "width": 0.86,
+      "fontSize": 72,
+      "font": "modern",
+      "textColor": "#244A37",
+      "background": "light",
+      "backgroundColor": "#F3F1E7",
+      "style": "light",
+      "height": 0.115,
+      "animation": {
+        "entrance": {
+          "preset": "line-cascade",
+          "durationMs": 650,
+          "staggerMs": 80,
+          "easing": "cubic-bezier",
+          "curve": {
+            "controlPoints": [
+              0.2,
+              0.65,
+              0.4,
+              1
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "caption-one",
+      "text": "Gentle motion. Every detail in sync.",
+      "startMs": 600,
+      "endMs": 4400,
+      "x": 0.5,
+      "y": 0.895,
+      "width": 0.86,
+      "fontSize": 32,
+      "font": "modern",
+      "textColor": "#5C725A",
+      "background": "light",
+      "backgroundColor": "#F3F1E7",
+      "style": "light",
+      "animation": {
+        "entrance": {
+          "preset": "soft-reveal",
+          "durationMs": 450
+        },
+        "exit": {
+          "preset": "fade",
+          "durationMs": 300
+        }
+      },
+      "height": 0.06
+    },
+    {
+      "id": "caption-two",
+      "text": "Make the small moments move.",
+      "startMs": 5150,
+      "endMs": 9000,
+      "x": 0.5,
+      "y": 0.895,
+      "width": 0.86,
+      "fontSize": 32,
+      "font": "modern",
+      "textColor": "#5C725A",
+      "background": "light",
+      "backgroundColor": "#F3F1E7",
+      "style": "light",
+      "animation": {
+        "entrance": {
+          "preset": "slide-up",
+          "durationMs": 500,
+          "easing": "spring",
+          "curve": {
+            "stiffness": 150,
+            "damping": 20,
+            "mass": 1
+          }
+        }
+      },
+      "height": 0.06
+    },
+    {
+      "id": "footer",
+      "text": "Original fictional app · Rendered in Relay",
+      "startMs": 0,
+      "endMs": 9000,
+      "x": 0.5,
+      "y": 0.961,
+      "width": 0.86,
+      "fontSize": 19,
+      "font": "modern",
+      "textColor": "#8B9680",
+      "background": "light",
+      "backgroundColor": "#F3F1E7",
+      "style": "light",
+      "height": 0.06
+    }
+  ],
+  "graphics": [
+    {
+      "id": "ring",
+      "kind": "ring",
+      "startMs": 0,
+      "endMs": 9000,
+      "x": 0.17,
+      "y": 0.81,
+      "width": 0.2,
+      "height": 0.09,
+      "color": "#D5E0C4",
+      "seed": 4,
+      "count": 1,
+      "speed": 0.15,
+      "animation": {
+        "keyframes": [
+          {
+            "timeMs": 0,
+            "opacity": 0.4
+          },
+          {
+            "timeMs": 8650,
+            "opacity": 0.4
+          }
+        ]
+      }
+    },
+    {
+      "id": "particles",
+      "kind": "particles",
+      "startMs": 0,
+      "endMs": 9000,
+      "x": 0.87,
+      "y": 0.39,
+      "width": 0.17,
+      "height": 0.25,
+      "color": "#BDCDA5",
+      "seed": 43,
+      "count": 7,
+      "speed": 0.15,
+      "animation": {
+        "keyframes": [
+          {
+            "timeMs": 0,
+            "opacity": 0.45
+          },
+          {
+            "timeMs": 8650,
+            "opacity": 0.45
+          }
+        ]
+      }
+    }
+  ],
+  "scene": {
+    "version": 1,
+    "environment": "softbox",
+    "exposure": 1.13,
+    "roughness": 0.42,
+    "metallic": 0.54,
+    "shadow": 0.27,
+    "lightAngle": -30,
+    "focusDepth": 0,
+    "aperture": 0,
+    "motionBlur": 0,
+    "camera": {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "rotateX": 0,
+      "rotateY": 0,
+      "rotateZ": 0,
+      "focalLength": 50,
+      "keyframes": [
+        {
+          "timeMs": 0,
+          "scale": 1,
+          "x": 0,
+          "y": 0.01
+        },
+        {
+          "timeMs": 9000,
+          "scale": 1.035,
+          "x": 0.01,
+          "y": -0.01
+        }
+      ]
+    }
+  },
+  "music": {
+    "url": "",
+    "volume": 0.8,
+    "offsetMs": 0,
+    "fadeInMs": 0,
+    "fadeOutMs": 0
+  },
+  "beatGrid": {
+    "bpm": 110,
+    "offsetMs": 0
+  },
+  "coverMs": 2200,
+  "exportSettings": {
+    "format": "mp4",
+    "fps": 24,
+    "resolution": "720p",
+    "quality": "high"
+  },
+  "camera": {
+    "zoom": 1,
+    "x": 0.5,
+    "y": 0.5,
+    "keyframes": [
+      {
+        "timeMs": 0,
+        "zoom": 1,
+        "x": 0.5,
+        "y": 0.5,
+        "easing": "spring",
+        "curve": {
+          "stiffness": 120,
+          "damping": 22,
+          "mass": 1
+        }
+      },
+      {
+        "timeMs": 1100,
+        "zoom": 1.018,
+        "x": 0.495,
+        "y": 0.52,
+        "easing": "cubic-bezier",
+        "curve": {
+          "controlPoints": [
+            0.2,
+            0.65,
+            0.4,
+            1
+          ]
+        }
+      },
+      {
+        "timeMs": 9000,
+        "zoom": 1,
+        "x": 0.5,
+        "y": 0.5
+      }
+    ]
+  }
+}

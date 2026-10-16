@@ -12,6 +12,7 @@ import { sql } from "@relay/database";
 
 import { requireApiSession } from "../../../../lib/api-session";
 import { collectFilteredPage } from "../../../../lib/filtered-pagination";
+import { mediaObjectLocation, ownsLegacyMedia, ownsUnfiledMedia, unfiledMediaPrefix, type AssetKind } from "../../../../lib/media-ownership";
 import { getR2Client, getR2Config, publicObjectUrl } from "../../../../lib/r2";
 
 export const runtime = "nodejs";
@@ -23,11 +24,13 @@ const PROJECT_ID_PATTERN = /^[0-9a-f-]{36}$/i;
 const STAGING_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 const stagingCleanupAt = new Map<string, number>();
 
-type AssetKind = "media" | "music";
+class MediaObjectNotFound extends Error {
+  constructor() { super("Media object not found"); }
+}
 
-function mediaPrefix(projectId: string | null | undefined, kind: AssetKind): string | undefined {
+function mediaPrefix(projectId: string | null | undefined, kind: AssetKind, ownerId: string): string | undefined {
   if (!projectId || projectId === "all") return undefined;
-  if (projectId === "unfiled") return kind === "music" ? "music/" : "media/";
+  if (projectId === "unfiled") return unfiledMediaPrefix(ownerId, kind);
   if (!PROJECT_ID_PATTERN.test(projectId)) throw new Error("Invalid media project");
   return `media-projects/${projectId}/${kind}/`;
 }
@@ -54,27 +57,28 @@ async function assertProjectAccess(projectId: string | null | undefined, ownerId
   if (!projectId || projectId === "all" || projectId === "unfiled") return;
   if (!PROJECT_ID_PATTERN.test(projectId)) throw new Error("Invalid media project");
   const config = getR2Config();
-  const object = await getR2Client().send(new GetObjectCommand({ Bucket: config.bucket, Key: `media-projects/${projectId}/.project.json` }));
+  const object = await getR2Client().send(new GetObjectCommand({ Bucket: config.bucket, Key: `media-projects/${projectId}/.project.json` })).catch((error: unknown) => {
+    if ((error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 404) throw new MediaObjectNotFound();
+    throw error;
+  });
   const manifest = JSON.parse(await object.Body!.transformToString()) as { ownerId?: string; kind?: string };
-  if (!manifest.ownerId || manifest.ownerId !== ownerId || (manifest.kind === "music" ? "music" : "media") !== kind) throw new Error("Media project not found");
+  if (!manifest.ownerId || manifest.ownerId !== ownerId || (manifest.kind === "music" ? "music" : "media") !== kind) throw new MediaObjectNotFound();
 }
 
 function projectIdForKey(key: string): string | null {
-  const match = /^media-projects\/([0-9a-f-]{36})\/(media|music)\//i.exec(key);
-  return match?.[1] ?? null;
+  return mediaObjectLocation(key)?.projectId ?? null;
 }
 
 function kindForKey(key: string): AssetKind | null {
-  if (/^music\/[^/]+$/i.test(key) || /^media-projects\/[0-9a-f-]{36}\/music\/[^/]+$/i.test(key)) return "music";
-  if (/^media\/[^/]+$/i.test(key) || /^media-projects\/[0-9a-f-]{36}\/media\/[^/]+$/i.test(key)) return "media";
-  return null;
+  return mediaObjectLocation(key)?.kind ?? null;
 }
 
 async function assertObjectAccess(key: string, ownerId: string, expectedKind?: AssetKind): Promise<AssetKind> {
   const kind = kindForKey(key);
-  if (!kind || expectedKind && kind !== expectedKind) throw new Error("Media object not found");
+  if (!kind || expectedKind && kind !== expectedKind) throw new MediaObjectNotFound();
   const projectId = projectIdForKey(key);
   if (projectId) await assertProjectAccess(projectId, ownerId, kind);
+  else if (!ownsUnfiledMedia(key, ownerId, kind)) throw new MediaObjectNotFound();
   return kind;
 }
 
@@ -118,7 +122,7 @@ async function updateMediaReferences(ownerId: string, currentUrl: string, nextUr
 const musicExtension = /\.(mp3|m4a|aac|wav|ogg|flac)$/i;
 const imageExtension = /\.(jpe?g|png|gif|webp|avif|svg|bmp)$/i;
 const videoExtension = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
-const isKind = (key: string, kind: AssetKind) => kind === "music" ? musicExtension.test(key) : !musicExtension.test(key) && !key.includes("/music/");
+const isKind = (key: string, kind: AssetKind) => kind === "music" ? musicExtension.test(key) : !musicExtension.test(key);
 
 function sanitizeFileName(value: string): string {
   const normalized = value.normalize("NFKC").split(/[\\/]/).pop()?.trim() ?? "";
@@ -131,6 +135,7 @@ function copySource(bucket: string, key: string): string {
 }
 
 function errorResponse(error: unknown) {
+  if (error instanceof MediaObjectNotFound) return Response.json({ error: error.message }, { status: 404 });
   console.error("R2 media operation failed", error);
   const message = error instanceof Error && error.message.includes("is required for Cloudflare R2")
     ? error.message
@@ -157,7 +162,10 @@ export async function GET(request: Request) {
     await assertProjectAccess(projectId, authorization.session.user.id, kind);
     const config = getR2Config();
     const client = getR2Client();
-    const prefix = mediaPrefix(projectId, kind);
+    // The configured legacy owner needs both the old and new roots. Filtering
+    // below still checks every key's ownership and restricts the unfiled view.
+    const prefix = projectId === "unfiled" && ownsLegacyMedia(authorization.session.user.id)
+      ? undefined : mediaPrefix(projectId, kind, authorization.session.user.id);
     const projectOwnership = new Map<string, Promise<boolean>>();
     const ownsProject = (id: string) => {
       const cached = projectOwnership.get(id);
@@ -189,7 +197,9 @@ export async function GET(request: Request) {
         if (kind === "media" && mediaType === "image" && !imageExtension.test(object.Key)) return false;
         if (kind === "media" && mediaType === "video" && !videoExtension.test(object.Key)) return false;
         const objectProjectId = projectIdForKey(object.Key);
-        if (!objectProjectId || projectId && projectId !== "all") return true;
+        if (!objectProjectId) return ownsUnfiledMedia(object.Key, authorization.session.user.id, kind);
+        if (projectId === "unfiled") return false;
+        if (projectId && projectId !== "all") return objectProjectId === projectId;
         return ownsProject(objectProjectId);
       },
     });
@@ -242,7 +252,7 @@ export async function POST(request: Request) {
       }
       const config = getR2Config();
       if (!staged) await assertProjectAccess(projectId, authorization.session.user.id, kind);
-      const key = `${staged ? stagingPrefix(authorization.session.user.id, kind) : mediaPrefix(projectId, kind) ?? (kind === "music" ? "music/" : "media/")}${crypto.randomUUID()}-${fileName}`;
+      const key = `${staged ? stagingPrefix(authorization.session.user.id, kind) : mediaPrefix(projectId, kind, authorization.session.user.id) ?? unfiledMediaPrefix(authorization.session.user.id, kind)}${crypto.randomUUID()}-${fileName}`;
       await getR2Client().send(new PutObjectCommand({
         Bucket: config.bucket,
         Key: key,
@@ -264,7 +274,7 @@ export async function POST(request: Request) {
     const projectId = typeof body.projectId === "string" ? body.projectId : undefined;
     const staged = body.staged === true;
     if (!staged) await assertProjectAccess(projectId, authorization.session.user.id, kind);
-    const key = `${staged ? stagingPrefix(authorization.session.user.id, kind) : mediaPrefix(projectId, kind) ?? (kind === "music" ? "music/" : "media/")}${crypto.randomUUID()}-${fileName}`;
+    const key = `${staged ? stagingPrefix(authorization.session.user.id, kind) : mediaPrefix(projectId, kind, authorization.session.user.id) ?? unfiledMediaPrefix(authorization.session.user.id, kind)}${crypto.randomUUID()}-${fileName}`;
     const command = new PutObjectCommand({ Bucket: config.bucket, Key: key, ContentType: contentType });
     const uploadUrl = await getSignedUrl(getR2Client(), command, { expiresIn: 15 * 60 });
     return Response.json({ key, uploadUrl, url: publicObjectUrl(key), expiresIn: 15 * 60, staged });
@@ -294,7 +304,7 @@ export async function PATCH(request: Request) {
       const destination = projectId ?? "unfiled";
       if (destination !== "unfiled") await assertProjectAccess(destination, authorization.session.user.id, kind);
       const name = key.split("/").pop() || `${crypto.randomUUID()}-asset`;
-      const nextKey = `${mediaPrefix(destination, kind)!}${name}`;
+      const nextKey = `${mediaPrefix(destination, kind, authorization.session.user.id)!}${name}`;
       const config = getR2Config(); const client = getR2Client();
       await client.send(new CopyObjectCommand({ Bucket: config.bucket, Key: nextKey, CopySource: copySource(config.bucket, key) }));
       await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
@@ -306,9 +316,11 @@ export async function PATCH(request: Request) {
     const slash = key.lastIndexOf("/");
     const currentName = slash >= 0 ? key.slice(slash + 1) : key;
     const name = requestedName || currentName;
-    const prefix = moving ? mediaPrefix(projectId, kind)! : slash >= 0 ? key.slice(0, slash + 1) : "";
+    const prefix = moving ? mediaPrefix(projectId, kind, authorization.session.user.id)!
+      : projectIdForKey(key) ? key.slice(0, slash + 1) : unfiledMediaPrefix(authorization.session.user.id, kind);
     const nextKey = `${prefix}${name}`;
-    if (nextKey === key) return Response.json({ key, name, url: publicObjectUrl(key) });
+    const destinationProjectId = projectIdForKey(nextKey);
+    if (nextKey === key) return Response.json({ key, name, url: publicObjectUrl(key), projectId: destinationProjectId });
 
     const config = getR2Config();
     const client = getR2Client();
@@ -328,13 +340,13 @@ export async function PATCH(request: Request) {
     const currentUrl = publicObjectUrl(key);
     const nextUrl = publicObjectUrl(nextKey);
     try {
-      await updateMediaReferences(authorization.session.user.id, currentUrl, nextUrl, projectId && projectId !== "unfiled" ? projectId : null);
+      await updateMediaReferences(authorization.session.user.id, currentUrl, nextUrl, destinationProjectId);
     } catch (error) {
       await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: nextKey })).catch(() => undefined);
       throw error;
     }
     await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
-    return Response.json({ key: nextKey, name, url: nextUrl, projectId: projectId && projectId !== "unfiled" ? projectId : null });
+    return Response.json({ key: nextKey, name, url: nextUrl, projectId: destinationProjectId });
   } catch (error) {
     return errorResponse(error);
   }

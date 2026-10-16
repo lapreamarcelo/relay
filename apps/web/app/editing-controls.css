@@ -1,0 +1,11 @@
+.video-edit-controls,.video-sound-controls{border:1px solid var(--border,#dce1e7);border-radius:12px;padding:14px;min-width:0;display:grid;gap:12px;margin:12px 0}
+.video-edit-controls legend,.video-sound-controls legend{font-size:13px;font-weight:650;padding:0 6px}
+.video-edit-actions,.video-edit-fields{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.video-edit-fields>label{display:grid;gap:5px;flex:1 1 120px;font-size:12px}
+.video-edit-fields input,.video-edit-fields select{width:100%;min-width:70px;border:1px solid var(--border,#dce1e7);border-radius:6px;padding:6px;background:var(--surface,#fff);color:inherit}
+.video-edit-controls small,.video-edit-empty{font-size:12px;color:var(--muted,#6b7280);line-height:1.5;margin:0}
+.video-beat-toggle{display:flex!important;align-items:center;gap:6px!important;font-size:12px;white-space:nowrap}
+.video-beat-toggle input{width:auto!important;min-width:0!important}
+.video-sound-lanes{position:relative;min-width:0}
+.video-beat-ruler{height:22px;position:relative;margin:0 6px;color:var(--muted,#6b7280);font-size:9px;overflow:hidden}
+.video-beat-ruler span{position:absolute;height:100%;border-left:1px solid var(--border,#dce1e7);padding-left:3px;white-space:nowrap}

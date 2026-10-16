@@ -1,0 +1,16 @@
+.scene-controls { border-top: 1px solid var(--border, #d9d9d9); padding: .8rem 0; min-width: 0; max-width: 100%; }
+.scene-controls summary { cursor: pointer; font-weight: 600; }
+.scene-controls p, .scene-controls small { color: var(--muted-foreground, #777); font-size: .76rem; line-height: 1.5; }
+.scene-controls fieldset { border: 0; margin: .75rem 0; padding: 0; min-width: 0; }
+.scene-controls legend { font-size: .8rem; font-weight: 600; margin-bottom: .5rem; }
+.scene-controls label { display: grid; min-width: 0; align-items: center; gap: .5rem; font-size: .75rem; margin: .4rem 0; }
+.scene-controls fieldset > label { grid-template-columns: minmax(80px, 1fr) minmax(0, 1.25fr) 34px; }
+.scene-controls > label:has(select) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.scene-controls input[type=range] { width: 100%; min-width: 0; }
+.scene-controls output { text-align: right; font-variant-numeric: tabular-nums; }
+.scene-controls select, .scene-controls input[type=number] { width: 100%; min-width: 0; box-sizing: border-box; background: var(--background, #fff); color: inherit; border: 1px solid var(--border, #ccc); border-radius: 5px; padding: .25rem; }
+.scene-camera-key { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: .5rem; font-size: .72rem; padding: .5rem 0; }
+.scene-camera-key > span, .scene-camera-key > .motion-curve-editor, .scene-camera-key > .motion-spring-controls { grid-column: 1 / -1; }
+.scene-camera-key > label { grid-template-columns: minmax(0, 1fr); margin: 0; }
+.scene-camera-key > button { justify-self: start; }
+.scene-controls button { font-size: .75rem; cursor: pointer; }

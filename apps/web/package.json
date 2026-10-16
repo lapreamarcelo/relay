@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build --webpack",
+    "dev": "node scripts/build-gpu-renderer.mjs && next dev",
+    "build": "node scripts/build-gpu-renderer.mjs && next build --webpack",
     "start": "node scripts/start-standalone.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-transform-types --test lib/*.test.ts",
@@ -21,18 +21,22 @@
     "@relay/providers": "workspace:*",
     "@smithy/node-http-handler": "^4.11.2",
     "better-auth": "^1.6.28",
+    "esbuild": "^0.28.2",
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
+    "playwright": "^1.64.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "three": "^0.186.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.186.0",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.8.0"
   }

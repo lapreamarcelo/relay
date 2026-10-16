@@ -50,7 +50,7 @@ function withoutUnpairedSurrogates(value: string): string {
   }).join("");
 }
 
-export function videoDownloadFilename(name: unknown): string {
+export function videoDownloadFilename(name: unknown, extension = "mp4"): string {
   const input = typeof name === "string" ? withoutUnpairedSurrogates(name.normalize("NFKC")) : "";
   const stem = Array.from(input
     .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]+/g, "-")
@@ -58,21 +58,21 @@ export function videoDownloadFilename(name: unknown): string {
     .trim()
     .replace(/^[. -]+/, "")
     .replace(/[. ]+$/, "")
-    .replace(/\.mp4$/i, "")
+    .replace(/\.(mp4|webm|gif|png|jpe?g)$/i, "")
     .replace(/[. ]+$/, ""))
     .slice(0, 100)
     .join("")
     .trim();
-  return `${stem || "video"}.mp4`;
+  return `${stem || "video"}.${["mp4","webm","gif","png","jpg"].includes(extension)?extension:"mp4"}`;
 }
 
-export function videoDownloadContentDisposition(name: unknown): string {
-  const filename = videoDownloadFilename(name);
-  const asciiStem = filename.slice(0, -4)
+export function videoDownloadContentDisposition(name: unknown, extension = "mp4"): string {
+  const filename = videoDownloadFilename(name,extension);
+  const asciiStem = filename.slice(0, filename.lastIndexOf("."))
     .replace(/[^\x20-\x7e]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^[. -]+|[. -]+$/g, "");
-  const asciiFilename = `${asciiStem || "video"}.mp4`;
+  const asciiFilename = `${asciiStem || "video"}.${filename.split(".").at(-1)}`;
   const encodedFilename = encodeURIComponent(filename).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
   return `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`;
 }

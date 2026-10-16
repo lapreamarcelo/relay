@@ -212,6 +212,23 @@ export interface CreativeLabel {
   background: SlideshowTextBackground;
   backgroundColor?: string;
   style: LabelStylePreset;
+  fontWeight?: 400 | 700 | 800;
+  kerning?: boolean;
+  textAlign?: "left" | "center" | "right";
+  letterSpacing?: number;
+  lineHeight?: number;
+  italic?: boolean;
+  strokeColor?: string;
+  strokeWidth?: number;
+  shadowColor?: string;
+  shadowBlur?: number;
+  shadowX?: number;
+  shadowY?: number;
+  backgroundOpacity?: number;
+  backgroundRadius?: number;
+  padding?: number;
+  sceneLayer?: "overlay" | "scene" | "back";
+  sceneDepth?: number;
 }
 
 export interface SlideshowSlide {
@@ -264,26 +281,49 @@ export interface VideoProject {
 
 export type VideoMusicMode = "none" | "fixed" | "rotate" | "random";
 
-export type AnimationEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+export type AnimationEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out" | "spring" | "bouncy" | "cubic-bezier";
+export interface AnimationCurve {
+  controlPoints?: [number, number, number, number];
+  stiffness?: number; damping?: number; mass?: number; velocity?: number;
+}
 export interface AnimationEffect {
-  preset: "fade" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "pop" | "zoom" | "typewriter";
+  preset: "fade" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "pop" | "zoom" | "typewriter" | "letter-rise" | "word-spring" | "line-cascade" | "tracking" | "soft-reveal" | "focus" | "ripple" | "spin-in" | "letter-drop" | "letter-slide" | "word-slide" | "word-blur" | "line-wipe" | "letter-zoom" | "word-zoom" | "letter-flip" | "wave-rise" | "arc-in" | "bounce-in" | "elastic-in" | "scatter-in" | "wipe-left" | "wipe-right" | "mask-up" | "mask-down" | "pulse-reveal" | "alternating-rise" | "ink-reveal";
   durationMs: number;
   easing?: AnimationEasing;
+  curve?: AnimationCurve;
+  staggerMs?: number;
 }
 export interface LayerKeyframe {
   /** Local time within the clip or label. Sparse properties interpolate independently. */
   timeMs: number;
   /** Curve used from this keyframe to the next authored value. */
   easing?: AnimationEasing;
+  curve?: AnimationCurve;
   x?: number; y?: number; scale?: number;
   rotateX?: number; rotateY?: number; rotateZ?: number;
-  foldAngle?: number; opacity?: number;
+  foldAngle?: number; opacity?: number; depth?: number;
 }
-export interface LayerAnimation { entrance?: AnimationEffect; exit?: AnimationEffect; keyframes?: LayerKeyframe[] }
+export interface LayerAnimation {
+  entrance?: AnimationEffect; exit?: AnimationEffect; keyframes?: LayerKeyframe[];
+  scaleMode?: "linear" | "perceptual";
+  /** Omitted keeps the final pose. A return blends the final key back to rest. */
+  returnMs?: number;
+}
 export interface ClipTransition {
   kind: "crossfade" | "slide-left" | "slide-right" | "wipe-left" | "wipe-right" | "zoom";
   durationMs: number;
   easing?: AnimationEasing;
+  curve?: AnimationCurve;
+}
+
+export interface VideoSceneKeyframe extends LayerKeyframe { z?: number; focalLength?: number }
+export interface VideoScene {
+  version: 1;
+  camera: { x: number; y: number; z: number; rotateX: number; rotateY: number; rotateZ: number; focalLength: number; keyframes?: VideoSceneKeyframe[] };
+  environment: "studio" | "softbox" | "sunset" | "night";
+  exposure: number; roughness: number; metallic: number; shadow: number;
+  lightAngle: number; focusDepth: number; aperture: number;
+  motionBlur: number;
 }
 
 export interface DeviceFrame {
@@ -304,6 +344,14 @@ export interface DeviceFrame {
   motionDurationMs?: number;
   motionEasing?: AnimationEasing;
   animation?: LayerAnimation;
+  renderMode?: "vector" | "mesh" | "gpu";
+  /** Bundled model/variant; omitted selects the device's default. */
+  modelId?: string;
+  finish?: "graphite" | "silver" | "gold" | "natural";
+  band?: "woven" | "none";
+  /** Shared scene is injected at render time; standalone frames may own one. */
+  scene?: VideoScene;
+  depth?: number;
 }
 
 export const brands: Brand[] = [];
@@ -324,6 +372,13 @@ export interface VideoClip {
   y: number;
   zoom: number;
   volume: number;
+  speed?: number;
+  /** Source timestamp held for this clip's authored duration. */
+  freezeMs?: number;
+  groupId?: string;
+  /** Local motion continues from this offset across linked source cuts. */
+  motionOffsetMs?: number;
+  pointer?: VideoPointerTrack;
   deviceFrame?: DeviceFrame;
   /** Incoming overlap with the preceding clip, capped at half of each clip. */
   transition?: ClipTransition;
@@ -338,6 +393,7 @@ export interface VideoCameraKeyframe {
   x?: number;
   y?: number;
   easing?: AnimationEasing;
+  curve?: AnimationCurve;
 }
 export interface VideoCamera {
   /** 1 is the full scene; up to 4 magnifies footage and device frames beneath labels. */
@@ -345,6 +401,55 @@ export interface VideoCamera {
   x: number;
   y: number;
   keyframes?: VideoCameraKeyframe[];
+  scaleMode?: "linear" | "perceptual";
+  returnMs?: number;
+}
+export interface VideoPointerEvent {
+  timeMs: number; x: number; y: number;
+  kind: "move" | "down" | "up";
+  screen?: "inner" | "outer";
+}
+export interface VideoPointerTrack {
+  events: VideoPointerEvent[];
+  style: "arrow" | "touch";
+  color: string; size: number; smoothing: number;
+  display: "continuous" | "tap-only";
+  idleMs: number; fadeMs: number;
+}
+export interface VideoAudioTrack {
+  id: string; url: string; name: string;
+  startMs: number; endMs: number; offsetMs: number;
+  volume: number; fadeInMs: number; fadeOutMs: number;
+}
+export interface VideoAudioFrame { rms: number; peak: number; bass: number; mid: number; treble: number }
+export interface VideoAudioAnalysis {
+  version: 1; durationMs: number; frameMs: number; frames: VideoAudioFrame[];
+  bpm: number; offsetMs: number; confidence: number; beats: number[]; bars: number[];
+  drops: number[]; quiet: { startMs: number; endMs: number }[];
+}
+export interface VideoAudioAnalysisTrack {
+  sourceUrl: string; startMs: number; endMs?: number; offsetMs: number; volume: number;
+  fadeInMs?: number; fadeOutMs?: number; loop?: boolean; analysis: VideoAudioAnalysis;
+}
+export interface VideoCodeParameter {
+  name: string; kind: "number" | "color" | "text"; value: number | string; min?: number; max?: number;
+}
+/** Bounded JSON drawing instructions, evaluated without JavaScript or host access. */
+export interface VideoCodeClip { source: string; parameters: VideoCodeParameter[] }
+export interface VideoGraphic {
+  id: string; kind: "shape" | "particles" | "bars" | "ring" | "code";
+  startMs: number; endMs: number;
+  x: number; y: number; width: number; height: number;
+  color: string; seed: number; count: number; speed: number;
+  code?: VideoCodeClip;
+  audioReactive?: { sourceUrl: string; signal: "envelope" | "bass" | "mid" | "treble"; amount: number };
+  animation?: LayerAnimation;
+}
+export interface VideoExportSettings {
+  format: "mp4" | "webm" | "gif" | "png" | "jpeg";
+  fps: 24 | 30 | 60;
+  resolution: "720p" | "1080p" | "2160p";
+  quality: "draft" | "standard" | "high";
 }
 export interface VideoTimeline {
   version: 1;
@@ -358,6 +463,12 @@ export interface VideoTimeline {
     imageFit?: "cover" | "contain";
   };
   camera?: VideoCamera;
+  scene?: VideoScene;
+  graphics?: VideoGraphic[];
+  audioTracks?: VideoAudioTrack[];
+  audioAnalysis?: VideoAudioAnalysisTrack[];
+  beatGrid?: { bpm: number; offsetMs: number };
+  exportSettings?: VideoExportSettings;
   clips: VideoClip[];
   /** Simultaneous overlays above the sequential clips and below timed labels. */
   layers?: VideoLayer[];

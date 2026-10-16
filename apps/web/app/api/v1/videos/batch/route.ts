@@ -4,6 +4,7 @@ import { sql } from "@relay/database";
 
 import { requireApiSession } from "../../../../../lib/api-session";
 import { automaticInstagramSettings } from "../../../../../lib/automatic-post-settings";
+import { ownsLegacyMedia, ownsUnfiledMedia, unfiledMediaPrefix } from "../../../../../lib/media-ownership";
 import { getR2Client, getR2Config, publicObjectUrl } from "../../../../../lib/r2";
 import { timelineDuration } from "../../../../../lib/video-timeline";
 import { renderVideoArtifactDetails } from "../../../../../lib/video-renderer";
@@ -35,9 +36,13 @@ async function listKeys(prefix: string): Promise<string[]> {
 
 async function musicUrls(folderId: string, ownerId: string): Promise<string[]> {
   const config = getR2Config(); const client = getR2Client();
-  if (folderId === "unfiled") return (await listKeys("music/")).filter((key) => musicFile.test(key)).map(publicObjectUrl);
+  const unfiledKeys = async () => (await Promise.all([
+    listKeys(unfiledMediaPrefix(ownerId, "music")),
+    ownsLegacyMedia(ownerId) ? listKeys("music/") : Promise.resolve([]),
+  ])).flat().filter((key) => ownsUnfiledMedia(key, ownerId, "music"));
+  if (folderId === "unfiled") return (await unfiledKeys()).filter((key) => musicFile.test(key)).map(publicObjectUrl);
   if (folderId === "all") {
-    const [rootKeys, projectKeys] = await Promise.all([listKeys("music/"), listKeys("media-projects/")]);
+    const [rootKeys, projectKeys] = await Promise.all([unfiledKeys(), listKeys("media-projects/")]);
     const manifestKeys = projectKeys.filter((key) => key.endsWith("/.project.json"));
     const ownedMusicPrefixes = (await Promise.all(manifestKeys.map(async (key) => {
       const manifest = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key })).then(async (object) => JSON.parse(await object.Body!.transformToString()) as { id?: string; ownerId?: string; kind?: string }).catch(() => null);

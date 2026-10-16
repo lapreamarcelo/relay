@@ -66,6 +66,37 @@ function parseSettings(provider: ProviderId, value: unknown): ProviderPostSettin
     ? { kind: "youtube", title, tags, privacyStatus: settings.privacyStatus as "private" | "unlisted" | "public", madeForKids: settings.madeForKids, thumbnailUrl: thumbnailUrl ?? undefined } : null;
 }
 
+interface SavedPostPlan {
+  id: string;
+  status: PostStatus;
+  text: string;
+  media_type: "none" | "image" | "video";
+  media_url: string | null;
+  media_urls: string[];
+}
+
+interface SavedPostTarget {
+  post_id: string;
+  status: PostStatus;
+  publish_lease_owner: string | null;
+  provider: ProviderId;
+  settings: ProviderPostSettings;
+  text_override: string | null;
+}
+
+function savedPostValidationError(post: SavedPostPlan, targets: SavedPostTarget[], scheduledAt: string | null): string | undefined {
+  if (targets.length === 0) return "A post needs at least one destination before publishing.";
+  if (post.media_type !== "none" && !post.media_url) return "The selected media is invalid or has not finished uploading.";
+  for (const target of targets) if (!parseSettings(target.provider, target.settings)) return "One of the selected destinations or its platform settings is invalid.";
+  return validatePostPlan({
+    text: post.text,
+    mediaType: post.media_type,
+    mediaCount: post.media_urls.length || (post.media_url ? 1 : 0),
+    scheduledAt,
+    destinations: targets.map((target) => ({ provider: target.provider, settings: target.settings, textOverride: target.text_override ?? undefined })),
+  })[0]?.message;
+}
+
 export async function GET(request: Request) {
   const authorization = await requireApiSession(request, { apiKeyScope: "posts:read" });
   if (authorization.response) return authorization.response;
@@ -223,11 +254,17 @@ export async function PATCH(request: Request) {
     if (updates.some((item) => !item.id || !item.scheduledAt || Number.isNaN(new Date(item.scheduledAt).getTime()) || new Date(item.scheduledAt).getTime() <= Date.now())) return Response.json({ error: "Every bulk update needs a post id and future schedule time." }, { status: 400 });
     const result = await sql.begin(async (transaction) => {
       const ids = updates.map((item) => item.id!);
-      const posts = await transaction<{ id: string; status: PostStatus }[]>`SELECT id, status FROM "post" WHERE id = ANY(${ids}) AND owner_id = ${ownerId} FOR UPDATE`;
+      const posts = await transaction<SavedPostPlan[]>`SELECT id, status, text, media_type, media_url, media_urls FROM "post" WHERE id = ANY(${ids}) AND owner_id = ${ownerId} FOR UPDATE`;
       if (posts.length !== ids.length) return { error: "One or more posts were not found.", status: 404 as const };
       if (posts.some((post) => post.status !== "draft" && post.status !== "scheduled")) return { error: "Only drafts and scheduled posts can be bulk rescheduled.", status: 409 as const };
-      const targets=await transaction<{status:PostStatus;publish_lease_owner:string|null}[]>`SELECT status,publish_lease_owner FROM post_target WHERE post_id=ANY(${ids}) FOR UPDATE`;
-      if(targets.some(target=>!['draft','scheduled'].includes(target.status)||target.publish_lease_owner))return {error:"A destination has started publishing; reload before rescheduling.",status:409 as const};
+      const targets = await transaction<SavedPostTarget[]>`SELECT post_id, status, publish_lease_owner, provider, settings, text_override FROM "post_target" WHERE post_id = ANY(${ids}) FOR UPDATE`;
+      if (targets.some((target) => !["draft", "scheduled"].includes(target.status) || target.publish_lease_owner)) return { error: "A destination has started publishing; reload before rescheduling.", status: 409 as const };
+      // Validate every locked plan before changing any member of the batch.
+      for (const update of updates) {
+        const post = posts.find((post) => post.id === update.id)!;
+        const error = savedPostValidationError(post, targets.filter((target) => target.post_id === post.id), update.scheduledAt!);
+        if (error) return { error, status: 400 as const };
+      }
       for (const update of updates) {
         const time = new Date(update.scheduledAt!).toISOString();
         await transaction`UPDATE "post" SET status = 'scheduled', scheduled_at = ${time}, updated_at = NOW() WHERE id = ${update.id}`;
@@ -275,6 +312,7 @@ export async function PATCH(request: Request) {
   }
 
   if (Array.isArray(body?.targets) && typeof body.text === "string") {
+    if (body.targets.length === 0 || body.targets.length > 20) return Response.json({ error: "A post needs between 1 and 20 destinations." }, { status: 400 });
     const text = body.text.trim().slice(0, 63_206);
     const mediaType = typeof body.mediaType === "string" && mediaTypes.has(body.mediaType) ? body.mediaType as "none" | "image" | "video" : "none";
     const mediaUrl = optionalString(body.mediaUrl, 2_000);
@@ -287,11 +325,14 @@ export async function PATCH(request: Request) {
     if ((mediaType === "none" && mediaUrl) || (mediaType !== "none" && (!mediaUrl || !isWebUrl(mediaUrl)))) return Response.json({ error: "The selected media is invalid." }, { status: 400 });
     if (mediaUrls.length > 35 || mediaUrls.some((value) => !isWebUrl(value)) || (mediaUrls.length > 1 && (mediaType !== "image" || mediaUrl !== mediaUrls[0] || mediaUrls.some((value) => !isHttpsUrl(value))))) return Response.json({ error: "A slideshow needs between 1 and 35 valid HTTPS image URLs." }, { status: 400 });
     const destinations: Array<{ id: string; provider: ProviderId; displayName: string; handle: string; settings: ProviderPostSettings; textOverride?: string }> = [];
+    const destinationIds = new Set<string>();
     for (const target of body.targets) {
       const accountId = optionalString(target.accountId, 240);
+      if (!accountId || destinationIds.has(accountId)) return Response.json({ error: "Every destination must be a unique account with platform settings." }, { status: 400 });
       const [account] = accountId ? await sql<{ id: string; provider: ProviderId; display_name: string; username: string }[]>`SELECT id, provider, display_name, username FROM "social_account" WHERE id = ${accountId} AND owner_id = ${ownerId}` : [];
       const settings = account ? parseSettings(account.provider, target.settings) : null;
       if (!account || !settings) return Response.json({ error: "One of the edited destinations or its settings is invalid." }, { status: 400 });
+      destinationIds.add(accountId);
       destinations.push({ id: account.id, provider: account.provider, displayName: account.display_name, handle: account.username.startsWith("@") ? account.username : `@${account.username}`, settings, textOverride: optionalString(target.textOverride, 63_206) ?? undefined });
     }
     if (mediaUrls.length > 1 && destinations.some((destination) => destination.provider === "youtube")) return Response.json({ error: "YouTube requires video and cannot receive image slideshows." }, { status: 400 });
@@ -305,50 +346,51 @@ export async function PATCH(request: Request) {
     const edited = await sql.begin(async (transaction) => {
       const [post] = await transaction<{ status: PostStatus }[]>`SELECT status FROM "post" WHERE id = ${id} AND owner_id = ${ownerId} FOR UPDATE`;
       if (!post || (post.status !== "draft" && post.status !== "scheduled")) return false;
-      await transaction`SELECT id FROM "post_target" WHERE post_id = ${id} FOR UPDATE`;
+      const targets = await transaction<{ status: PostStatus; publish_lease_owner: string | null }[]>`SELECT status, publish_lease_owner FROM "post_target" WHERE post_id = ${id} FOR UPDATE`;
+      if (targets.some((target) => !["draft", "scheduled"].includes(target.status) || target.publish_lease_owner !== null)) return false;
       const publishAfter = status === "scheduled" ? new Date(scheduledAt!).toISOString() : new Date().toISOString();
       await transaction`UPDATE "post" SET creative_origin = CASE WHEN media_url=${mediaUrl} THEN creative_origin ELSE ${editedOrigin ? JSON.stringify(editedOrigin) : null}::jsonb END, brand_id = ${brandId}, campaign_id = ${campaignId}, text = ${text}, media_type = ${mediaType}, media_url = ${mediaUrl}, media_urls = ${JSON.stringify(mediaUrls)}::jsonb, status = ${status}, scheduled_at = ${status === "scheduled" ? publishAfter : null}, updated_at = NOW() WHERE id = ${id}`;
       await transaction`DELETE FROM "post_target" WHERE post_id = ${id}`;
       for (const destination of destinations) await transaction`INSERT INTO "post_target" (id, post_id, social_account_id, provider, account_display_name, account_handle, status, settings, text_override, publish_after) VALUES (${crypto.randomUUID()}, ${id}, ${destination.id}, ${destination.provider}, ${destination.displayName}, ${destination.handle}, ${status}, ${JSON.stringify(destination.settings)}::jsonb, ${destination.textOverride ?? null}, ${publishAfter})`;
       return true;
     });
-    if (!edited) return Response.json({ error: "Only drafts and scheduled posts can be edited." }, { status: 409 });
+    if (!edited) return Response.json({ error: "Only drafts and scheduled posts whose destinations have not started publishing can be edited." }, { status: 409 });
     const [saved] = (await listPostsForOwner(ownerId)).filter((item) => item.id === id);
     return Response.json({ data: saved });
   }
 
   const publishNow = body?.scheduledAt === null;
   const scheduledAt = optionalString(body?.scheduledAt, 100);
-  if (!publishNow && (!scheduledAt || Number.isNaN(new Date(scheduledAt).getTime()))) {
-    return Response.json({ error: "Set scheduledAt to an ISO date, or null to publish now." }, { status: 400 });
-  }
-  const [post] = await sql<{ id: string; status: PostStatus }[]>`
-    SELECT id, status FROM "post" WHERE id = ${id} AND owner_id = ${ownerId}
-  `;
-  if (!post) return Response.json({ error: "The post was not found." }, { status: 404 });
-  if (post.status !== "draft" && post.status !== "scheduled") {
-    return Response.json({ error: "Only a draft or scheduled post can be rescheduled or published now." }, { status: 409 });
+  if (!publishNow && (!scheduledAt || Number.isNaN(new Date(scheduledAt).getTime()) || new Date(scheduledAt).getTime() <= Date.now())) {
+    return Response.json({ error: "Set scheduledAt to a future ISO date, or null to publish now." }, { status: 400 });
   }
   const nextStatus: PostStatus = publishNow ? "publishing" : "scheduled";
   const publishAfter = publishNow ? new Date().toISOString() : new Date(scheduledAt!).toISOString();
-  const updated = await sql.begin(async (transaction) => {
-    const targets = await transaction<{ status: PostStatus; publish_lease_owner: string | null }[]>`
-      SELECT status, publish_lease_owner FROM "post_target" WHERE post_id = ${id} FOR UPDATE
+  const result = await sql.begin(async (transaction) => {
+    const [post] = await transaction<SavedPostPlan[]>`
+      SELECT id, status, text, media_type, media_url, media_urls FROM "post" WHERE id = ${id} AND owner_id = ${ownerId} FOR UPDATE
     `;
-    if (targets.some((target) => target.status === "publishing" || target.status === "processing" || target.publish_lease_owner !== null)) return false;
+    if (!post) return { error: "The post was not found.", status: 404 as const };
+    if (post.status !== "draft" && post.status !== "scheduled") return { error: "Only a draft or scheduled post can be rescheduled or published now.", status: 409 as const };
+    const targets = await transaction<SavedPostTarget[]>`
+      SELECT post_id, status, publish_lease_owner, provider, settings, text_override FROM "post_target" WHERE post_id = ${id} FOR UPDATE
+    `;
+    if (targets.some((target) => target.status === "publishing" || target.status === "processing" || target.publish_lease_owner !== null)) return { error: "The post started publishing while it was being changed.", status: 409 as const };
+    const error = savedPostValidationError(post, targets, publishNow ? null : publishAfter);
+    if (error) return { error, status: 400 as const };
     const [claimed] = await transaction<{ id: string }[]>`
       UPDATE "post" SET status = ${nextStatus}, scheduled_at = ${publishNow ? null : publishAfter}, updated_at = NOW()
       WHERE id = ${id} AND owner_id = ${ownerId} AND status IN ('draft', 'scheduled')
       RETURNING id
     `;
-    if (!claimed) return false;
+    if (!claimed) return { error: "The post started publishing while it was being changed.", status: 409 as const };
     await transaction`
       UPDATE "post_target" SET status = ${nextStatus}, publish_after = ${publishAfter}, error = NULL, updated_at = NOW()
       WHERE post_id = ${id}
     `;
-    return true;
+    return { data: id };
   });
-  if (!updated) return Response.json({ error: "The post started publishing while it was being changed." }, { status: 409 });
+  if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
   const [saved] = (await listPostsForOwner(ownerId)).filter((item) => item.id === id);
   return Response.json({ data: saved });
 }

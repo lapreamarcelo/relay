@@ -71,3 +71,23 @@ test("saved cinematic camera tracks scale with replacement scene lifetime withou
  assert.deepEqual(template,before);
  assert.doesNotThrow(()=>normalizeVideoTimeline(result));
 });
+
+test("templates retime speed-aware linked motion and keep source-specific replacement pointer/freeze",()=>{
+ const animation={returnMs:400,scaleMode:"perceptual" as const,keyframes:[{timeMs:0,scale:.7,easing:"spring" as const,curve:{stiffness:210,damping:18}},{timeMs:4000,scale:1}]};
+ const frame={device:"iphone" as const,background:"#112233",color:"#171717",animation};
+ const template={...emptyTimeline(),clips:[{...clip("a",2000),groupId:"move",motionOffsetMs:0,deviceFrame:frame},{...clip("b",2000),groupId:"move",motionOffsetMs:2000,deviceFrame:frame}]};
+ const pointer={events:[{timeMs:1500,x:.3,y:.4,kind:"down" as const}],style:"touch" as const,color:"#FFFFFF",size:20,smoothing:0,display:"tap-only" as const,idleMs:0,fadeMs:200};
+ const result=applySavedVideoTemplate(template,{...emptyTimeline(),clips:[{...clip("new-a",4000),speed:2,freezeMs:1500,pointer},{...clip("new-b",2000),speed:2}]});
+ assert.equal(timelineDuration(result),3000);assert.deepEqual(result.clips.map(item=>item.motionOffsetMs),[0,2000]);
+ assert.equal(result.clips[0].freezeMs,1500);assert.deepEqual(result.clips[0].pointer,pointer);assert.equal(result.clips[1].pointer,undefined);
+ assert.equal(result.clips[0].deviceFrame!.animation!.keyframes!.at(-1)!.timeMs,3000);assert.equal(result.clips[0].deviceFrame!.animation!.returnMs,300);assert.deepEqual(result.clips[0].deviceFrame!.animation!.keyframes![0].curve,{stiffness:210,damping:18});
+ assert.doesNotThrow(()=>normalizeVideoTimeline(result));
+});
+
+test("template graphics, sound cues, scene and camera follow replacement lifetime",()=>{
+ const template={...emptyTimeline(),clips:[clip("a",4000)],graphics:[{id:"spark",kind:"particles" as const,startMs:1000,endMs:4000,x:.5,y:.5,width:.5,height:.3,color:"#FFFFFF",seed:5,count:10,speed:1,animation:{keyframes:[{timeMs:0,opacity:0},{timeMs:3000,opacity:1}]}}],audioTracks:[{id:"cue",url:"https://example.com/a.wav",name:"Cue",startMs:1000,endMs:3000,offsetMs:200,volume:.5,fadeInMs:400,fadeOutMs:600}],camera:{zoom:1,x:.5,y:.5,returnMs:400,keyframes:[{timeMs:0,zoom:1},{timeMs:4000,zoom:2}]}};
+ const result=applySavedVideoTemplate(template,{...emptyTimeline(),clips:[clip("b",2000)]});
+ assert.deepEqual(result.graphics!.map(g=>[g.startMs,g.endMs]),[[500,2000]]);assert.equal(result.graphics![0].animation!.keyframes![1].timeMs,1500);
+ assert.deepEqual(result.audioTracks!.map(a=>[a.startMs,a.endMs,a.fadeInMs,a.fadeOutMs,a.offsetMs]),[[500,1500,200,300,200]]);assert.equal(result.camera!.returnMs,200);
+ assert.doesNotThrow(()=>normalizeVideoTimeline(result));
+});

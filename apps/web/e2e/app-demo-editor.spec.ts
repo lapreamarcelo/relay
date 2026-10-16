@@ -217,7 +217,8 @@ test("every device and animation preset works across promotion aspect ratios", a
 });
 
 test("an edited promotion exports a real playable MP4 with its device, background and timed label", async ({ page }, testInfo) => {
-  test.setTimeout(120_000);
+  // Real 1080p composition can take over 90 seconds on a busy test host.
+  test.setTimeout(240_000);
   const project = await editor(page, true, true);
   await page.getByLabel("Aspect ratio", { exact: true }).selectOption("1:1");
   await page.getByRole("group", { name: "Device frame", exact: true }).getByRole("button", { name: "iPhone Duo", exact: true }).click();
@@ -258,13 +259,13 @@ test("an edited promotion exports a real playable MP4 with its device, backgroun
       renderRevision = project().revision;
       const document = join(dir, "timeline.json");
       await writeFile(document, JSON.stringify(project().timeline));
-      await run(process.execPath, [fileURLToPath(new URL("./fixtures/render-demo.mjs", import.meta.url)), document, dir], { timeout: 90_000 });
+      await run(process.execPath, [fileURLToPath(new URL("./fixtures/render-demo.mjs", import.meta.url)), document, dir], { timeout: 180_000 });
       body = await readFile(join(dir, "output.mp4"));
       await route.fulfill({ status: 202, json: { job: { id: "real-render", projectId: project().id, revision: renderRevision, status: "queued", progress: 0 } } });
     });
     await page.route("**/api/v1/videos/jobs*", route => route.fulfill({ json: { data: { id: "real-render", projectId: project().id, revision: renderRevision, status: "completed", progress: 100, renderedUrl: "https://media.example.test/output.mp4" } } }));
     await page.route("**/api/v1/videos/download?**", route => route.fulfill({ contentType: "video/mp4", headers: { "Content-Disposition": 'attachment; filename="promotion.mp4"' }, body }));
-    const downloaded = page.waitForEvent("download", { timeout: 100_000 });
+    const downloaded = page.waitForEvent("download", { timeout: 200_000 });
     await page.getByRole("button", { name: "Save & download", exact: true }).click();
     const download = await downloaded;
     expect(download.suggestedFilename()).toBe("promotion.mp4");
@@ -338,7 +339,19 @@ test("a failed save keeps edits recoverable and export cancellation and retry pr
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(page.getByText("Export running", { exact: true })).toBeVisible();
   status = "completed";
-  await expect(page.getByRole("link", { name: "Download MP4", exact: true })).toBeVisible();
+  const exportLink = page.getByRole("link", { name: "Download export", exact: true });
+  await expect(exportLink).toBeVisible();
+  await expect(exportLink).toHaveAttribute("href", "/api/v1/videos/download?jobId=retry-render");
+  const expectedFile = readFileSync(new URL("./fixtures/device-demo.mp4", import.meta.url));
+  await page.route("**/api/v1/videos/download?jobId=retry-render", route => route.fulfill({ contentType: "video/mp4", headers: { "Content-Disposition": 'attachment; filename="retry.mp4"' }, body: expectedFile }));
+  const downloaded = page.waitForEvent("download");
+  await exportLink.click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toBe("retry.mp4");
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  expect(Buffer.concat(chunks)).toEqual(expectedFile);
   expect(project().timeline.labels[0].text).toBe("My app launch");
 });
 

@@ -2,6 +2,9 @@ import type { DeviceFrame, VideoClip } from "@relay/core";
 import { animationExpressions, animationEase } from "./video-animation.ts";
 import { deviceBackgroundCss, deviceFrameGeometry, type DeviceFrameGeometry } from "./device-frames.ts";
 
+import { sceneCameraState, sceneCameraPoint, sceneProjectPoint, rotateScenePoint, sceneFocusBlur, sceneShutterSamples, defaultVideoScene, type ScenePoint } from "./video-scene.ts";
+import { createDeviceMesh, projectDeviceMesh, renderDeviceMeshSvg } from "./device-mesh.ts";
+
 export interface DevicePoint { x: number; y: number }
 export interface DevicePanelRect { x: number; y: number; width: number; height: number }
 export interface DevicePanel {
@@ -16,6 +19,8 @@ export interface DevicePanel {
   /** Body sheets sit behind the front glass; these values also drive export. */
   depth?: number;
   shade?: number;
+  screen?: "inner" | "outer";
+  screenRect?: DevicePanelRect & {radius:number};
 }
 export interface DeviceScene {
   geometry: DeviceFrameGeometry;
@@ -23,6 +28,9 @@ export interface DeviceScene {
   bodyPanels: DevicePanel[];
   background: string;
   opacity: number;
+  meshSvg?: string;
+  meshBounds?: DevicePanelRect;
+  focusBlur?: number;
 }
 
 // Numeric preview and symbolic FFmpeg coordinates share this single projection.
@@ -59,7 +67,13 @@ function pose(frame: DeviceFrame, timeMs: Scalar, height: number, durationMs = f
   return { rx: degrees(rx), ry: degrees(ry), rz: degrees(rz), fold: degrees(frame.device === "iphone-duo" ? fold : 0), dy, animated };
 }
 
-function project(width: number, height: number, frame: DeviceFrame, geometry: DeviceFrameGeometry, timeMs: Scalar, point: DevicePoint, side: number, durationMs?: number, bodyDepth = 0): { x: Scalar; y: Scalar } {
+/** The GPU and software paths evaluate the same authored object clock. */
+export function devicePose(frame:DeviceFrame,timeMs:number,height:number,durationMs:number) {
+  return pose(frame,timeMs,height,durationMs);
+}
+
+function project(width: number, height: number, frame: DeviceFrame, geometry: DeviceFrameGeometry, timeMs: Scalar, point: DevicePoint, side: number, durationMs?: number, bodyDepth = 0, sceneTimeMs: Scalar = timeMs): { x: Scalar; y: Scalar } {
+  if (frame.renderMode === "mesh") return meshProjectPoint(width,height,frame,geometry,timeMs,{x:point.x-geometry.outer.x-geometry.outer.width/2,y:point.y-geometry.outer.y-geometry.outer.height/2,z:bodyDepth},side,durationMs,sceneTimeMs).screen;
   const p = pose(frame, timeMs, height, durationMs), scale = p.animated.scale;
   const localX = mul(point.x - geometry.outer.x - geometry.outer.width / 2, scale);
   const localY = mul(point.y - geometry.outer.y - geometry.outer.height / 2, scale);
@@ -78,8 +92,51 @@ function project(width: number, height: number, frame: DeviceFrame, geometry: De
   return { x: add(mul(width, p.animated.x), mul(rotatedX, perspective)), y: add(add(mul(height, p.animated.y), p.dy), mul(rotatedY, perspective)) };
 }
 
-function facing(frame: DeviceFrame, timeMs: Scalar, height: number, side: number, durationMs?: number): Scalar {
+/** A single vertex pipeline for polygon mesh, CSS glass homographies and FFmpeg. */
+function meshProjectPoint(width:number,height:number,frame:DeviceFrame,geometry:DeviceFrameGeometry,timeMs:Scalar,point:ScenePoint,side:number,durationMs=4000,sceneTimeMs:Scalar=timeMs,preparedPose?:ReturnType<typeof pose>) {
+  const p=preparedPose ?? pose(frame,timeMs,height,durationMs),scale=p.animated.scale;
+  const folded=rotateScenePoint({x:mul(point.x,scale),y:mul(point.y,scale),z:mul(point.z,scale)},0,mul(-side*.5,p.fold),0);
+  const rotated=rotateScenePoint(folded,p.rx,p.ry,p.rz);
+  const world={x:add(rotated.x,mul(width,add(p.animated.x,-.5))),y:add(add(rotated.y,mul(height,add(p.animated.y,-.5))),p.dy),z:add(rotated.z,mul(p.animated.depth,Math.max(width,height)))};
+  return {screen:sceneProjectPoint(world,width,height,frame.scene,sceneTimeMs),camera:sceneCameraPoint(world,width,height,frame.scene,sceneTimeMs)};
+}
+/** Body bounds remain selectable when all recording surfaces face away. */
+export function deviceMeshBounds(width:number,height:number,frame:DeviceFrame,timeMs=0,durationMs=frame.motionDurationMs ?? 4000,sceneTimeMs=timeMs):DevicePanelRect {
+  const geometry=deviceFrameGeometry(width,height,frame.device),mesh=createDeviceMesh(geometry,frame.device),p=pose(frame,timeMs,height,durationMs);
+  const points=mesh.faces.flatMap(face=>face.vertices.map(point=>meshProjectPoint(width,height,frame,geometry,timeMs,point,face.side,durationMs,sceneTimeMs,p).screen as ScenePoint));
+  const x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y)),right=Math.max(...points.map(p=>p.x)),bottom=Math.max(...points.map(p=>p.y));
+  return {x,y,width:right-x,height:bottom-y};
+}
+/** Render local pose at timeMs, shared camera at sceneTimeMs. This is already
+ * projected output SVG: export must NOT perspective-warp this body input. */
+export function deviceMeshSvg(width:number,height:number,frame:DeviceFrame,timeMs=0,durationMs=frame.motionDurationMs ?? 4000,sceneTimeMs=timeMs,fps=30):string {
+  const geometry=deviceFrameGeometry(width,height,frame.device),mesh=createDeviceMesh(geometry,frame.device),scene=frame.scene ?? defaultVideoScene;
+  const samples=sceneShutterSamples(scene,timeMs,fps);
+  const rendered=samples.map(sample=>{
+    const globalTime=Math.max(0,sceneTimeMs+sample.timeMs-timeMs),cameraPose=sceneCameraState(scene,globalTime);
+    const frozenFrame={...frame,scene:{...scene,camera:{...scene.camera,x:cameraPose.x,y:cameraPose.y,z:cameraPose.z,rotateX:cameraPose.rotateX as number,rotateY:cameraPose.rotateY as number,rotateZ:cameraPose.rotateZ as number,focalLength:cameraPose.focalLength*cameraPose.scale,keyframes:undefined}}};
+    const devicePose=pose(frame,sample.timeMs,height,durationMs);
+    const faces=projectDeviceMesh(mesh,(point,side)=>meshProjectPoint(width,height,frozenFrame,geometry,sample.timeMs,point,side,durationMs,globalTime,devicePose) as {screen:ScenePoint;camera:ScenePoint},frame,scene,Math.max(width,height)*3);
+    const svg=renderDeviceMeshSvg(width,height,faces,scene,sceneFocusBlur(scene,devicePose.animated.depth as number,width,height));
+    return {svg,weight:sample.weight};
+  });
+  if(rendered.length===1) return rendered[0].svg;
+  const definitions=rendered.map((r,i)=>r.svg.replace(/^<svg /,`<svg id="shutter-image${i}" `).replaceAll('id="mesh-',`id="mesh-${i}-`).replaceAll('url(#mesh-',`url(#mesh-${i}-`)).join("");
+  const images=rendered.map((r,i)=>`<feImage href="#shutter-image${i}" x="0" y="0" width="${width}" height="${height}" result="image${i}"/><feColorMatrix in="image${i}" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 ${r.weight} 0" result="sample${i}"/>`).join("");
+  const sums=rendered.slice(1).map((_,i)=>`<feComposite in="${i===0?"sample0":`sum${i-1}`}" in2="sample${i+1}" operator="arithmetic" k2="1" k3="1" result="sum${i}"/>`).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><defs>${definitions}<filter id="mesh-shutter" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">${images}${sums}</filter></defs><rect width="100%" height="100%" fill="transparent" filter="url(#mesh-shutter)"/></svg>`;
+}
+
+function facing(frame: DeviceFrame, timeMs: Scalar, height: number, side: number, durationMs?: number, width = height, sceneTimeMs: Scalar = timeMs): Scalar {
   const p = pose(frame, timeMs, height,durationMs);
+  if(frame.renderMode === "mesh") {
+    const normal=rotateScenePoint(rotateScenePoint({x:0,y:0,z:1},0,mul(-side*.5,p.fold),0),p.rx,p.ry,p.rz);
+    const c=animationExpressions({keyframes:frame.scene?.camera.keyframes},sceneTimeMs,86400000,{...frame.scene?.camera,scale:1},"device");
+    const n=rotateScenePoint(normal,mul(c.rotateX,-Math.PI/180),mul(c.rotateY,-Math.PI/180),mul(c.rotateZ,-Math.PI/180));
+    const geometry=deviceFrameGeometry(width,height,frame.device),center=meshProjectPoint(width,height,frame,geometry,timeMs,{x:side*geometry.outer.width/4,y:0,z:0},side,durationMs,sceneTimeMs).camera;
+    const camera=Math.max(width,height)*3;
+    return div(add(add(mul(n.x,neg(center.x)),mul(n.y,neg(center.y))),mul(n.z,add(camera,neg(center.z)))),camera);
+  }
   return add(mul(side, mul(sin(mul(.5, p.fold)), sin(p.ry))), mul(cos(mul(.5, p.fold)), mul(cos(p.rx), cos(p.ry))));
 }
 
@@ -88,6 +145,13 @@ export function devicePanelRects(geometry: DeviceFrameGeometry, frame: DeviceFra
   if (frame.device !== "iphone-duo") return [{ x, y, width, height }];
   const left = Math.floor(width / 2);
   return [{ x, y, width: left, height }, { x: x + left, y, width: width - left, height }];
+}
+interface DeviceSurface { rect:DevicePanelRect; side:number; depth:number; rear:boolean; screen:"inner"|"outer"; screenRect?:DevicePanel["screenRect"] }
+function deviceSurfaces(geometry:DeviceFrameGeometry,frame:DeviceFrame):DeviceSurface[] {
+  const front=devicePanelRects(geometry,frame).map(rect=>({rect,side:rect.x+rect.width/2<geometry.outer.x+geometry.outer.width/2?-1:1,depth:0,rear:false,screen:frame.device === "iphone-duo"?"inner" as const:"outer" as const}));
+  if(frame.renderMode !== "mesh" || frame.device !== "iphone-duo") return front;
+  const rect=front[1].rect,b=geometry.border,top=Math.round(rect.y+rect.width*.5);
+  return [...front,{rect,side:1,depth:-createDeviceMesh(geometry,frame.device).thickness-.4,rear:true,screen:"outer",screenRect:{x:rect.x+b,y:top,width:rect.width-b*2,height:rect.y+rect.height-b-top,radius:geometry.screen.radius}}];
 }
 const rectCorners = (r: DevicePanelRect): [DevicePoint, DevicePoint, DevicePoint, DevicePoint] => [{ x: r.x, y: r.y }, { x: r.x + r.width, y: r.y }, { x: r.x, y: r.y + r.height }, { x: r.x + r.width, y: r.y + r.height }];
 
@@ -112,25 +176,26 @@ export function devicePanelAtScale(panel: DevicePanel, scale: number): DevicePan
   return { ...panel, rect, corners, transform: devicePanelTransform(rect, corners) };
 }
 
-export function deviceScene(width: number, height: number, frame: DeviceFrame, timeMs = 0, durationMs = frame.motionDurationMs ?? 4000): DeviceScene {
+export function deviceScene(width: number, height: number, frame: DeviceFrame, timeMs = 0, durationMs = frame.motionDurationMs ?? 4000, sceneTimeMs = timeMs, fps=30): DeviceScene {
   const geometry = deviceFrameGeometry(width, height, frame.device);
-  const panels = devicePanelRects(geometry, frame).map(rect => {
-    const side = rect.x + rect.width / 2 < geometry.outer.x + geometry.outer.width / 2 ? -1 : 1;
-    const corners = rectCorners(rect).map(point => project(width, height, frame, geometry, Math.max(0, timeMs), point, side,durationMs)) as DevicePanel["corners"];
-    return { rect, corners, transform: devicePanelTransform(rect, corners), visible: (facing(frame, Math.max(0, timeMs), height, side,durationMs) as number) > .015 };
+  const panels = deviceSurfaces(geometry, frame).map(surface => {
+    const {rect,side,depth,rear}=surface;
+    const points=rectCorners(rect);if(rear) { [points[0],points[1]]=[points[1],points[0]];[points[2],points[3]]=[points[3],points[2]]; }
+    const corners=points.map(point=>project(width,height,frame,geometry,Math.max(0,timeMs),point,side,durationMs,depth,sceneTimeMs)) as DevicePanel["corners"];
+    return {rect,corners,transform:devicePanelTransform(rect,corners),screen:surface.screen,screenRect:surface.screenRect,visible:(facing(frame,Math.max(0,timeMs),height,side,durationMs,width,sceneTimeMs) as number)*(rear?-1:1)>.015};
   });
   const bodyPanels = deviceBodySheets(geometry, frame).flatMap(sheet => panels.map(panel => {
     const side = panel.rect.x + panel.rect.width / 2 < geometry.outer.x + geometry.outer.width / 2 ? -1 : 1;
     const corners = rectCorners(panel.rect).map(point => project(width, height, frame, geometry, Math.max(0,timeMs), point, side, durationMs, sheet.depth)) as DevicePanel["corners"];
     return { ...panel, corners, transform: devicePanelTransform(panel.rect, corners), ...sheet };
   }));
-  return { geometry, panels, bodyPanels, background: deviceBackgroundCss(frame), opacity: pose(frame,Math.max(0,timeMs),height,durationMs).animated.opacity as number };
+  return { geometry, panels, bodyPanels, ...(frame.renderMode === "mesh" ? {meshSvg:deviceMeshSvg(width,height,frame,timeMs,durationMs,sceneTimeMs,fps),meshBounds:deviceMeshBounds(width,height,frame,timeMs,durationMs,sceneTimeMs),focusBlur:sceneFocusBlur(frame.scene,pose(frame,timeMs,height,durationMs).animated.depth as number,width,height)} : {}), background: deviceBackgroundCss(frame), opacity: pose(frame,Math.max(0,timeMs),height,durationMs).animated.opacity as number };
 }
 
 /** Overlapping rounded planes form a bounded extrusion. This is a perspective
  * body, not a mesh model: rotations stay within the supported front-facing range. */
 function deviceBodySheets(geometry: DeviceFrameGeometry, frame: DeviceFrame): Array<{ depth: number; shade: number }> {
-  if (frame.device === "browser") return [];
+  if (frame.device === "browser" || frame.renderMode === "mesh") return [];
   const tilted = frame.rotateX || frame.rotateY || frame.foldAngle || ["orbit","fold","unfold","fold-cycle"].includes(frame.motion ?? "none") || frame.animation?.keyframes?.some(key => key.rotateX || key.rotateY || key.foldAngle);
   // A face-on body's silhouette is completely covered by the glass. Avoid the
   // extra preview layers and export warps for simple labels/static mockups.
@@ -143,19 +208,21 @@ function deviceBodySheets(geometry: DeviceFrameGeometry, frame: DeviceFrame): Ar
  * guard pixel around the panel prevents FFmpeg's edge extension filling the canvas.
  * FFmpeg's perspective on counter starts at one, after fps=30. Subtracting one
  * makes the first exported frame match preview local time zero. */
-export function devicePerspectiveFilter(width: number, height: number, frame: DeviceFrame, panel: DevicePanelRect, fps = 30, guard = 1, viewport: DevicePanelRect = { x: 0, y: 0, width, height }, durationMs = frame.motionDurationMs ?? 4000, bodyDepth = 0): string {
+export function devicePerspectiveFilter(width: number, height: number, frame: DeviceFrame, panel: DevicePanelRect, fps = 30, guard = 1, viewport: DevicePanelRect = { x: 0, y: 0, width, height }, durationMs = frame.motionDurationMs ?? 4000, bodyDepth = 0, sceneTimeOffsetMs = 0, motionTimeOffsetMs = 0, rear=false): string {
   const geometry = deviceFrameGeometry(width, height, frame.device);
   const expanded = { x: panel.x - guard, y: panel.y - guard, width: panel.width + guard * 2, height: panel.height + guard * 2 };
   const side = panel.x + panel.width / 2 < geometry.outer.x + geometry.outer.width / 2 ? -1 : 1;
-  const points = rectCorners(expanded).map(point => project(width, height, frame, geometry, `((on-1)/${fps}*1000)`, point, side,durationMs,bodyDepth));
+  const sourceCorners=rectCorners(expanded);if(rear){[sourceCorners[0],sourceCorners[1]]=[sourceCorners[1],sourceCorners[0]];[sourceCorners[2],sourceCorners[3]]=[sourceCorners[3],sourceCorners[2]];}
+  const points = sourceCorners.map(point => project(width, height, frame, geometry, `max(0,((on-1)/${fps}*1000)+${motionTimeOffsetMs})`, point, side,durationMs,bodyDepth,`max(0,((on-1)/${fps}*1000)+${sceneTimeOffsetMs})`));
   return `perspective=${points.map((point, index) => `x${index}='${add(point.x, -viewport.x)}':y${index}='${add(point.y, -viewport.y)}'`).join(":")}:sense=destination:eval=frame:interpolation=linear`;
 }
 
 /** Conservative output bounds for a complete preset cycle. Perspective maps are
  * generated only for this region, avoiding two full-HD warps for small panels.
  * Fixed dense sampling plus a guard covers the smooth, bounded preset curves. */
-export function devicePanelViewport(width: number, height: number, frame: DeviceFrame, panel: DevicePanelRect, durationMs = frame.motionDurationMs ?? 4000, bodyDepth = 0): DevicePanelRect {
+export function devicePanelViewport(width: number, height: number, frame: DeviceFrame, panel: DevicePanelRect, durationMs = frame.motionDurationMs ?? 4000, bodyDepth = 0, sceneTimeOffsetMs = 0): DevicePanelRect {
   const geometry = deviceFrameGeometry(width, height, frame.device);
+  if(frame.renderMode === "mesh") return {x:0,y:0,width,height};
   const moving = (frame.motion && frame.motion !== "none") || !!frame.animation;
   const side = panel.x + panel.width / 2 < geometry.outer.x + geometry.outer.width / 2 ? -1 : 1;
   let minX = width, minY = height, maxX = 0, maxY = 0;
@@ -187,50 +254,86 @@ export function devicePanelViewport(width: number, height: number, frame: Device
  * projection and animation as the glass. Existing callers can omit the body.
  * Source and frame are composited before splitting/warping, so screen media
  * follows exactly the same geometry as the bezel in both preview and export. */
-export function deviceVideoSceneFilter(width: number, height: number, clip: VideoClip, backgroundInput: number, durationMs = clip.outMs-clip.inMs, transparent = false, bodyInput?: number): string {
+export function deviceVideoSceneFilter(width: number, height: number, clip: VideoClip, backgroundInput: number, durationMs = clip.outMs-clip.inMs, transparent = false, bodyInput?: number, sceneTimeOffsetMs = 0, sourceInput = "0:v", fps = 30, panelSourceInputs?:{inner?:string;outer?:string}): string {
+  const motionOffsetMs=clip.motionOffsetMs ?? 0;
   const geometry = clip.deviceFrame ? deviceFrameGeometry(width, height, clip.deviceFrame.device) : undefined;
   const tw = geometry?.screen.width ?? width, th = geometry?.screen.height ?? height;
   const sw = Math.ceil(tw * clip.zoom / 2) * 2, sh = Math.ceil(th * clip.zoom / 2) * 2;
   const fit = clip.fit === "cover"
     ? `scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${tw}:${th}:(iw-ow)*${clip.x}:(ih-oh)*${clip.y}`
     : `scale=${tw}:${th}:force_original_aspect_ratio=decrease,pad=${tw}:${th}:(ow-iw)*${clip.x}:(oh-ih)*${clip.y}:color=${geometry ? "black" : "black@0"}`;
-  const filters = [`[0:v]format=rgba,${fit},setsar=1,fps=30,setpts=PTS-STARTPTS${geometry ? `,pad=${width}:${height}:${geometry.screen.x}:${geometry.screen.y}:color=black@0` : ""}[screen]`, `[${backgroundInput}:v]format=rgba${transparent ? ",colorchannelmixer=aa=0" : ""},loop=loop=-1:size=1:start=0,settb=1/30,setpts=N,fps=30[background]`];
+  const surfaces=clip.deviceFrame && geometry ? deviceSurfaces(geometry,clip.deviceFrame):[];
+  const rearSurface=surfaces.find(s=>s.rear);
+  let frontSource=panelSourceInputs?.inner ?? sourceInput,outerSource=panelSourceInputs?.outer ?? sourceInput;
+  const sourcePrefix:string[]=[];
+  if(rearSurface && frontSource===outerSource) { sourcePrefix.push(`[${frontSource}]split=2[meshFrontSource][meshRearSource]`);frontSource="meshFrontSource";outerSource="meshRearSource"; }
+  const filters = [...sourcePrefix,`[${frontSource}]format=rgba,${fit},setsar=1,fps=${fps},setpts=PTS-STARTPTS${geometry ? `,pad=${width}:${height}:${geometry.screen.x}:${geometry.screen.y}:color=black@0` : ""}[screen]`, `[${backgroundInput}:v]format=rgba${transparent ? ",colorchannelmixer=aa=0" : ""},loop=loop=-1:size=1:start=0,settb=1/${fps},setpts=N,fps=${fps}[background]`];
   if (!clip.deviceFrame || !geometry) {
     filters.push(`[background][screen]overlay=0:0:format=auto,format=${transparent ? "rgba" : "yuv420p"}[framed]`);
     return filters.join(";");
   }
-  filters.push("[1:v]format=rgba,loop=loop=-1:size=1:start=0,settb=1/30,setpts=N,fps=30[bezel]", "[screen][bezel]overlay=0:0:format=auto[device]");
-  const opacity = animationExpressions(clip.deviceFrame.animation,"(T*1000)",durationMs,clip.deviceFrame,"device").opacity;
+  const focusBlur = clip.deviceFrame.renderMode === "mesh" ? sceneFocusBlur(clip.deviceFrame.scene,pose(clip.deviceFrame,motionOffsetMs,height,durationMs).animated.depth as number,width,height) : 0;
+  const focusAnimated=clip.deviceFrame.renderMode === "mesh" && !!clip.deviceFrame.scene?.aperture && clip.deviceFrame.animation?.keyframes?.some(k=>k.depth !== undefined);
+  filters.push(`[1:v]format=rgba,loop=loop=-1:size=1:start=0,settb=1/${fps},setpts=N,fps=${fps}[bezel]`, "[screen][bezel]overlay=0:0:format=auto[device]");
+  const opacity = animationExpressions(clip.deviceFrame.animation,`(T*1000+${motionOffsetMs})`,durationMs,clip.deviceFrame,"device").opacity;
   const fade = opacity !== 1;
   // Fade the completed device once, matching preview group opacity. Fading each
   // overlapping sheet both compounds alpha and repeats expensive RGB evaluation.
   if (fade && !transparent) filters.push("[background]split=2[canvasBackground][deviceCanvas]", "[deviceCanvas]colorchannelmixer=aa=0[deviceBase]");
   const base = fade && !transparent ? "deviceBase" : "background";
-  const panels = devicePanelRects(geometry, clip.deviceFrame);
+  const panels=surfaces.map(s=>s.rect);
+  if(rearSurface?.screenRect) {
+    const r=rearSurface.screenRect,sw=Math.ceil(r.width*clip.zoom/2)*2,sh=Math.ceil(r.height*clip.zoom/2)*2;
+    const fit=clip.fit === "cover" ? `scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${r.width}:${r.height}:(iw-ow)*${clip.x}:(ih-oh)*${clip.y}` : `scale=${r.width}:${r.height}:force_original_aspect_ratio=decrease,pad=${r.width}:${r.height}:(ow-iw)*${clip.x}:(oh-ih)*${clip.y}:color=black`;
+    const radius=Math.min(r.radius,r.width/2,r.height/2),dx=`max(0,abs(X-${r.width/2})-${r.width/2-radius})`,dy=`max(0,abs(Y-${r.height/2})-${r.height/2-radius})`;
+    const mask=`geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*lte(${dx}*${dx}+${dy}*${dy},${radius*radius})'`;
+    filters.push(`[${outerSource}]format=rgba,${fit},setsar=1,fps=${fps},setpts=PTS-STARTPTS,${mask},pad=${width}:${height}:${r.x}:${r.y}:color=black@0[rearDevice]`);
+  }
   const viewports: DevicePanelRect[] = [];
   const sheets = bodyInput === undefined ? [] : deviceBodySheets(geometry, clip.deviceFrame);
+  const meshBody = clip.deviceFrame.renderMode === "mesh" && bodyInput !== undefined;
+  if(meshBody) filters.push(`[${bodyInput}:v]format=rgba,setpts=PTS-STARTPTS,fps=${fps}[meshBody]`, `[${base}][meshBody]overlay=0:0:format=auto[meshBase]`);
   const bodyCount = sheets.length * panels.length;
   if (bodyCount) {
-    filters.push(`[${bodyInput}:v]format=rgba,loop=loop=-1:size=1:start=0,settb=1/30,setpts=N,fps=30,split=${bodyCount}${Array.from({length:bodyCount},(_,i)=>`[body${i}]`).join("")}`);
+    filters.push(`[${bodyInput}:v]format=rgba,loop=loop=-1:size=1:start=0,settb=1/${fps},setpts=N,fps=${fps},split=${bodyCount}${Array.from({length:bodyCount},(_,i)=>`[body${i}]`).join("")}`);
     sheets.forEach((sheet, sheetIndex) => panels.forEach((panel, panelIndex) => {
       const index = sheetIndex * panels.length + panelIndex;
-      const viewport = devicePanelViewport(width,height,clip.deviceFrame!,panel,durationMs,sheet.depth);
+      const viewport = motionOffsetMs ? {x:0,y:0,width,height} : devicePanelViewport(width,height,clip.deviceFrame!,panel,durationMs,sheet.depth);
       viewports.push(viewport);
-      filters.push(`[body${index}]crop=${panel.width}:${panel.height}:${panel.x}:${panel.y},pad=${panel.width+2}:${panel.height+2}:1:1:color=black@0,colorchannelmixer=rr=${sheet.shade}:gg=${sheet.shade}:bb=${sheet.shade},scale=${viewport.width}:${viewport.height},${devicePerspectiveFilter(width,height,clip.deviceFrame!,panel,30,1,viewport,durationMs,sheet.depth)}[bodywarped${index}]`);
+      filters.push(`[body${index}]crop=${panel.width}:${panel.height}:${panel.x}:${panel.y},pad=${panel.width+2}:${panel.height+2}:1:1:color=black@0,colorchannelmixer=rr=${sheet.shade}:gg=${sheet.shade}:bb=${sheet.shade},scale=${viewport.width}:${viewport.height},${devicePerspectiveFilter(width,height,clip.deviceFrame!,panel,fps,1,viewport,durationMs,sheet.depth,sceneTimeOffsetMs,motionOffsetMs)}[bodywarped${index}]`);
       const side=panel.x+panel.width/2<geometry.outer.x+geometry.outer.width/2?-1:1;
-      const visibility=facing(clip.deviceFrame!,"(t*1000)",height,side,durationMs);
+      const visibility=facing(clip.deviceFrame!,`(t*1000+${motionOffsetMs})`,height,side,durationMs);
       filters.push(`[${index===0?base:`bodycomposite${index-1}`}][bodywarped${index}]overlay=${viewport.x}:${viewport.y}:format=auto:enable='gt(${visibility},0.015)'[bodycomposite${index}]`);
     }));
   }
-  if (panels.length > 1) filters.push(`[device]split=${panels.length}${panels.map((_, i) => `[panel${i}]`).join("")}`);
+  const blurAmount=clip.deviceFrame.renderMode === "mesh" ? clip.deviceFrame.scene?.motionBlur ?? 0 : 0;
+  const sampleOffsets=blurAmount ? Array.from({length:5},(_,i)=>(i/4-.5)*1000/fps*blurAmount) : [0];
+  const frontPanelCount=surfaces.filter(s=>!s.rear).length;
+  const sourceCount=frontPanelCount*sampleOffsets.length;
+  if(sourceCount>1) filters.push(`[device]split=${sourceCount}${Array.from({length:sourceCount},(_,i)=>`[panelSource${i}]`).join("")}`);
+  if(rearSurface && sampleOffsets.length>1) filters.push(`[rearDevice]split=${sampleOffsets.length}${sampleOffsets.map((_,i)=>`[rearSource${i}]`).join("")}`);
   panels.forEach((panel, i) => {
-    const source = panels.length === 1 ? "device" : `panel${i}`;
-    const viewport = devicePanelViewport(width, height, clip.deviceFrame!, panel,durationMs);
+    const surface=surfaces[i];
+    const viewport = motionOffsetMs ? {x:0,y:0,width,height} : devicePanelViewport(width, height, clip.deviceFrame!, panel,durationMs);
     viewports.push(viewport);
-    filters.push(`[${source}]crop=${panel.width}:${panel.height}:${panel.x}:${panel.y},pad=${panel.width + 2}:${panel.height + 2}:1:1:color=black@0,scale=${viewport.width}:${viewport.height},${devicePerspectiveFilter(width, height, clip.deviceFrame!, panel, 30, 1, viewport,durationMs)}[warped${i}]`);
+    sampleOffsets.forEach((offset,sampleIndex)=>{
+      const source=surface.rear?(sampleOffsets.length===1?"rearDevice":`rearSource${sampleIndex}`):sourceCount===1?"device":`panelSource${i*sampleOffsets.length+sampleIndex}`;
+      filters.push(`[${source}]crop=${panel.width}:${panel.height}:${panel.x}:${panel.y},pad=${panel.width+2}:${panel.height+2}:1:1:color=black@0,scale=${viewport.width}:${viewport.height},${devicePerspectiveFilter(width,height,clip.deviceFrame!,panel,fps,1,viewport,durationMs,surface.depth,sceneTimeOffsetMs+offset,motionOffsetMs+offset,surface.rear)}[sampleWarp${i}_${sampleIndex}]`);
+      if(sampleIndex>0) filters.push(`[${sampleIndex===1?`sampleWarp${i}_0`:`sampleBlend${i}_${sampleIndex-1}`}][sampleWarp${i}_${sampleIndex}]blend=all_expr='A*${sampleIndex/(sampleIndex+1)}+B*${1/(sampleIndex+1)}'[sampleBlend${i}_${sampleIndex}]`);
+    });
+    let warped = sampleOffsets.length===1?`sampleWarp${i}_0`:`sampleBlend${i}_${sampleOffsets.length-1}`;
+    if(focusAnimated) {
+      const frames=Math.ceil((clip.outMs-clip.inMs)/(clip.speed ?? 1)/1000*fps);
+      const commands=Array.from({length:frames},(_,n)=>{
+        const local=n/fps*1000+motionOffsetMs;
+        const blur=sceneFocusBlur(clip.deviceFrame!.scene,pose(clip.deviceFrame!,local,height,durationMs).animated.depth as number,width,height);
+        return `${(n/fps).toFixed(7)} gblur@deviceFocus${i} sigma ${blur.toFixed(6)}`;
+      }).join(";");
+      filters.push(`[${warped}]sendcmd=c='${commands}',gblur@deviceFocus${i}=sigma=${focusBlur}[focused${i}]`);warped=`focused${i}`;
+    } else if(focusBlur > .01) { filters.push(`[${warped}]gblur=sigma=${focusBlur}[focused${i}]`); warped=`focused${i}`; }
     const side = panel.x + panel.width / 2 < geometry.outer.x + geometry.outer.width / 2 ? -1 : 1;
-    const visibility = facing(clip.deviceFrame!, "(t*1000)", height, side,durationMs);
-    filters.push(`[${i === 0 ? bodyCount ? `bodycomposite${bodyCount-1}` : base : `composite${i - 1}`}][warped${i}]overlay=${viewport.x}:${viewport.y}:format=auto:enable='gt(${visibility},0.015)'[composite${i}]`);
+    const visibility = facing(clip.deviceFrame!, `(t*1000+${motionOffsetMs})`, height, side,durationMs,width,`(t*1000+${sceneTimeOffsetMs})`);
+    filters.push(`[${i === 0 ? bodyCount ? `bodycomposite${bodyCount-1}` : meshBody ? "meshBase" : base : `composite${i - 1}`}][${warped}]overlay=${viewport.x}:${viewport.y}:format=auto:enable='gt(${mul(visibility,surface.rear?-1:1)},0.015)'[composite${i}]`);
   });
   const composite = `composite${panels.length - 1}`;
   if (fade) {

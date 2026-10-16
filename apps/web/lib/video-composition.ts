@@ -1,8 +1,8 @@
 import type { AnimationEffect, DeviceFrame, LayerKeyframe, TimedVideoLabel, VideoCamera, VideoClip, VideoLayer, VideoTimeline } from "@relay/core";
-import { animationPresets, transitionKinds } from "./video-animation.ts";
+import { animationPresets, textOnlyPresets, transitionKinds } from "./video-animation.ts";
 import { normalizeVideoCamera, videoCameraPresets } from "./video-camera.ts";
 import { deviceFrameDevices } from "./device-frames.ts";
-import { clipSchedule, normalizeVideoTimeline, timelineDuration } from "./video-timeline.ts";
+import { clipSchedule, clipDuration, normalizeVideoTimeline, timelineDuration } from "./video-timeline.ts";
 
 export interface VideoCompositionRequest {
   prompt: string;
@@ -19,8 +19,10 @@ export interface VideoCompositionResult {
 
 const cameras = ["still", "push-in", "pull-back", "pan-left", "pan-right", "orbit", "float", "fold", "unfold", "fold-cycle"] as const;
 type Camera = typeof cameras[number];
+type FramePreset = Exclude<AnimationEffect["preset"], "typewriter" | "letter-rise" | "word-spring" | "line-cascade" | "tracking" | "soft-reveal" | "focus" | "ripple" | "spin-in">;
+const frameAnimationPresets = animationPresets.filter((preset): preset is FramePreset => !textOnlyPresets.has(preset));
 type Title = { text: string; startMs: number; endMs: number; position: "top" | "middle" | "bottom"; font: "modern" | "editorial" | "mono"; fontSize: number; style: "dark" | "light" | "outline"; entrance: "none" | AnimationEffect["preset"]; exit: "none" | AnimationEffect["preset"] };
-type Shot = { sourceClipId: string; inMs: number; outMs: number; fit: "cover" | "contain"; device: "none" | DeviceFrame["device"]; camera: Camera; position: "center" | "left" | "right"; transition: "none" | NonNullable<VideoClip["transition"]>["kind"]; transitionDurationMs: number; entrance: "none" | Exclude<AnimationEffect["preset"], "typewriter">; exit: "none" | Exclude<AnimationEffect["preset"], "typewriter">; titles: Title[] };
+type Shot = { sourceClipId: string; inMs: number; outMs: number; fit: "cover" | "contain"; device: "none" | DeviceFrame["device"]; camera: Camera; position: "center" | "left" | "right"; transition: "none" | NonNullable<VideoClip["transition"]>["kind"]; transitionDurationMs: number; entrance: "none" | FramePreset; exit: "none" | FramePreset; titles: Title[] };
 type CompositionLayer = Shot & { startMs: number; x: number; y: number; scale: number; rotateX: number; rotateY: number; rotateZ: number; volume: number };
 export interface VideoCompositionPlan { summary: string; background: string; backgroundEnd: string; shots: Shot[]; layers?: CompositionLayer[]; camera?: VideoCamera }
 
@@ -58,7 +60,7 @@ const shotProperties = {
     sourceClipId: { type: "string", minLength: 1, maxLength: 120 }, inMs: integerSchema(0, 3600000), outMs: integerSchema(100, 3600000),
     fit: enumSchema(["cover", "contain"]), device: enumSchema(["none", ...deviceFrameDevices]), camera: enumSchema(cameras), position: enumSchema(["center", "left", "right"]),
     transition: enumSchema(["none", ...transitionKinds]), transitionDurationMs: integerSchema(50, 2000),
-    entrance: enumSchema(["none", ...animationPresets.filter(p => p !== "typewriter")]), exit: enumSchema(["none", ...animationPresets.filter(p => p !== "typewriter")]),
+    entrance: enumSchema(["none", ...frameAnimationPresets]), exit: enumSchema(["none", ...frameAnimationPresets]),
     titles: { type: "array", maxItems: 2, items: strictSchema({ text: { type: "string", minLength: 1, maxLength: 180 }, startMs: integerSchema(0, 60000), endMs: integerSchema(100, 60000), position: enumSchema(["top", "middle", "bottom"]), font: enumSchema(["modern", "editorial", "mono"]), fontSize: integerSchema(28, 160), style: enumSchema(["dark", "light", "outline"]), entrance: enumSchema(["none", ...animationPresets]), exit: enumSchema(["none", ...animationPresets]) }) },
 };
 const { transition: _transition, transitionDurationMs: _transitionDuration, position: _position, ...layerProperties } = shotProperties;
@@ -83,7 +85,7 @@ function normalizePlan(raw: unknown): VideoCompositionPlan {
       const t = object(rawTitle); keys(t, ["text", "startMs", "endMs", "position", "font", "fontSize", "style", "entrance", "exit"]);
       return { text: text(t.text, "Title", 1, 180), startMs: number(t.startMs, "Title start", 0, 60000), endMs: number(t.endMs, "Title end", 100, 60000), position: choice(t.position, "title position", ["top", "middle", "bottom"]), font: choice(t.font, "font", ["modern", "editorial", "mono"]), fontSize: number(t.fontSize, "Font size", 28, 160), style: choice(t.style, "title style", ["dark", "light", "outline"]), entrance: choice(t.entrance, "title entrance", ["none", ...animationPresets]), exit: choice(t.exit, "title exit", ["none", ...animationPresets]) } satisfies Title;
     });
-    return { sourceClipId: text(s.sourceClipId, "Source clip id", 1, 120), inMs: number(s.inMs, "Trim start", 0, 3600000), outMs: number(s.outMs, "Trim end", 100, 3600000), fit: choice(s.fit, "fit", ["cover", "contain"]), device: choice(s.device, "device", ["none", ...deviceFrameDevices]), camera: choice(s.camera, "camera", cameras), position: choice(s.position, "position", ["center", "left", "right"]), transition: choice(s.transition, "transition", ["none", ...transitionKinds]), transitionDurationMs: number(s.transitionDurationMs, "Transition duration", 50, 2000), entrance: choice(s.entrance, "frame entrance", ["none", ...animationPresets.filter(p => p !== "typewriter")]), exit: choice(s.exit, "frame exit", ["none", ...animationPresets.filter(p => p !== "typewriter")]), titles } satisfies Shot;
+    return { sourceClipId: text(s.sourceClipId, "Source clip id", 1, 120), inMs: number(s.inMs, "Trim start", 0, 3600000), outMs: number(s.outMs, "Trim end", 100, 3600000), fit: choice(s.fit, "fit", ["cover", "contain"]), device: choice(s.device, "device", ["none", ...deviceFrameDevices]), camera: choice(s.camera, "camera", cameras), position: choice(s.position, "position", ["center", "left", "right"]), transition: choice(s.transition, "transition", ["none", ...transitionKinds]), transitionDurationMs: number(s.transitionDurationMs, "Transition duration", 50, 2000), entrance: choice(s.entrance, "frame entrance", ["none", ...frameAnimationPresets]), exit: choice(s.exit, "frame exit", ["none", ...frameAnimationPresets]), titles } satisfies Shot;
   };
   const shots = plan.shots.map(normalizeShot);
   const scalar = (value: unknown, field: string, min: number, max: number) => {
@@ -134,15 +136,16 @@ export function compileVideoComposition(request: VideoCompositionRequest, rawPla
     const source = sources.get(shot.sourceClipId);
     if (!source) throw new Error("The composition referenced footage outside the selected clips.");
     if (shot.outMs - shot.inMs < 100 || shot.outMs - shot.inMs > 60000 || shot.inMs < source.inMs || shot.outMs > source.outMs || (source.kind === "video" && source.sourceDurationMs !== undefined && shot.outMs > source.sourceDurationMs)) throw new Error("A composition trim exceeds the selected footage range.");
-    if (shot.titles.some(title => title.endMs <= title.startMs || title.endMs > shot.outMs - shot.inMs)) throw new Error("Title timing exceeds its shot.");
+    if (shot.titles.some(title => title.endMs <= title.startMs || title.endMs > (shot.outMs - shot.inMs)/(source.speed ?? 1))) throw new Error("Title timing exceeds its shot.");
     if (used.has(source.sourceUrl)) warnings.push("The composition reuses selected footage in more than one shot.");
     used.add(source.sourceUrl);
-    return { ...source, id: crypto.randomUUID(), inMs: shot.inMs, outMs: shot.outMs, fit: shot.fit, deviceFrame: frameFor(shot, plan), transition: shot.transition === "none" ? undefined : { kind: shot.transition, durationMs: shot.transitionDurationMs, easing: "ease-in-out" as const } };
+    const { groupId: _sourceGroup, motionOffsetMs: _sourceOffset, ...media } = source;
+    return { ...media, id: crypto.randomUUID(), inMs: shot.inMs, outMs: shot.outMs, fit: shot.fit, deviceFrame: frameFor(shot, plan), transition: shot.transition === "none" ? undefined : { kind: shot.transition, durationMs: shot.transitionDurationMs, easing: "ease-in-out" as const } };
   };
   const clips = plan.shots.map(compileShot);
   let timeline: VideoTimeline = { ...request.timeline, camera: plan.camera, layers: [], background: { color: plan.background, endColor: plan.backgroundEnd }, clips, labels: [], coverMs: 0 };
   // Cut excess output on the overlap-aware clock; never stretch or fetch new footage.
-  if (timelineDuration(timeline) > request.durationMs) {
+  if (timelineDuration({...timeline,graphics:[],audioTracks:[]}) > request.durationMs) {
     const schedule = clipSchedule(timeline);
     let keep = schedule.findIndex(entry => entry.endMs >= request.durationMs);
     while (keep > 0 && request.durationMs - schedule[keep].startMs < 100) keep--;
@@ -152,11 +155,11 @@ export function compileVideoComposition(request: VideoCompositionRequest, rawPla
     // d - min(overlap, previous/2, d/2) = remaining on the previous end clock.
     const previous = timeline.clips[keep - 1];
     const remaining = request.durationMs - (schedule[keep - 1]?.endMs ?? 0);
-    if (!previous || !last.transition) last.outMs = last.inMs + Math.max(100, remaining);
+    if (!previous || !last.transition) last.outMs = last.inMs + Math.max(100, remaining)*(last.speed ?? 1);
     else {
-      const cap = Math.min(last.transition.durationMs, (previous.outMs - previous.inMs) / 2);
+      const cap = Math.min(last.transition.durationMs, clipDuration(previous) / 2);
       const duration = remaining <= cap ? remaining * 2 : remaining + cap;
-      if (duration >= 100) last.outMs = last.inMs + Math.min(last.outMs - last.inMs, duration);
+      if (duration >= 100) last.outMs = last.inMs + Math.min(last.outMs - last.inMs, duration*(last.speed ?? 1));
       else { timeline.clips.pop(); }
     }
     warnings.push("The generated sequence was trimmed to the requested duration.");
@@ -167,7 +170,7 @@ export function compileVideoComposition(request: VideoCompositionRequest, rawPla
     // Validate all authored source ranges before cutting excess timeline duration.
     const compiled = compileShot(layer);
     if (layer.startMs + 100 > request.durationMs) { warnings.push("Device layers beyond the requested duration were omitted."); continue; }
-    const trimmed = { ...layer, outMs: Math.min(layer.outMs, layer.inMs + request.durationMs - layer.startMs) };
+    const trimmed = { ...layer, outMs: Math.min(layer.outMs, layer.inMs + (request.durationMs - layer.startMs)*(compiled.speed ?? 1)) };
     if (trimmed.outMs !== layer.outMs) warnings.push("Device layers were trimmed to the requested duration.");
     const { transition: _ignored, ...media } = compiled;
     layers.push({ ...media, startMs: layer.startMs, outMs: trimmed.outMs, deviceFrame: frameFor(trimmed, plan), volume: layer.volume });
@@ -178,11 +181,11 @@ export function compileVideoComposition(request: VideoCompositionRequest, rawPla
   const schedule = clipSchedule(timeline);
   const actualDuration = timelineDuration(timeline);
   if (plan.camera?.keyframes?.some(frame => frame.timeMs > actualDuration)) throw new Error("Camera keyframe timing exceeds the composed video.");
-  const entries = [...schedule.map((entry,index) => ({...entry, shot:plan.shots[index], titleEnd:schedule[index+1]?.startMs ?? actualDuration})), ...layers.map((clip,index) => ({clip,startMs:clip.startMs,endMs:clip.startMs+clip.outMs-clip.inMs,shot:layerPlans[index],titleEnd:clip.startMs+clip.outMs-clip.inMs}))];
+  const entries = [...schedule.map((entry,index) => ({...entry, shot:plan.shots[index], titleEnd:schedule[index+1]?.startMs ?? actualDuration})), ...layers.map((clip,index) => ({clip,startMs:clip.startMs,endMs:clip.startMs+clipDuration(clip),shot:layerPlans[index],titleEnd:clip.startMs+clipDuration(clip)}))];
   for (const entry of entries) {
     const shot = entry.shot;
     // A trimmed shot still completes its authored camera move on its new clock.
-    entry.clip.deviceFrame = frameFor({ ...shot, outMs: entry.clip.outMs }, plan);
+    entry.clip.deviceFrame = frameFor({ ...shot, outMs: shot.inMs + clipDuration(entry.clip) }, plan);
     for (const title of shot.titles) {
       const startMs = entry.startMs + title.startMs;
       const endMs = Math.min(entry.startMs + title.endMs, entry.endMs, entry.titleEnd);

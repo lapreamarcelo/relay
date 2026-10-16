@@ -24,3 +24,15 @@ test("validates carousel limits and feed-only Meta settings", () => {
   ] });
   assert.deepEqual(issues.map((issue) => issue.message), ["Instagram carousels support up to 10 slides.", "Instagram carousels publish as feed posts.", "Facebook Reels require a video.", "Facebook multi-photo posts publish to the feed."]);
 });
+
+test("Instagram requires media for feed, reel and story publication", () => {
+  for (const publishType of ["feed", "reel", "story"] as const) {
+    const destinations = [{ provider: "instagram" as const, settings: { kind: "instagram" as const, publishType } }];
+    const issues = validatePostPlan({ text: "Caption-only draft", mediaType: "none", destinations });
+    assert.ok(issues.some((issue) => issue.provider === "instagram" && issue.field === "media"), publishType);
+    for (const mediaType of ["image", "video"] as const) {
+      assert.deepEqual(validatePostPlan({ text: "Ready to publish", mediaType, mediaCount: 1, destinations }), []);
+    }
+  }
+  assert.deepEqual(validatePostPlan({ text: "Text feed", mediaType: "none", destinations: [{ provider: "facebook", settings: { kind: "facebook", publishType: "feed" } }] }), []);
+});
