@@ -87,11 +87,11 @@ test("mute original audio silences all footage, preserves songs and supports und
   await expect(mute).toBeChecked();
 });
 
-test("blocked uploads use the server asset and show failures inside the picker", async ({ page }) => {
+test("song uploads stay same-origin and show failures inside the picker", async ({ page }) => {
   const saved = await editor(page);
   let fallbacks = 0, fail = true;
   await page.route("**/api/v1/media", route => {
-    if (route.request().headers()["content-type"]?.includes("application/json")) return route.fulfill({ json: { key: "music/direct.wav", url: "https://media.example.test/direct.wav", uploadUrl: "https://media.example.test/upload" } });
+    expect(route.request().headers()["content-type"]).toContain("multipart/form-data");
     fallbacks++;
     expect(route.request().postDataBuffer()?.toString()).toContain('name="kind"\r\n\r\nmusic');
     if (fail) return route.fulfill({ status: 503, json: { error: "Audio storage unavailable" } });

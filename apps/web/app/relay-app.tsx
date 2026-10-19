@@ -1,4 +1,5 @@
 "use client";
+import { LocalDate } from "./local-date";
 
 import ModalLayer from "./modal-layer";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -180,10 +181,10 @@ function HomeView({ posts, onCompose, go, userName, initialNow }: { posts: Relay
       <div className="section-heading"><div><p className="eyebrow">Next up</p><h3>Your publishing queue</h3></div><button className="text-button" onClick={() => go("calendar")}>Open calendar <ChevronRight /></button></div>
       <div className="upcoming-list">
         {upcoming.map((post) => {
-          const date = post.scheduledAt ? new Date(post.scheduledAt) : new Date();
+          const date = post.scheduledAt ?? initialNow;
           const brand = brands.find((b) => b.id === post.brandId);
           return <article className="upcoming-row" key={post.id}>
-            <div className="timeline"><b>{date.toLocaleDateString([], { month: "short", day: "numeric" })}</b><span>{date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>
+            <div className="timeline"><b><LocalDate value={date} options={{ month: "short", day: "numeric" }}/></b><span><LocalDate value={date} kind="time" options={{ hour: "2-digit", minute: "2-digit" }}/></span></div>
             <BrandMark brandId={post.brandId} />
             <div className="upcoming-copy"><span>{brand?.name ?? "Unassigned"}</span><h4>{post.text}</h4><div className="provider-stack">{post.targets.map((target) => <ProviderIcon id={target.provider} key={target.id} />)}</div></div>
             <PostThumbnail post={post} />
