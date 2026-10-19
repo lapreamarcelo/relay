@@ -34,9 +34,9 @@ test("production renderer exports source-speed pointer and held frames with inde
  const dir=await mkdtemp(join(tmpdir(),"relay-advanced-render-"));
  try {
   await run("ffmpeg",["-v","error","-y","-f","lavfi","-i","color=red:size=320x320:rate=60:duration=1,drawbox=color=blue:t=fill:enable='gte(t,0.5)'","-f","lavfi","-i","sine=frequency=330:sample_rate=48000:duration=1","-c:v","libx264","-pix_fmt","yuv420p","-c:a","aac",join(dir,"source.mp4")]);
-  for (const frequency of [440,880]) await run("ffmpeg",["-v","error","-y","-f","lavfi","-i",`sine=frequency=${frequency}:sample_rate=48000:duration=1`,join(dir,`${frequency}.wav`)]);
+  for (const frequency of [220,440,880]) await run("ffmpeg",["-v","error","-y","-f","lavfi","-i",`sine=frequency=${frequency}:sample_rate=48000:duration=1`,join(dir,`${frequency}.wav`)]);
   const pointer={events:[{timeMs:0,x:.15,y:.5,kind:"move"},{timeMs:1000,x:.8,y:.5,kind:"move"}],style:"touch",display:"continuous",color:"#00FF00",size:80,smoothing:0,idleMs:0,fadeMs:0};
-  const timeline={...emptyTimeline(),aspectRatio:"1:1",exportSettings:{format:"mp4",fps:60,resolution:"720p",quality:"standard"},clips:[{...clip,speed:2,pointer},{...clip,id:"held",inMs:0,outMs:500,freezeMs:800}],audioTracks:[{id:"a",url:"https://media.example.test/440.wav",name:"First",startMs:0,endMs:500,offsetMs:0,volume:.5,fadeInMs:0,fadeOutMs:0},{id:"b",url:"https://media.example.test/880.wav",name:"Second",startMs:500,endMs:1000,offsetMs:0,volume:.8,fadeInMs:0,fadeOutMs:0}]};
+  const timeline={...emptyTimeline(),aspectRatio:"1:1",exportSettings:{format:"mp4",fps:60,resolution:"720p",quality:"standard"},clips:[{...clip,speed:2,pointer},{...clip,id:"held",inMs:0,outMs:500,freezeMs:800}],music:{...emptyTimeline().music,url:"https://media.example.test/220.wav",volume:.8},audioTracks:[{id:"a",url:"https://media.example.test/440.wav",name:"First",startMs:0,endMs:500,offsetMs:0,volume:.5,fadeInMs:0,fadeOutMs:0},{id:"b",url:"https://media.example.test/880.wav",name:"Second",startMs:500,endMs:1000,offsetMs:0,volume:.8,fadeInMs:0,fadeOutMs:0}]};
   await writeFile(join(dir,"timeline.json"),JSON.stringify(timeline));await writeFile(join(dir,"render.mjs"),adapter(dir));
   await run(process.execPath,["--experimental-transform-types",join(dir,"render.mjs")],{maxBuffer:1024*1024,timeout:30000});
   const {result,uploads}=JSON.parse(await readFile(join(dir,"result.json"),"utf8"));assert.equal(result.durationMs,1000);assert.equal(uploads[0].contentType,"video/mp4");
@@ -55,9 +55,26 @@ test("production renderer exports source-speed pointer and held frames with inde
   assert.ok(states[0].red>170&&states[0].blue<80);assert.ok(states[1].blue>170&&states[1].red<80);
   for(const held of states.slice(2)){assert.ok(held.blue>170&&held.red<80);assert.equal(held.green,0);}
   const {stdout:pcm}=await run("ffmpeg",["-v","error","-i",join(dir,"output.mp4"),"-vn","-ac","1","-ar","48000","-f","f32le","pipe:1"],{encoding:"buffer",maxBuffer:1024*1024});
+  assert.ok(tone(pcm,.1,330)<.001,"muted source footage is silent even while the video plays at double speed");
+  assert.ok(tone(pcm,.1,220)>.02,"the song still plays over muted source footage");
+  assert.ok(tone(pcm,.7,220)>.02,"the song continues over later muted clips");
   assert.ok(tone(pcm,.1,440)>.01);assert.ok(tone(pcm,.1,880)<.001);
   assert.ok(tone(pcm,.7,880)>.02);assert.ok(tone(pcm,.7,440)<.001);
   assert.ok(tone(pcm,.7,330)<.001,"held footage does not continue source audio");
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test("production video export renders animated color emoji without host emoji fonts",{skip:!available,timeout:60000},async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"relay-emoji-render-"));
+ try{
+  await run("ffmpeg",["-v","error","-y","-f","lavfi","-i","color=black:size=80x80:rate=24:duration=1","-c:v","libx264","-pix_fmt","yuv420p",join(dir,"source.mp4")]);
+  const timeline={...emptyTimeline(),aspectRatio:"1:1",clips:[clip],labels:[{id:"emoji",text:"🚀 👍🏽 👨‍👩‍👧‍👦 🇪🇸 ❤️",x:.5,y:.5,width:.85,height:.12,fontSize:100,font:"modern",textColor:"#FFFFFF",background:"none",style:"outline",startMs:0,endMs:1000,animation:{entrance:{preset:"letter-rise",durationMs:300}}}],exportSettings:{format:"mp4",fps:24,resolution:"720p",quality:"draft"}};
+  await writeFile(join(dir,"timeline.json"),JSON.stringify(timeline));await writeFile(join(dir,"render.mjs"),adapter(dir));
+  await run(process.execPath,["--experimental-transform-types",join(dir,"render.mjs")],{maxBuffer:1024*1024,timeout:30000});
+  const file=join(dir,"emoji.png");await run("ffmpeg",["-v","error","-y","-ss","0.7","-i",join(dir,"output.mp4"),"-frames:v","1",file]);
+  const {data,info}=await sharp(file).raw().toBuffer({resolveWithObject:true});let colored=0;
+  for(let i=0;i<data.length;i+=info.channels)if(Math.max(...data.subarray(i,i+3))-Math.min(...data.subarray(i,i+3))>70)colored++;
+  assert.ok(colored>5000,`export preserves color emoji sequences (${colored} colored pixels)`);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
 

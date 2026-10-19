@@ -12,6 +12,8 @@ import { CreativePublishHandoff } from "./creative-publish-handoff";
 import { DeviceFrameControls, DeviceFramePreview } from "./device-frame-controls";
 import { LabelControls, type LabelControlValue } from "./label-controls";
 import { labelFonts } from "../lib/creative-labels";
+import { labelTextMarkup } from "../lib/creative-label-markup";
+import { useLabelEmoji } from "./use-label-emoji";
 import type { ExternalImageResult } from "../lib/external-image-sources";
 import { flattenMediaProjects, mediaProjectOptionLabel } from "../lib/media-projects";
 
@@ -24,6 +26,7 @@ function newSlide(mediaUrl: string, text = ""): SlideshowSlide {
 }
 
 function SlideCanvas({ slide, compact = false, onMove }: { slide: SlideshowSlide; compact?: boolean; onMove?: (x: number, y: number) => void }) {
+  const emojiError = useLabelEmoji(slide.text ?? "");
   const ref = useRef<HTMLDivElement>(null); const [dragging, setDragging] = useState(false);
   const style = { "--slide-size": `${slide.textSize}px`, "--slide-color": slide.textColor, fontFamily: labelFonts[slide.textFont ?? "modern"].css } as React.CSSProperties;
   const x = slide.textX ?? .5; const y = slide.textY ?? (slide.textPosition === "top" ? .18 : slide.textPosition === "center" ? .5 : .78);
@@ -31,8 +34,9 @@ function SlideCanvas({ slide, compact = false, onMove }: { slide: SlideshowSlide
     <DeviceFramePreview value={slide.renderedUrl ? undefined : slide.deviceFrame} width={1080} height={1920}>
       <img src={slide.renderedUrl ?? slide.mediaUrl} alt="" style={{ objectFit: slide.renderedUrl ? "cover" : slide.fit }} />
     </DeviceFramePreview>
-    {!slide.renderedUrl && slide.text && <div className={`slide-title movable bg-${slide.textBackground}`} style={{ left: `${x * 100}%`, top: `${y * 100}%`, width: `${(slide.textWidth ?? .87) * 100}%`, minHeight: `${(slide.textHeight ?? .12) * 100}%`, maxHeight: "88%", backgroundColor: slide.textBackground === "none" ? undefined : slide.textBackgroundColor }} onPointerDown={(event) => { if (!onMove) return; event.currentTarget.setPointerCapture(event.pointerId); setDragging(true); }}>{slide.text}</div>}
+    {!slide.renderedUrl && slide.text && <div className={`slide-title movable bg-${slide.textBackground}`} style={{ left: `${x * 100}%`, top: `${y * 100}%`, width: `${(slide.textWidth ?? .87) * 100}%`, minHeight: `${(slide.textHeight ?? .12) * 100}%`, maxHeight: "88%", backgroundColor: slide.textBackground === "none" ? undefined : slide.textBackgroundColor }} onPointerDown={(event) => { if (!onMove) return; event.currentTarget.setPointerCapture(event.pointerId); setDragging(true); }}><span dangerouslySetInnerHTML={{__html:labelTextMarkup(slide.text)}}/></div>}
     {slide.renderedUrl && <span className="slide-rendered"><Check /> Rendered</span>}
+    {emojiError && !compact && <span className="slide-rendered" role="alert">{emojiError}</span>}
   </div>;
 }
 

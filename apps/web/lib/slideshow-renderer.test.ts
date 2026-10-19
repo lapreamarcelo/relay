@@ -42,3 +42,12 @@ test("renders a framed slide and preserves its title overlay", async () => {
   for (let index = 0; index < data.length; index += 3) if (Math.abs(data[index] - plain[index]) + Math.abs(data[index + 1] - plain[index + 1]) + Math.abs(data[index + 2] - plain[index + 2]) > 30) changed++;
   assert.ok(changed > 1_000, "title pixels should be composited over the framed slide");
 });
+
+test("slideshow JPEG exports preserve color emoji sequences alongside title text", async () => {
+  const source = await sharp({ create: { width: 108, height: 192, channels: 3, background: "#000000" } }).png().toBuffer();
+  const rendered = await renderSlideshowImage(source, { id: "emoji", mediaUrl: "https://media.example/source.png", fit: "cover", text: "Launch 🚀 👍🏽 👨‍👩‍👧‍👦 🇪🇸 ❤️", textPosition: "center", textSize: 100, textFont: "modern", textColor: "#FFFFFF", textBackground: "dark", textBackgroundColor: "#000000" });
+  const { data, info } = await sharp(rendered).raw().toBuffer({ resolveWithObject: true });
+  let colored = 0;
+  for (let i = 0; i < data.length; i += info.channels) if (Math.max(...data.subarray(i, i + 3)) - Math.min(...data.subarray(i, i + 3)) > 70) colored++;
+  assert.ok(colored > 10_000, "exported title includes colored emoji artwork on its monochrome slide");
+});

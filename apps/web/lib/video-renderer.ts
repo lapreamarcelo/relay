@@ -10,6 +10,7 @@ import sharp from "sharp";
 
 import { clipSchedule, effectiveMusicRange, layerSchedule, timelineDuration, videoSizes, clipDuration, clipSourceTime, clipMotionTime, clipMotionDuration } from "./video-timeline";
 import { creativeLabelsSvg } from "./creative-label-svg";
+import {preloadLabelEmoji} from "./label-emoji";
 import { deviceBackgroundSvg, deviceBodyLayerSvg, deviceFrameLayerSvg } from "./device-frames";
 import { deviceVideoSceneFilter, deviceMeshSvg } from "./device-motion";
 import { animatedLabelsMarkup } from "./animated-label-markup";
@@ -115,6 +116,7 @@ export interface RenderedVideoArtifact {
 }
 
 export async function renderVideoArtifactDetails(input: { projectId: string; sourceUrl: string; musicUrl?: string | null; labels: CreativeLabel[]; targetKey?: string; timeline?: VideoTimeline; signal?: AbortSignal; onProgress?: (value: number) => Promise<void> }): Promise<RenderedVideoArtifact> {
+  await preloadLabelEmoji((input.timeline?.labels??input.labels).map(label=>label.text).join("\n"));
   if (input.timeline) return renderTimeline(input as typeof input & { timeline: VideoTimeline });
   if (!input.sourceUrl) throw new Error("Choose a source video before rendering.");
   const directory = await mkdtemp(join(tmpdir(), "relay-video-"));

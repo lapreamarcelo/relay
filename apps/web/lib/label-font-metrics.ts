@@ -1,5 +1,6 @@
 import type { LabelFont } from "@relay/core";
 import { bundledLabelFonts } from "./label-font-data.ts";
+import { labelEmoji, type LabelEmoji } from "./label-emoji.ts";
 
 type Point = { x: number; y: number; on: boolean };
 type Table = { offset: number; length: number };
@@ -118,27 +119,43 @@ function outline(face: Face, glyph: number): string {
   face.outlines.set(glyph, path); return path;
 }
 export interface FontSettings { font?: LabelFont; fontWeight?: 400 | 700 | 800; letterSpacing?: number; italic?: boolean; kerning?: boolean }
-export interface MeasuredGlyph { glyph: number; code: number; x: number; advance: number; path: string }
+export interface MeasuredGlyph { glyph: number; code: number; x: number; advance: number; path: string; textEnd: number; emoji?: LabelEmoji }
 export interface MeasuredText { width: number; units: number; glyphs: MeasuredGlyph[]; unsupported: boolean }
 export function measureLabelText(text: string, fontSize: number, settings: FontSettings = {}): MeasuredText {
   const normalized = text.normalize("NFC"), key = JSON.stringify([settings.font ?? "modern", settings.fontWeight ?? 800, fontSize, settings.letterSpacing ?? 0, settings.kerning !== false, normalized]);
   const cached = measurements.get(key); if (cached) return cached;
   const face = faceFor(settings.font, settings.fontWeight), scale = fontSize / face.units, tracking = settings.letterSpacing ?? 0;
   const glyphs: MeasuredGlyph[] = []; let width = 0, previous = -1, unsupported = false;
-  // NFC keeps common combining sequences together and renders them as their native composed glyph.
-  const characters = Array.from(normalized);
-  characters.forEach((character, index) => {
-    const code = character.codePointAt(0)!, glyph = glyphId(face, code);
-    if (!glyph && !/\p{Default_Ignorable_Code_Point}/u.test(character)) unsupported = true;
-    if (/\p{Default_Ignorable_Code_Point}/u.test(character)) return;
-    if (previous >= 0 && settings.kerning !== false) width += (face.kern.get(previous * 65536 + glyph) ?? 0) * scale;
-    const step = advance(face, glyph) * scale;
-    glyphs.push({ glyph, code, x: width, advance: step, path: outline(face, glyph) });
-    width += step + (index === characters.length - 1 ? 0 : tracking); previous = glyph;
-  });
+  let textEnd = 0;
+  for (const grapheme of labelGraphemes(normalized)) {
+    textEnd += grapheme.length;
+    const emoji = labelEmoji(grapheme);
+    if (emoji) {
+      if (glyphs.length) width += tracking;
+      glyphs.push({ glyph: -1, code: grapheme.codePointAt(0)!, x: width, advance: fontSize, path: "", textEnd, emoji });
+      width += fontSize; previous = -1;
+      continue;
+    }
+    for (const character of Array.from(grapheme)) {
+      if (/\p{Default_Ignorable_Code_Point}/u.test(character)) continue;
+      const code = character.codePointAt(0)!, glyph = glyphId(face, code);
+      if (!glyph) unsupported = true;
+      if (glyphs.length) width += tracking;
+      if (previous >= 0 && settings.kerning !== false) width += (face.kern.get(previous * 65536 + glyph) ?? 0) * scale;
+      const step = advance(face, glyph) * scale;
+      glyphs.push({ glyph, code, x: width, advance: step, path: outline(face, glyph), textEnd });
+      width += step; previous = glyph;
+    }
+  }
   const result = { width, units: face.units, glyphs, unsupported };
   if (measurements.size >= 4096) measurements.delete(measurements.keys().next().value!);
-  measurements.set(key, result); return result;
+  if (!glyphs.some(glyph => glyph.emoji && !glyph.emoji.svg)) measurements.set(key, result);
+  return result;
+}
+/** Map a normalized text boundary to complete glyphs, including emoji sequences. */
+export function labelGlyphEndAt(measured: MeasuredText, textEnd: number): number {
+  const end = measured.glyphs.findIndex(glyph => glyph.textEnd > textEnd);
+  return end < 0 ? measured.glyphs.length : end;
 }
 export function labelGraphemes(text: string): string[] { return Array.from(graphemeSegmenter.segment(text), part => part.segment); }
 export function labelWords(text: string): string[] {

@@ -2,6 +2,7 @@ import type { SlideshowSlide } from "@relay/core";
 import sharp from "sharp";
 
 import { creativeLabelsMarkup } from "./creative-label-markup.ts";
+import { preloadLabelEmoji } from "./label-emoji.ts";
 import { deviceFrameGeometry, deviceFrameSvg } from "./device-frames.ts";
 
 function titleOverlay(slide: SlideshowSlide): Buffer | null {
@@ -11,6 +12,7 @@ function titleOverlay(slide: SlideshowSlide): Buffer | null {
 }
 
 export async function renderSlideshowImage(source: Buffer, slide: SlideshowSlide): Promise<Buffer> {
+  await preloadLabelEmoji(slide.text ?? "");
   let base: Buffer;
   if (slide.deviceFrame) {
     const geometry = deviceFrameGeometry(1080, 1920, slide.deviceFrame.device);

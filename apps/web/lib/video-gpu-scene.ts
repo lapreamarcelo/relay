@@ -17,6 +17,7 @@ import { clipSchedule, layerSchedule, clipMotionTime, clipMotionDuration, clipSo
 import { defaultVideoScene, sceneCameraState, sceneShutterSamples } from "./video-scene.ts";
 import { pointerSvg } from "./video-pointer.ts";
 import {mediaPreviewUrl} from "./browser-library-media.ts";
+import {preloadLabelEmoji} from "./label-emoji.ts";
 import { animatedLabelsMarkup } from "./animated-label-markup.ts";
 
 type Surface={mesh:THREE.Mesh; canvas:HTMLCanvasElement; texture:THREE.CanvasTexture; screen?:"inner"|"outer";half?:-1|1};
@@ -182,6 +183,7 @@ export class VideoGpuScene {
  }
  private render(scene:NonNullable<VideoTimeline["scene"]>){this.renderer.toneMappingExposure=scene.exposure;this.bokeh.enabled=scene.aperture>0;(this.bokeh.uniforms as Record<string,THREE.IUniform>).focus.value=Math.max(1,Math.max(this.width,this.height)*(3-scene.focusDepth));(this.bokeh.uniforms as Record<string,THREE.IUniform>).aperture.value=scene.aperture*.00003;this.composer.render();}
  private async updateSceneLabels(timeline:VideoTimeline,timeMs:number){
+  await preloadLabelEmoji(timeline.labels.filter(label=>label.sceneLayer==="scene").map(label=>label.text).join("\n"));
   const labels=timeline.labels.filter(l=>l.sceneLayer==="scene");const active=new Set(labels.map(l=>l.id));for(const [id,label]of this.sceneLabels)if(!active.has(id)){label.mesh.geometry.dispose();(label.mesh.material as THREE.MeshBasicMaterial).map?.dispose();(label.mesh.material as THREE.Material).dispose();this.scene.remove(label.mesh);this.sceneLabels.delete(id);}
   for(const label of labels){let state=this.sceneLabels.get(label.id);if(!state){const mesh=new THREE.Mesh(new THREE.PlaneGeometry(this.width,this.height),new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,toneMapped:false,side:THREE.DoubleSide}));this.scene.add(mesh);state={mesh};this.sceneLabels.set(label.id,state);}state.mesh.visible=timeMs>=label.startMs&&timeMs<label.endMs;if(!state.mesh.visible)continue;const [dw,dh]=videoSizes[timeline.aspectRatio];const svg=animatedLabelsMarkup([{...label,sceneLayer:"overlay"}],timeMs,dw,dh);if(svg!==state.svg){const image=await loadedImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);if(this.disposed)return;const texture=new THREE.Texture(image);texture.colorSpace=THREE.SRGBColorSpace;texture.needsUpdate=true;const material=state.mesh.material as THREE.MeshBasicMaterial;material.map?.dispose();material.map=texture;material.needsUpdate=true;state.svg=svg;}const p=animationState(label.animation,timeMs-label.startMs,label.endMs-label.startMs,{x:label.x,y:label.y},"label");
     // Rotate around the authored text anchor, not the canvas origin.

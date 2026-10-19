@@ -93,6 +93,20 @@ test("direct unfiled upload signing creates keys owned by the authenticated acco
   }
 });
 
+test("audio listing uses the owned music namespace for every accepted audio filename", async () => {
+  reset();
+  objects.set(`media-projects/${projectMusic}/.project.json`, JSON.stringify({ id: projectMusic, ownerId: "A", kind: "music" }));
+  for (const [fileName, contentType] of [["song.opus", "audio/ogg"], ["voice.webm", "audio/webm"], ["recording.aiff", "audio/aiff"], ["track", "audio/mpeg"]]) {
+    const unfiled = await upload("A", "music", { fileName, contentType });
+    const filed = await upload("A", "music", { fileName, contentType, projectId: projectMusic });
+    assert.ok((await listed("A", "?kind=music")).includes(unfiled.key));
+    assert.ok((await listed("A", `?kind=music&project=${projectMusic}`)).includes(filed.key));
+    assert.equal((await listed("A", "?kind=media")).includes(unfiled.key), false);
+    assert.equal((await listed("B", "?kind=music")).includes(unfiled.key), false);
+    assert.equal((await listed("B", "?kind=music")).includes(filed.key), false);
+  }
+});
+
 test("server multipart uploads stay owned for both media and music", async () => {
   reset();
   for (const kind of ["media", "music"]) {

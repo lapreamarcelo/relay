@@ -22,6 +22,7 @@
     "@smithy/node-http-handler": "^4.11.2",
     "better-auth": "^1.6.28",
     "esbuild": "^0.28.2",
+    "fflate": "0.8.3",
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
     "playwright": "^1.64.0",

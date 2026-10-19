@@ -119,10 +119,8 @@ async function updateMediaReferences(ownerId: string, currentUrl: string, nextUr
   });
 }
 
-const musicExtension = /\.(mp3|m4a|aac|wav|ogg|flac)$/i;
 const imageExtension = /\.(jpe?g|png|gif|webp|avif|svg|bmp)$/i;
 const videoExtension = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
-const isKind = (key: string, kind: AssetKind) => kind === "music" ? musicExtension.test(key) : !musicExtension.test(key);
 
 function sanitizeFileName(value: string): string {
   const normalized = value.normalize("NFKC").split(/[\\/]/).pop()?.trim() ?? "";
@@ -193,7 +191,9 @@ export async function GET(request: Request) {
         return { items: result.Contents ?? [], nextToken: result.IsTruncated ? result.NextContinuationToken ?? null : null };
       },
       include: async (object) => {
-        if (!object.Key || object.Key.endsWith("/") || object.Key.endsWith("/.project.json") || kindForKey(object.Key) !== kind || !isKind(object.Key, kind)) return false;
+        // The upload's storage namespace records its kind. Audio containers such
+        // as WebM and Opus must not disappear because of a filename allowlist.
+        if (!object.Key || object.Key.endsWith("/") || object.Key.endsWith("/.project.json") || kindForKey(object.Key) !== kind) return false;
         if (kind === "media" && mediaType === "image" && !imageExtension.test(object.Key)) return false;
         if (kind === "media" && mediaType === "video" && !videoExtension.test(object.Key)) return false;
         const objectProjectId = projectIdForKey(object.Key);

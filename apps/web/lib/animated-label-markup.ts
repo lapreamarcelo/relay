@@ -1,6 +1,6 @@
 import type { TimedVideoLabel } from "@relay/core";
 import { creativeLabelsMarkup, creativeLabelLayout, escapeLabelXml, labelBackgroundMarkup, labelGlyphMarkup, labelShadowMarkup } from "./creative-label-markup.ts";
-import { labelGraphemes, labelWords } from "./label-font-metrics.ts";
+import { labelGlyphEndAt, labelGraphemes, labelWords } from "./label-font-metrics.ts";
 import { animationState, easingProgress, textOnlyPresets } from "./video-animation.ts";
 
 function staggeredText(label: TimedVideoLabel, timeMs: number, width: number, height: number, index: number): string | null {
@@ -17,10 +17,10 @@ function staggeredText(label: TimedVideoLabel, timeMs: number, width: number, he
   const span = Math.max(1, length - stagger * (count - 1)); let unit = 0;
   const id = `text-box-${index}`, shadowId = `${id}-shadow`, shadow = labelShadowMarkup(label, shadowId);
   const text = parts.map((parts, lineIndex) => {
-    const line = layout.lines[lineIndex]; let glyphStart = 0;
+    const line = layout.lines[lineIndex]; let glyphStart = 0, textEnd = 0;
     return parts.map(part => {
-      const glyphCount = Array.from(part.normalize("NFC")).filter(character => !/\p{Default_Ignorable_Code_Point}/u.test(character)).length;
-      const glyphEnd = glyphStart + glyphCount, first = line.measured.glyphs[glyphStart], last = line.measured.glyphs[glyphEnd - 1];
+      textEnd += part.normalize("NFC").length;
+      const glyphEnd = labelGlyphEndAt(line.measured, textEnd), first = line.measured.glyphs[glyphStart], last = line.measured.glyphs[glyphEnd - 1];
       const begin = first?.x ?? 0, end = last ? last.x + last.advance : begin, partWidth = Math.max(1, end - begin), center = (begin + end) / 2;
       const phase = unit++, progress = Math.max(0, Math.min(1, (local - stagger * phase) / span)), p = exiting ? 1 - progress : progress;
       const spring = ["word-spring", "bounce-in", "elastic-in"].includes(preset);

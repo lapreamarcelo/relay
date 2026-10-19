@@ -42,6 +42,13 @@ test("malformed ranges, redirects, active MIME types, and oversized declarations
   const tooLarge = createMediaPreviewHandler({ authorize: authorized, publicUrl: () => publicUrl, maxBytes: 4, fetcher: async () => new Response("12345", { headers: { "Content-Type": "audio/mpeg", "Content-Length": "5" } }) });
   assert.equal((await tooLarge(request())).status, 413);
 });
+test("audio preview preserves library audio container MIME types", async () => {
+  for (const mime of ["audio/webm", "audio/ogg", "audio/opus", "audio/aiff", "audio/x-aiff", "audio/m4a", "audio/x-caf"]) {
+    const handler = createMediaPreviewHandler({ authorize: authorized, publicUrl: () => publicUrl, fetcher: async () => new Response("audio", { headers: { "Content-Type": mime } }) });
+    const response = await handler(request(`${publicUrl}/music/song`));
+    assert.equal(response.status, 200); assert.equal(response.headers.get("Content-Type"), mime); assert.equal(await response.text(), "audio");
+  }
+});
 test("unknown-length streams are bounded and cancellation aborts the upstream fetch", async () => {
   let canceled = false, signal: AbortSignal | null | undefined;
   const handler = createMediaPreviewHandler({ authorize: authorized, publicUrl: () => publicUrl, maxBytes: 3, fetcher: async (_url, options) => {

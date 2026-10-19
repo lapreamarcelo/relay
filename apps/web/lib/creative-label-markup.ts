@@ -1,8 +1,16 @@
 import type { CreativeLabel } from "@relay/core";
 import { creativeLabelHeight, wrapCreativeLabel, type LabelTypography } from "./creative-labels.ts";
-import { labelGraphemes, measureLabelText, type MeasuredText } from "./label-font-metrics.ts";
+import { labelGlyphEndAt, labelGraphemes, measureLabelText, type MeasuredText } from "./label-font-metrics.ts";
+import { labelEmoji } from "./label-emoji.ts";
 
 export const escapeLabelXml = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
+/** Editable DOM titles use the same local emoji artwork as SVG exports. */
+export function labelTextMarkup(text: string): string {
+  return labelGraphemes(text).map(grapheme => {
+    const emoji = labelEmoji(grapheme);
+    return emoji ? emoji.svg.replace("<svg ", `<svg data-label-emoji="${emoji.id}" role="img" aria-label="${escapeLabelXml(grapheme)}" style="display:inline-block;width:1em;height:1em;vertical-align:-0.15em;stroke-width:1" `) : escapeLabelXml(grapheme);
+  }).join("");
+}
 export type StyledLabel = CreativeLabel & LabelTypography;
 export interface LabelLine { text: string; x: number; baseline: number; measured: MeasuredText }
 export function creativeLabelLayout(label: StyledLabel, width = 1080, height = 1920) {
@@ -31,7 +39,9 @@ export function labelShadowMarkup(label: StyledLabel, id: string): string {
 export function labelGlyphMarkup(label: StyledLabel, measured: MeasuredText, glyphStart = 0, glyphEnd = measured.glyphs.length): string {
   const scale = label.fontSize / measured.units;
   const stroke = label.strokeColor ?? (label.background === "none" ? "#10110F" : "none"), strokeWidth = label.strokeWidth ?? (label.background === "none" ? 7 : 0);
-  return measured.glyphs.slice(glyphStart, glyphEnd).map(glyph => glyph.path ? `<path d="${glyph.path}" transform="translate(${glyph.x} 0) scale(${scale})${label.italic ? " skewX(-12)" : ""}" fill="${label.textColor}" stroke="${stroke}" stroke-width="${strokeWidth}" vector-effect="non-scaling-stroke" paint-order="stroke"/>` : "").join("");
+  return measured.glyphs.slice(glyphStart, glyphEnd).map(glyph => glyph.emoji
+    ? glyph.emoji.svg.replace("<svg ", `<svg data-label-emoji="${glyph.emoji.id}" x="${glyph.x}" y="${-label.fontSize * .85}" width="${label.fontSize}" height="${label.fontSize}" style="width:${label.fontSize}px;height:${label.fontSize}px;stroke-width:1" `)
+    : glyph.path ? `<path d="${glyph.path}" transform="translate(${glyph.x} 0) scale(${scale})${label.italic ? " skewX(-12)" : ""}" fill="${label.textColor}" stroke="${stroke}" stroke-width="${strokeWidth}" vector-effect="non-scaling-stroke" paint-order="stroke"/>` : "").join("");
 }
 /** Glyph paths make browser preview, GPU textures and Sharp export independent of host font installation. */
 export function creativeLabelsMarkup(labels: StyledLabel[], width = 1080, height = 1920, options: { reveal?: number; idPrefix?: string } = {}): string {
@@ -41,7 +51,7 @@ export function creativeLabelsMarkup(labels: StyledLabel[], width = 1080, height
     let remaining = Math.ceil(total * (options.reveal ?? 1));
     const text = layout.lines.map(line => {
       const parts = labelGraphemes(line.text), shown = parts.slice(0, Math.max(0, remaining)).join(""); remaining -= parts.length;
-      const glyphEnd = Array.from(shown.normalize("NFC")).filter(character => !/\p{Default_Ignorable_Code_Point}/u.test(character)).length;
+      const glyphEnd = labelGlyphEndAt(line.measured, shown.normalize("NFC").length);
       return `<g transform="translate(${line.x} ${line.baseline})">${labelGlyphMarkup(label, line.measured, 0, glyphEnd)}</g>`;
     }).join("");
     const visibleText = labelGraphemes(label.text).slice(0, Math.ceil(labelGraphemes(label.text).length * (options.reveal ?? 1))).join("");

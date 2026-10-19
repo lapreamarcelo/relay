@@ -1,4 +1,5 @@
 "use client";
+import {useLabelEmoji} from "./use-label-emoji";
 import { videoBackgroundCss } from "../lib/video-background";
 
 import { useEffect, useRef, useState } from "react";
@@ -33,6 +34,7 @@ function readComposition(value: unknown, source: VideoTimeline, signature: strin
 }
 
 export function CompositionPreview({ timeline, timeMs, label = "Generated composition preview" }: { timeline: VideoTimeline; timeMs: number; label?: string }) {
+  const emojiError = useLabelEmoji(timeline.labels.map(label => label.text).join("\n"));
   const [width, height] = videoSizes[timeline.aspectRatio];
   const active = clipSchedule(timeline).filter(entry => timeMs >= entry.startMs && timeMs < entry.endMs);
   const incoming = active.length > 1 ? active[1] : undefined;
@@ -43,6 +45,7 @@ export function CompositionPreview({ timeline, timeMs, label = "Generated compos
   const endColor = timeline.background ? timeline.background.endColor : active.at(-1)?.clip.deviceFrame?.backgroundEnd;
   const background = videoBackgroundCss(width,height,timeline.background ?? {color,endColor});
   return <div className="video-composer-canvas" style={{ background: background, aspectRatio: `${width}/${height}`, width: `min(100%, ${300 * width / height}px)` }} aria-label={label}>
+    {emojiError && <p role="alert">{emojiError}</p>}
     <div className="timeline-label-preview" style={{zIndex:0,transform:videoCameraTransform(timeline.camera,timeMs)}} aria-hidden="true" dangerouslySetInnerHTML={{__html:animatedLabelsMarkup(timeline.labels.filter(l=>l.sceneLayer==="back"),timeMs,width,height)}}/>
     <div className="video-camera-scene" data-camera-preview style={{transform:videoCameraTransform(timeline.camera,timeMs),zIndex:1}}>{[...active,...layers].map((entry, index) => {
       const clip = entry.clip, local = timeMs - entry.startMs, kind = incoming?.clip.transition?.kind;

@@ -5,6 +5,7 @@ const MIME_TYPES = new Set([
   "image/jpeg", "image/png", "image/webp", "image/avif", "image/gif",
   "video/mp4", "video/webm", "video/quicktime", "video/x-m4v", "video/mpeg", "video/x-msvideo", "video/x-matroska",
   "audio/mpeg", "audio/mp3", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/wav", "audio/x-wav", "audio/wave", "audio/ogg", "audio/webm", "audio/flac", "audio/x-flac",
+  "audio/aiff", "audio/x-aiff", "audio/opus", "audio/m4a", "audio/x-caf",
 ]);
 const PRIVATE_HEADERS = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "same-origin", "Content-Security-Policy": "default-src 'none'; sandbox" };
 type Dependencies = {
