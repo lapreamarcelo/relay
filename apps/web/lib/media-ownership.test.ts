@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
+import type { MediaUsageRow } from "./media-post-usage.ts";
 import { objectKeyFromPublicUrl } from "./video-download.ts";
 
 // Execute the production routes against an in-memory R2 bucket. Authentication,
 // signing, database access and rendering are adapters; no cloud calls are made.
+let usageRows: Array<MediaUsageRow & { ownerId: string }> = [];
 const objects = new Map<string, string>();
 const getFailures = new Map<string, number>();
 const mutations: Array<{ type: string; key: string }> = [];
@@ -17,6 +19,7 @@ const ownedKey = (owner: string, kind = "media", name = "clip.png") => `media-ow
 const missing = () => Object.assign(new Error("Not found"), { $metadata: { httpStatusCode: 404 } });
 const query = async (strings: TemplateStringsArray, ...values: unknown[]) => {
   const statement = strings.join("");
+  if (statement.includes("target.status AS target_status")) return usageRows.filter((row) => row.ownerId === values[0]);
   if (statement.includes('SELECT * FROM "video_project"')) return [{ id: "video" }];
   // Apply the parameterized CASE updates to an in-memory saved video reference.
   if (statement.includes('UPDATE "video_project"') && referencedVideo) {
@@ -70,6 +73,7 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 const media = await import("../app/api/v1/media/route.ts");
 const batch = await import("../app/api/v1/videos/batch/route.ts");
 function reset() {
+  usageRows = [];
   objects.clear(); getFailures.clear(); mutations.length = 0; renderedMusic.length = 0; referencedVideo = null; delete process.env.RELAY_LEGACY_MEDIA_OWNER_ID;
   for (const [id, ownerId] of [[projectA, "A"], [projectB, "B"]]) objects.set(`media-projects/${id}/.project.json`, JSON.stringify({ id, ownerId, kind: "media" }));
 }
@@ -272,5 +276,73 @@ test("batch rotation excludes ambiguous legacy music and honors the configured l
     assert.equal((await run("A")).status, 400); assert.deepEqual(mutations, []); assert.deepEqual(renderedMusic, []);
     process.env.RELAY_LEGACY_MEDIA_OWNER_ID = "A"; assert.equal((await run("B")).status, 400);
     assert.equal((await run("A")).status, 201); assert.deepEqual(renderedMusic, ["https://media.example.test/music/legacy.mp3"]);
+  }
+});
+
+
+test("gallery usage filters all owned references before pagination and combines type/folder filters", async () => {
+  reset();
+  const keys = [ownedKey("A", "media", "a-none.png"), ownedKey("A", "media", "b-published.png"), ownedKey("A", "media", "c-both.mp4"), `media-projects/${projectA}/media/d-scheduled.png`, ownedKey("B")];
+  for (const key of keys) objects.set(key, "asset");
+  const row = (id: string, key: string, status: string, ownerId = "A"): MediaUsageRow & { ownerId: string } => ({ id, ownerId, media_url: null, media_urls: [`https://media.example.test/${key.split("/").map(encodeURIComponent).join("/")}`], status: "failed", target_status: status, settings: null });
+  // More than 500 unrelated references must not hide the older published asset.
+  usageRows = Array.from({ length: 501 }, (_, i) => row(`old-${i}`, "unrelated", "published"));
+  usageRows.push(row("published", keys[1], "published"), row("mixed", keys[2], "published"), row("mixed", keys[2], "scheduled"), row("scheduled", keys[3], "scheduled"));
+  usageRows.push(row("foreign", keys[0], "scheduled", "B"));
+  const response = await request("GET", "A", undefined, "?usage=scheduled&limit=1");
+  assert.equal(response.status, 200);
+  const first = await response.json();
+  assert.deepEqual(first.data.map((item: { key: string }) => item.key), [keys[2]]);
+  assert.deepEqual(first.data[0].postUsage, { scheduled: 1, published: 1, publishing: 0 });
+  const secondResponse = await request("GET", "A", undefined, `?usage=scheduled&limit=1&cursor=${first.pagination.nextCursor}`);
+  const second = await secondResponse.json();
+  assert.deepEqual(second.data.map((item: { key: string }) => item.key), [keys[3]]);
+  assert.deepEqual(await listed("A", "?usage=none"), [keys[0]]);
+  assert.deepEqual(await listed("A", "?usage=scheduled&mediaType=video"), [keys[2]]);
+  assert.deepEqual(await listed("A", `?usage=scheduled&project=${projectA}&mediaType=image`), [keys[3]]);
+  assert.deepEqual(await listed("B", "?usage=published"), []);
+  assert.equal((await request("GET", "A", undefined, "?usage=unknown")).status, 400);
+});
+
+test("direct and server uploads keep original image, video, and music names after listing", async () => {
+  reset();
+  for (const [kind, name, contentType] of [
+    ["media", "Café launch #1 & 50%.png", "image/png"],
+    ["media", "Summer launch (final) 🎬.mp4", "video/mp4"],
+    ["music", "Canción — versión 2 🎵.mp3", "audio/mpeg"],
+  ]) {
+    const direct = await upload("A", kind, { fileName: name, contentType });
+    const form = new FormData();
+    form.append("file", new File(["asset"], name, { type: contentType })); form.append("kind", kind);
+    const response = await request("POST", "A", form);
+    assert.equal(response.status, 201);
+    const server = await response.json();
+    assert.notEqual(direct.key, server.key, "same-name uploads must never overwrite each other");
+    const listing = await (await request("GET", "A", undefined, `?kind=${kind}`)).json();
+    for (const result of [direct, server]) {
+      assert.equal(result.name, name);
+      assert.equal(listing.data.find((item: { key: string }) => item.key === result.key)?.name, name);
+      assert.equal(objectKeyFromPublicUrl(result.url, "https://media.example.test"), result.key);
+    }
+  }
+});
+
+test("names survive staging, folder moves, and explicit Unicode renames", async () => {
+  reset();
+  for (const [kind, folder, name] of [["media", projectA, "Vídeo final (1).mp4"], ["music", projectMusic, "Mi canción 🎵.mp3"]]) {
+    objects.set(`media-projects/${folder}/.project.json`, JSON.stringify({ id: folder, ownerId: "A", kind }));
+    const staged = await upload("A", kind, { fileName: name, contentType: kind === "music" ? "audio/mpeg" : "video/mp4", staged: true });
+    const committedResponse = await request("PATCH", "A", { key: staged.key, kind, commit: true, projectId: folder });
+    assert.equal(committedResponse.status, 200);
+    const committed = await committedResponse.json(); assert.equal(committed.name, name);
+    const movedResponse = await request("PATCH", "A", { key: committed.key, kind, projectId: "unfiled" });
+    assert.equal(movedResponse.status, 200);
+    const moved = await movedResponse.json(); assert.equal(moved.name, name);
+    const renamedName = `Revisión 2 — ${name}`;
+    const renamedResponse = await request("PATCH", "A", { key: moved.key, kind, name: renamedName });
+    assert.equal(renamedResponse.status, 200);
+    const renamed = await renamedResponse.json(); assert.equal(renamed.name, renamedName);
+    const listing = await (await request("GET", "A", undefined, `?kind=${kind}`)).json();
+    assert.equal(listing.data.find((item: { key: string }) => item.key === renamed.key)?.name, renamedName);
   }
 });
