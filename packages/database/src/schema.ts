@@ -229,6 +229,7 @@ export const slideshowProject = pgTable(
     name: text("name").notNull(),
     caption: text("caption").notNull().default(""),
     slides: jsonb("slides").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    output: jsonb("output").$type<{ format: "images" | "video"; imageSeconds?: number }>().notNull().default({ format: "images" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -300,6 +301,23 @@ export const postTarget = pgTable(
   (table) => [index("post_target_post_id_idx").on(table.postId), index("post_target_social_account_id_idx").on(table.socialAccountId), index("post_target_publish_due_idx").on(table.publishAfter)],
 );
 
+export const postImageVideoJob = pgTable("post_image_video_job", {
+  id: text("id").primaryKey(),
+  targetId: text("target_id").notNull().references(() => postTarget.id, { onDelete: "cascade" }),
+  sourceUrls: jsonb("source_urls").$type<string[]>().notNull(),
+  imageSeconds: integer("image_seconds").notNull(),
+  status: text("status").notNull().default("queued"),
+  progress: integer("progress").notNull().default(0),
+  attempts: integer("attempts").notNull().default(0),
+  renderedUrl: text("rendered_url"),
+  error: text("error"),
+  failureAcknowledgedAt: timestamp("failure_acknowledged_at", { withTimezone: true }),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("post_image_video_job_target_id_key").on(table.targetId), index("post_image_video_queue_idx").on(table.status, table.createdAt)]);
+
 export const workerHeartbeat = pgTable(
   "worker_heartbeat",
   {
@@ -340,6 +358,6 @@ export const contentIdea=pgTable("content_idea",{id:text("id").primaryKey(),owne
 export const campaignRecipe=pgTable("campaign_recipe",{id:text("id").primaryKey(),ownerId:text("owner_id").notNull().references(()=>user.id,{onDelete:"cascade"}),name:text("name").notNull(),entries:jsonb("entries").notNull(),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow()});
 export const creativeAssistanceRequest=pgTable("creative_assistance_request",{id:text("id").primaryKey(),ownerId:text("owner_id").notNull().references(()=>user.id,{onDelete:"cascade"}),createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow()});
 
-export const schema = { campaignRecipe, videoRenderJob,creativeTemplate,publishingQueue,contentIdea,creativeAssistanceRequest,user, session, account, verification, apiKey, brand, socialAccount, notification, campaign, postTemplate, relayPost, slideshowProject, videoProject, analyticsReportSchedule, postTarget, postMetricSnapshot, workerHeartbeat };
+export const schema = { postImageVideoJob, campaignRecipe, videoRenderJob,creativeTemplate,publishingQueue,contentIdea,creativeAssistanceRequest,user, session, account, verification, apiKey, brand, socialAccount, notification, campaign, postTemplate, relayPost, slideshowProject, videoProject, analyticsReportSchedule, postTarget, postMetricSnapshot, workerHeartbeat };
 
 export type RelayUser = typeof user.$inferSelect;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import YoutubeImageVideoPreview from "./youtube-image-video-preview";
 import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 
 interface PreviewMedia {
@@ -10,8 +11,9 @@ interface PreviewMedia {
   urls?: string[];
 }
 
-export default function SocialPreviewMedia({ media, immersive, aspectRatio, busy, onImageLoad, onVideoLoad }: {
+export default function SocialPreviewMedia({ media, immersive, aspectRatio, busy, onImageLoad, onVideoLoad, imageSeconds }: {
   media: PreviewMedia;
+  imageSeconds?: number;
   immersive: boolean;
   aspectRatio: number;
   busy: boolean;
@@ -24,6 +26,8 @@ export default function SocialPreviewMedia({ media, immersive, aspectRatio, busy
   const carousel = urls.length > 1;
   const source = slide === 0 ? media.previewUrl : urls[slide];
   const move = (index: number) => setSlide(Math.max(0, Math.min(urls.length - 1, index)));
+
+  if (media.type === "image" && imageSeconds !== undefined) return <YoutubeImageVideoPreview name={media.name} urls={[media.previewUrl, ...urls.slice(1)]} seconds={imageSeconds} onImageLoad={onImageLoad} />;
 
   return <div
     className={`${immersive ? "reel-media" : "preview-media"}${carousel ? " preview-carousel" : ""}`}

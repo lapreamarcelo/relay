@@ -468,8 +468,10 @@ test("slideshow and video use the same label controls", async ({ page }) => {
   const composer = page.getByRole("dialog", { name: "Create post" });
   await expect(composer.getByText("2 ordered slides ready")).toBeVisible();
   await expect(composer.locator(".destination-list button").filter({ hasText: "Instagram" })).toBeEnabled();
-  await expect(composer.locator(".destination-list button").filter({ hasText: "YouTube" })).toBeDisabled();
-  await expect(composer.getByText("YouTube requires video")).toBeVisible();
+  const youtube = composer.locator(".destination-list button").filter({ hasText: "YouTube" });
+  await expect(youtube).toBeEnabled();
+  await youtube.click();
+  await expect(composer.getByText("YouTube will publish this as a slideshow video · 8 seconds")).toBeVisible();
 });
 
 test("slideshow accepts dropped image files", async ({ page }) => {

@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./account-credentials": "./src/account-credentials.ts",
     "./post-validation": "./src/post-validation.ts",
+    "./image-video": "./src/image-video.ts",
     "./token-encryption": "./src/token-encryption.ts"
   },
   "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "test": "node --experimental-transform-types --test src/*.test.ts" },

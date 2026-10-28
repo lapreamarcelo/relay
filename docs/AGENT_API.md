@@ -83,7 +83,7 @@ curl -X POST "$RELAY_URL/api/v1/posts" \
 
 `mediaType` is `none`, `image`, or `video`. A public HTTPS `mediaUrl` is required for image and video posts. The CLI and local MCP adapter can upload agent-provided files through Relay's short-lived signed R2 upload flow.
 
-For an image slideshow, keep `mediaType: "image"`, set `mediaUrl` to the first rendered slide (the cover), and send every ordered slide in `mediaUrls`. Relay preserves that order when publishing Instagram carousels, Facebook multi-photo posts, and TikTok photo posts. Instagram accepts up to 10 slides; Relay accepts up to 35 for Facebook and TikTok. YouTube destinations require video and are rejected for image posts.
+For an image slideshow, keep `mediaType: "image"`, set `mediaUrl` to the first rendered slide (the cover), and send every ordered slide in `mediaUrls`. Relay preserves that order when publishing Instagram carousels, Facebook multi-photo posts, and TikTok photo posts. Instagram accepts up to 10 slides; Relay accepts up to 35 for Facebook and TikTok. YouTube targets automatically receive a video derived from the images. To publish the entire slideshow as a video on other destinations, render it with `format: "video"` and use `mediaType: "video"` with the returned MP4 URL.
 
 ```json
 {
@@ -140,7 +140,19 @@ curl -X POST "$RELAY_URL/api/v1/slideshows/render" \
   -d '{ "id": "slideshow-project-id" }'
 ```
 
-Rendering creates a new named Media folder and stores one numbered 1080×1920 JPEG per slide in order. The response returns the folder plus each URL as `renderedUrl`. Project instructions live in PostgreSQL; rendered R2 images are immutable publishing artifacts. Schedule them through `/api/v1/posts` using the ordered `renderedUrl` values in `mediaUrls`. Instagram accepts up to 10 slides; Facebook and TikTok use the same ordered list. YouTube cannot be selected because it requires video.
+Rendering creates a new named Media folder and stores one numbered 1080×1920 JPEG per slide in order. The response returns the folder plus each URL as `renderedUrl`. Project instructions live in PostgreSQL; rendered R2 images are immutable publishing artifacts. Schedule them through `/api/v1/posts` using the ordered `renderedUrl` values in `mediaUrls`. Instagram accepts up to 10 slides; Facebook and TikTok use the same ordered list. YouTube automatically receives a slideshow video generated from those images.
+
+Slideshow projects can save `output: { "format": "images" | "video", "imageSeconds": 4 }`. Existing projects default to images. `imageSeconds` is optional: one slide defaults to 8 seconds (5–10 allowed), while multiple slides default to 4 seconds each (3–5 allowed). Omitting `output` on an update preserves the saved choice.
+
+For a reusable vertical MP4, call the same render endpoint with `format: "video"`. The MP4 includes the editor's labels, static device frames, image fitting, and complete slide order with simple cuts. A standalone video project is also saved for reuse. `format` and `imageSeconds` on a render request override the saved output for that render; omitted values use the project settings.
+
+```json
+{ "id": "slideshow-project-id", "format": "video", "imageSeconds": 4, "async": true }
+```
+
+Async video rendering returns HTTP 202 with `{ data, format: "video", folder, video: { projectId, durationMs }, job }`. Poll `GET /api/v1/videos/jobs?id=<job.id>` until `data.status` is `completed`; use that job's `renderedUrl` and optional `coverUrl` for preview or a video post. `PATCH /api/v1/videos/jobs` with `{ "id": "<job.id>", "action": "cancel" | "retry" }` manages queued/running or failed/cancelled jobs. Without `async: true`, video rendering waits for completion and returns `video.url`, `video.coverUrl`, and `video.durationMs`. Video output requires `slideshows:write` and `videos:write`; async output also requires `videos:read` for polling. Video output always renders the full project, so do not send `slideIds`.
+
+In MCP, `save_slideshow` and `create_slideshows` accept the saved `output` settings. `render_slideshow` accepts `format`, `imageSeconds`, and `async`; use `get_video_render_job` and `update_video_render_job` for its job. `schedule_slideshow` accepts `format` and `imageSeconds` overrides and sends the MP4 to the chosen targets. It supports Instagram/Facebook `publishType: "reel"`, TikTok video settings, and YouTube. `create_slideshow_batch` honors each project's saved output, including mixed image/video batches. Scheduling helpers render synchronously; for longer exports, use the async render/poll/create-post workflow. Immediate publishing still requires `publishNow: true`.
 
 ### Platform settings
 
@@ -155,7 +167,9 @@ Each target needs settings matching its connected provider:
 
 Instagram `publishType` supports `feed`, `reel`, or `story`. For an Instagram Reel, set either `coverUrl` to a public HTTPS JPEG or `thumbOffsetMs` to a frame position in milliseconds; `coverUrl` takes precedence. TikTok Direct Posts accept `thumbOffsetMs` for the video cover frame. Facebook supports `feed` or `reel`, but Meta's Reel publishing endpoint does not accept a cover. YouTube privacy supports `private`, `unlisted`, or `public`; `thumbnailUrl` may be a public HTTPS JPEG or PNG no larger than 2 MB. TikTok `SELF_ONLY` sends media to the creator's TikTok inbox for manual review and publishing; visibility, interactions, and the cover are chosen in TikTok. Other TikTok privacy levels use Direct Post and are validated against the creator's current capabilities at publish time.
 
-Relay validates media requirements and caption limits before saving. YouTube requires video, TikTok requires media, and Reel or Story settings may require a specific media type. `textOverride` stores a destination-specific caption; omit it to use the post's shared `text`.
+For YouTube image posts, Relay creates a vertical 1080×1920 MP4 before uploading, fitting each complete image against a black background and preserving slide order with simple cuts. One image plays for 8 seconds by default; multiple images play for 4 seconds each. Set the YouTube target's optional `imageSeconds` to an integer from 5–10 for one image, or 3–5 for multiple images. Images must come from this Relay R2 media library. Conversion runs in the background at publishing time and reuses the completed video on upload retries. The post retains its original image URLs for other destinations. Drafts do not render or upload anything.
+
+Relay validates media requirements and caption limits before publishing or scheduling. YouTube accepts images or a video, TikTok requires media, and Reel or Story settings may require a specific media type. `textOverride` stores a destination-specific caption; omit it to use the post's shared `text`.
 
 ### Publishing defaults
 
@@ -425,7 +439,7 @@ Discover frames before designing:
 - CLI: `relay device-frames list`.
 - MCP: `list_device_frames` (also discoverable through `get_capabilities`).
 
-Both REST discovery requests require a valid Relay API key or session, using the same authentication as capabilities discovery. No AI provider key is needed. Saving/rendering retains the existing video/slideshow write scopes.
+Both REST discovery requests require a valid Relay API key or session, using the same authentication as capabilities discovery. No AI provider key is needed. Image slideshow rendering uses `slideshows:write`; slideshow video output additionally uses `videos:write` and async exports also use `videos:read`.
 
 The catalog lists `phone`, `tablet`, `browser`, `iphone`, `iphone-duo`, `mac`, `watch`, and `android`, defaults, valid configuration examples, and `layouts` for each supported output ratio. Layout `canvas`, `outer`, and `screen` dimensions/coordinates are pixels, derived from the actual renderer. Use them to place text around the device; label coordinates remain normalized fractions of the **whole canvas**, not the device screen. These are stylized built-in bezels, not photorealistic manufacturer meshes. Layouts describe the default pose; motion changes the projected screen location.
 

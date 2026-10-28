@@ -3,6 +3,7 @@ import { sql } from "@relay/database";
 import { ProviderPublishError, type ProviderPublishRegistry } from "@relay/providers/publish";
 import { TokenRefreshTransientError, type TokenLifecycleService } from "./token-lifecycle.ts";
 import { withFreshAccountToken } from "./publisher-auth.ts";
+import { youtubeImageVideoUrl } from "./post-image-video.ts";
 
 interface ClaimedTarget {
   lease_owner: string;
@@ -192,9 +193,30 @@ export class PostPublishingService {
       const renewal = this.renewLease(target);
       try {
         if (!target.social_account_id || !target.auth_method || !target.provider_account_id) throw new ProviderPublishError("The destination account is no longer connected.");
+        let mediaType = target.media_type;
+        let mediaUrl = target.media_url ?? undefined;
+        let mediaUrls = target.media_urls;
+        if (target.provider === "youtube" && mediaType === "image") {
+          const videoUrl = await youtubeImageVideoUrl(target);
+          renewal.check();
+          if (!videoUrl) {
+            const deferred = await sql`
+              UPDATE post_target SET publish_after = ${isoAfter(15_000)}, publish_lease_owner = NULL,
+                publish_lease_expires_at = NULL, error = NULL, updated_at = NOW()
+              WHERE id = ${target.id} AND publish_lease_owner = ${target.lease_owner} RETURNING id
+            `;
+            if (!deferred.length) throw new PublishingLeaseLostError();
+            await this.updatePostStatus(target.post_id);
+            result.deferred += 1;
+            continue;
+          }
+          mediaType = "video";
+          mediaUrl = videoUrl;
+          mediaUrls = [videoUrl];
+        }
         const providerResult = await withFreshAccountToken(this.lifecycle, target.social_account_id, (accessToken) => {
           renewal.check();
-          const input = { provider: target.provider, authMethod: target.auth_method!, providerAccountId: target.provider_account_id!, providerMetadata: target.provider_metadata ?? {}, accessToken, text: target.text_override ?? target.text, mediaType: target.media_type, mediaUrl: target.media_url ?? undefined, mediaUrls: target.media_urls, settings: target.settings, providerPostId: target.provider_post_id ?? undefined };
+          const input = { provider: target.provider, authMethod: target.auth_method!, providerAccountId: target.provider_account_id!, providerMetadata: target.provider_metadata ?? {}, accessToken, text: target.text_override ?? target.text, mediaType, mediaUrl, mediaUrls, settings: target.settings, providerPostId: target.provider_post_id ?? undefined };
           return target.status === "processing" ? this.providers.check(input) : this.providers.publish(input);
         });
         await renewal.stop();

@@ -1,4 +1,5 @@
 import type { ProviderId, ProviderPostSettings } from "./index.ts";
+import { imageVideoSeconds } from "./image-video.ts";
 
 export interface PostValidationIssue {
   provider?: ProviderId;
@@ -21,7 +22,11 @@ export function validatePostPlan(input: {
   for (const destination of input.destinations) {
     const caption = destination.textOverride?.trim() || input.text.trim();
     if (caption.length > captionLimits[destination.provider]) issues.push({ provider: destination.provider, field: "caption", message: `Caption exceeds the ${captionLimits[destination.provider].toLocaleString()} character limit.` });
-    if (destination.provider === "youtube" && input.mediaType !== "video") issues.push({ provider: "youtube", field: "media", message: "YouTube publishing requires a video." });
+    if (destination.provider === "youtube" && input.mediaType === "none") issues.push({ provider: "youtube", field: "media", message: "YouTube publishing requires images or a video." });
+    if (destination.provider === "youtube" && input.mediaType === "image" && destination.settings.kind === "youtube") {
+      try { imageVideoSeconds(input.mediaCount ?? 1, destination.settings.imageSeconds); }
+      catch (error) { issues.push({ provider: "youtube", field: "settings", message: error instanceof Error ? error.message : "Choose a valid YouTube image duration." }); }
+    }
     if (destination.provider === "instagram" && (input.mediaCount ?? 0) > 10) issues.push({ provider: "instagram", field: "media", message: "Instagram carousels support up to 10 slides." });
     if (destination.provider === "instagram" && input.mediaType === "none") issues.push({ provider: "instagram", field: "media", message: "Instagram publishing requires an image or video." });
     if (destination.provider === "tiktok" && input.mediaType === "none") issues.push({ provider: "tiktok", field: "media", message: "TikTok publishing requires an image or video." });

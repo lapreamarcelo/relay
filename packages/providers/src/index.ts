@@ -5,14 +5,14 @@ export interface ProviderManifest {
   name: string;
   shortName: string;
   color: string;
-  capabilities: { text: boolean; images: boolean; video: boolean; maxCaption: number };
+  capabilities: { text: boolean; images: boolean; imagesAsVideo?: boolean; video: boolean; maxCaption: number };
 }
 
 const manifests: ProviderManifest[] = [
   { id: "instagram", name: "Instagram", shortName: "IG", color: "#d9468f", capabilities: { text: true, images: true, video: true, maxCaption: 2200 } },
   { id: "facebook", name: "Facebook", shortName: "f", color: "#1877f2", capabilities: { text: true, images: true, video: true, maxCaption: 63206 } },
   { id: "tiktok", name: "TikTok", shortName: "TK", color: "#111111", capabilities: { text: true, images: true, video: true, maxCaption: 2200 } },
-  { id: "youtube", name: "YouTube", shortName: "YT", color: "#ff0033", capabilities: { text: true, images: false, video: true, maxCaption: 5000 } },
+  { id: "youtube", name: "YouTube", shortName: "YT", color: "#ff0033", capabilities: { text: true, images: true, imagesAsVideo: true, video: true, maxCaption: 5000 } },
 ];
 
 export class ProviderRegistry {

@@ -1,7 +1,7 @@
 import { sql } from "@relay/database";
 
 import { requireApiSession } from "../../../../lib/api-session";
-import { normalizeSlides, serializeSlideshow, type SlideshowRow } from "../../../../lib/slideshows";
+import { normalizeSlides, normalizeSlideshowOutput, serializeSlideshow, type SlideshowRow } from "../../../../lib/slideshows";
 
 export const runtime = "nodejs";
 
@@ -11,6 +11,7 @@ interface ProjectInput {
   name?: unknown;
   caption?: unknown;
   slides?: unknown;
+  output?: unknown;
 }
 
 function cleanString(value: unknown, maximum: number): string {
@@ -28,14 +29,16 @@ async function createProject(ownerId: string, body: ProjectInput | null): Promis
   const name = cleanString(body?.name, 120);
   const caption = typeof body?.caption === "string" ? body.caption.trim().slice(0, 2_200) : "";
   const slides = normalizeSlides(body?.slides);
+  const output = normalizeSlideshowOutput(body?.output, slides?.length ?? 0);
   const brandId = await validBrand(ownerId, body?.brandId);
   if (!name || !slides) return Response.json({ error: "A slideshow needs a name and a valid ordered slides array (maximum 35)." }, { status: 400 });
+  if (!output) return Response.json({ error: "Choose images or video output with a valid duration per image (5–10 seconds for one slide, 3–5 for multiple slides)." }, { status: 400 });
   if (brandId === false) return Response.json({ error: "The selected brand was not found." }, { status: 400 });
   const id = crypto.randomUUID();
   const [created] = await sql<SlideshowRow[]>`
-    INSERT INTO "slideshow_project" (id, owner_id, brand_id, name, caption, slides)
-    VALUES (${id}, ${ownerId}, ${brandId}, ${name}, ${caption}, ${JSON.stringify(slides)}::jsonb)
-    RETURNING id, brand_id, name, caption, slides, created_at, updated_at
+    INSERT INTO "slideshow_project" (id, owner_id, brand_id, name, caption, slides, output)
+    VALUES (${id}, ${ownerId}, ${brandId}, ${name}, ${caption}, ${JSON.stringify(slides)}::jsonb, ${JSON.stringify(output)}::jsonb)
+    RETURNING id, brand_id, name, caption, slides, output, created_at, updated_at
   `;
   return Response.json({ data: serializeSlideshow(created) }, { status: 201 });
 }
@@ -45,8 +48,8 @@ export async function GET(request: Request) {
   if (authorization.response) return authorization.response;
   const id = cleanString(new URL(request.url).searchParams.get("id"), 240);
   const rows = id
-    ? await sql<SlideshowRow[]>`SELECT id, brand_id, name, caption, slides, created_at, updated_at FROM "slideshow_project" WHERE id = ${id} AND owner_id = ${authorization.session.user.id}`
-    : await sql<SlideshowRow[]>`SELECT id, brand_id, name, caption, slides, created_at, updated_at FROM "slideshow_project" WHERE owner_id = ${authorization.session.user.id} ORDER BY updated_at DESC LIMIT 200`;
+    ? await sql<SlideshowRow[]>`SELECT id, brand_id, name, caption, slides, output, created_at, updated_at FROM "slideshow_project" WHERE id = ${id} AND owner_id = ${authorization.session.user.id}`
+    : await sql<SlideshowRow[]>`SELECT id, brand_id, name, caption, slides, output, created_at, updated_at FROM "slideshow_project" WHERE owner_id = ${authorization.session.user.id} ORDER BY updated_at DESC LIMIT 200`;
   if (id && !rows[0]) return Response.json({ error: "Slideshow not found." }, { status: 404 });
   return Response.json({ data: id ? serializeSlideshow(rows[0]) : rows.map(serializeSlideshow) });
 }
@@ -75,13 +78,16 @@ export async function PATCH(request: Request) {
   const name = cleanString(body?.name, 120);
   const caption = typeof body?.caption === "string" ? body.caption.trim().slice(0, 2_200) : "";
   const slides = normalizeSlides(body?.slides);
+  const output = normalizeSlideshowOutput(body?.output, slides?.length ?? 0);
   const brandId = await validBrand(authorization.session.user.id, body?.brandId);
   if (!id || !name || !slides) return Response.json({ error: "Slideshow id, name, and valid slides are required." }, { status: 400 });
+  if (!output) return Response.json({ error: "Choose images or video output with a valid duration per image (5–10 seconds for one slide, 3–5 for multiple slides)." }, { status: 400 });
   if (brandId === false) return Response.json({ error: "The selected brand was not found." }, { status: 400 });
   const [updated] = await sql<SlideshowRow[]>`
-    UPDATE "slideshow_project" SET brand_id = ${brandId}, name = ${name}, caption = ${caption}, slides = ${JSON.stringify(slides)}::jsonb, updated_at = NOW()
+    UPDATE "slideshow_project" SET brand_id = ${brandId}, name = ${name}, caption = ${caption}, slides = ${JSON.stringify(slides)}::jsonb,
+      output = COALESCE(${body?.output === undefined ? null : JSON.stringify(output)}::jsonb, output), updated_at = NOW()
     WHERE id = ${id} AND owner_id = ${authorization.session.user.id}
-    RETURNING id, brand_id, name, caption, slides, created_at, updated_at
+    RETURNING id, brand_id, name, caption, slides, output, created_at, updated_at
   `;
   if (!updated) return Response.json({ error: "Slideshow not found." }, { status: 404 });
   return Response.json({ data: serializeSlideshow(updated) });

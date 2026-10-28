@@ -5,6 +5,7 @@ import type { VideoProject } from "@relay/core";
 import { renderVideoArtifactDetails } from "../lib/video-renderer";
 import { transcribeTimeline } from "../lib/video-captions";
 import { setTimeout as delay } from "node:timers/promises";
+import { runNextPostImageVideoJob } from "../lib/post-image-video-jobs";
 const shutdown=new AbortController();
 for(const signal of ["SIGINT","SIGTERM"])process.on(signal,()=>shutdown.abort());
 const rendererId=`renderer-${process.env.HOSTNAME??crypto.randomUUID()}`;
@@ -13,6 +14,7 @@ const healthTimer=setInterval(()=>{void reportHealth().catch(()=>{});},20000);
 try {
  await reportHealth();
  while(!shutdown.signal.aborted){
+  if(await runNextPostImageVideoJob(shutdown.signal))continue;
   const lease=crypto.randomUUID();
   const [job]=await sql<{id:string;project_id:string;revision:number;kind:string;snapshot:VideoProject}[]>`UPDATE video_render_job SET status='running',attempts=attempts+1,lease_token=${lease},lease_until=now()+interval '60 seconds',updated_at=now() WHERE id=(SELECT id FROM video_render_job WHERE (status='queued' OR (status='running' AND lease_until<now())) AND attempts<3 ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`;
   if(!job){await sql`UPDATE video_render_job SET status='failed',error='Render worker lease expired after three attempts.',lease_token=NULL WHERE status='running' AND lease_until<now() AND attempts>=3`; await delay(2000,undefined,{signal:shutdown.signal}).catch(()=>{});continue;}

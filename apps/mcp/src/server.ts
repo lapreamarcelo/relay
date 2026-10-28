@@ -38,7 +38,7 @@ const providerSettingsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("instagram"), publishType: z.enum(["feed", "reel", "story"]), coverUrl: z.string().url().optional(), thumbOffsetMs: z.number().int().min(0).max(900_000).optional() }),
   z.object({ kind: z.literal("facebook"), publishType: z.enum(["feed", "reel"]), linkUrl: z.string().url().optional() }),
   z.object({ kind: z.literal("tiktok"), privacyLevel: z.enum(["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]), allowComments: z.boolean(), allowDuet: z.boolean(), allowStitch: z.boolean(), thumbOffsetMs: z.number().int().min(0).max(900_000).optional() }),
-  z.object({ kind: z.literal("youtube"), title: z.string().min(1).max(100), tags: z.array(z.string().max(100)).max(50), privacyStatus: z.enum(["private", "unlisted", "public"]), madeForKids: z.boolean(), thumbnailUrl: z.string().url().optional() }),
+  z.object({ kind: z.literal("youtube"), title: z.string().min(1).max(100), tags: z.array(z.string().max(100)).max(50), privacyStatus: z.enum(["private", "unlisted", "public"]), madeForKids: z.boolean(), thumbnailUrl: z.string().url().optional(), imageSeconds: z.number().int().min(3).max(10).optional().describe("Image video timing: 5–10 seconds for one image, 3–5 per carousel image. Defaults: 8 / 4.") }),
 ]);
 
 const postTargetSchema = z.object({
@@ -154,13 +154,32 @@ const projectSchema = z.object({
   brandId: z.string().optional(),
   caption: z.string().max(2200).optional(),
   slides: z.array(slideSchema).max(35),
+  output: z.object({ format: z.enum(["images", "video"]), imageSeconds: z.number().int().min(3).max(10).optional().describe("Video timing: 5–10 seconds for one slide, 3–5 per slide for multiple slides; defaults 8 / 4.") }).optional(),
 });
 
 const slideshowTargetSchema = z.object({ accountId: z.string().min(1), settings: z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("instagram"), publishType: z.literal("feed") }),
-  z.object({ kind: z.literal("facebook"), publishType: z.literal("feed"), linkUrl: z.string().url().optional() }),
-  z.object({ kind: z.literal("tiktok"), privacyLevel: z.enum(["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]).default("SELF_ONLY"), allowComments: z.boolean().default(true), allowDuet: z.boolean().default(false), allowStitch: z.boolean().default(false) }),
-]) });
+  z.object({ kind: z.literal("instagram"), publishType: z.enum(["feed", "reel", "story"]), coverUrl: z.string().url().optional(), thumbOffsetMs: z.number().int().min(0).max(900_000).optional() }),
+  z.object({ kind: z.literal("facebook"), publishType: z.enum(["feed", "reel"]), linkUrl: z.string().url().optional() }),
+  z.object({ kind: z.literal("tiktok"), privacyLevel: z.enum(["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]).default("SELF_ONLY"), allowComments: z.boolean().default(true), allowDuet: z.boolean().default(false), allowStitch: z.boolean().default(false), thumbOffsetMs: z.number().int().min(0).max(900_000).optional() }),
+  z.object({ kind: z.literal("youtube"), title: z.string().min(1).max(100), tags: z.array(z.string().max(100)).max(50).default([]), privacyStatus: z.enum(["private", "unlisted", "public"]).default("private"), madeForKids: z.boolean().default(false), thumbnailUrl: z.string().url().optional(), imageSeconds: z.number().int().min(3).max(10).optional() }),
+]), textOverride: z.string().max(63_206).optional() });
+
+interface SlideshowRenderResult {
+  format?: "images" | "video";
+  data?: { brandId?: string; caption?: string; slides?: Array<{ renderedUrl?: string }> };
+  folder?: unknown;
+  video?: { projectId: string; url?: string; coverUrl?: string; durationMs: number };
+}
+
+function slideshowRenderedMedia(rendered: SlideshowRenderResult, requestedFormat?: "images" | "video") {
+  if (rendered.format === "video" || rendered.video || requestedFormat === "video") {
+    if (!rendered.video?.url) throw new Error("Relay rendered no slideshow video. For an asynchronous render, poll get_video_render_job until completed, then create a video post using its renderedUrl.");
+    return { mediaType: "video" as const, mediaUrl: rendered.video.url, mediaUrls: [rendered.video.url] };
+  }
+  const urls = rendered.data?.slides?.map((slide) => slide.renderedUrl).filter((url): url is string => Boolean(url)) ?? [];
+  if (!urls.length || urls.length !== rendered.data?.slides?.length) throw new Error("Relay did not render every slideshow image.");
+  return { mediaType: "image" as const, mediaUrl: urls[0], mediaUrls: urls };
+}
 
 const server = new McpServer({ name: "relay", version: "0.1.0" });
 
@@ -313,7 +332,7 @@ server.registerTool("list_slideshows", {
 }, async ({ id }) => result(await relay(`/api/v1/slideshows${id ? `?id=${encodeURIComponent(id)}` : ""}`)));
 
 server.registerTool("save_slideshow", {
-  description: "Create or update a reusable slideshow. Each image may have its own optional visible text and deviceFrame. Call list_device_frames before designing framed images. Omit renderedUrl after changing a slide; render_slideshow produces JPEGs.",
+  description: "Create or update a reusable slideshow. Save output.format as images or video and optional output.imageSeconds timing. Each slide keeps its visible text, fit and static deviceFrame in either output. Call list_device_frames before designing framed images.",
   inputSchema: projectSchema.shape,
 }, async (project) => result(await relay("/api/v1/slideshows", { method: project.id ? "PATCH" : "POST", body: JSON.stringify(project) })));
 
@@ -328,30 +347,30 @@ server.registerTool("delete_slideshow", {
 }, async ({ id }) => result(await relay("/api/v1/slideshows", { method: "DELETE", body: JSON.stringify({ id }) })));
 
 server.registerTool("render_slideshow", {
-  description: "Render a saved slideshow to ordered 1080x1920 JPEGs in a new R2 Media folder. Returns ordered renderedUrl values.",
-  inputSchema: { id: z.string().min(1), slideIds: z.array(z.string()).optional() },
+  description: "Render a saved slideshow as ordered 1080x1920 JPEG images or one vertical MP4, preserving text, frames and order. Omitted format uses the saved output (legacy default images). Video supports optional imageSeconds and async=true; poll get_video_render_job for its renderedUrl, or cancel/retry via update_video_render_job. Video requires videos:write; async also requires videos:read. Video output renders the complete slideshow, so omit slideIds.",
+  inputSchema: { id: z.string().min(1), slideIds: z.array(z.string()).optional(), format: z.enum(["images", "video"]).optional(), imageSeconds: z.number().int().min(3).max(10).optional(), async: z.boolean().optional() },
 }, async (input) => result(await relay("/api/v1/slideshows/render", { method: "POST", body: JSON.stringify(input) })));
 
 server.registerTool("schedule_slideshow", {
-  description: "Render a saved slideshow into an ordered Media folder and schedule or immediately publish it to Instagram, Facebook, and/or TikTok accounts.",
+  description: "Render and schedule a saved slideshow using its saved output, or override format/imageSeconds. Images remain photo posts (YouTube automatically converts them); video creates an MP4 for Instagram/Facebook Reels, Stories, TikTok video or YouTube. Set format=video for Reel targets. Video rendering requires videos:write. For longer renders, prefer render_slideshow async=true, poll its job, then create_post.",
   inputSchema: {
     projectId: z.string().min(1), scheduledAt: z.string().datetime().nullable().describe("ISO time, or null to publish now"), publishNow: z.literal(true).optional(), clientRequestId: z.string().max(240).optional(), campaignId: z.string().optional(), text: z.string().max(63_206).optional(),
+    format: z.enum(["images", "video"]).optional(), imageSeconds: z.number().int().min(3).max(10).optional(),
     targets: z.array(slideshowTargetSchema).min(1).max(20),
   },
-}, async ({ projectId, targets, scheduledAt, publishNow, clientRequestId, campaignId, text }) => {
+}, async ({ projectId, targets, scheduledAt, publishNow, clientRequestId, campaignId, text, format, imageSeconds }) => {
   if (scheduledAt === null && publishNow !== true) throw new Error("Set publishNow to true to confirm immediate external publishing.");
-  const rendered = await relay("/api/v1/slideshows/render", { method: "POST", body: JSON.stringify({ id: projectId }) }) as { data?: { brandId?: string; caption?: string; slides?: Array<{ renderedUrl?: string }> } };
-  const urls = rendered.data?.slides?.map((slide) => slide.renderedUrl).filter((url): url is string => Boolean(url)) ?? [];
-  if (!urls.length) throw new Error("Relay rendered no slideshow images.");
+  const rendered = await relay("/api/v1/slideshows/render", { method: "POST", body: JSON.stringify({ id: projectId, format, imageSeconds }) }) as SlideshowRenderResult;
+  const media = slideshowRenderedMedia(rendered, format);
   return result(await relay("/api/v1/posts", { method: "POST", body: JSON.stringify({
-    clientRequestId, brandId: rendered.data?.brandId || undefined, campaignId, text: text ?? rendered.data?.caption ?? "", mediaType: "image", mediaUrl: urls[0], mediaUrls: urls,
+    clientRequestId, brandId: rendered.data?.brandId || undefined, campaignId, text: text ?? rendered.data?.caption ?? "", ...media,
     status: scheduledAt === null ? "publishing" : "scheduled", scheduledAt: scheduledAt ?? undefined,
     targets,
   }) }));
 });
 
 server.registerTool("create_slideshow_batch", {
-  description: "Bulk-create and render slideshow variants into separate ordered Media folders, then optionally schedule each variant to the same connected accounts.",
+  description: "Bulk-create and render slideshow variants using each project's output.format/imageSeconds settings, then optionally schedule each to the same connected accounts. Video outputs can publish as Reels or TikTok videos and require videos:write; images remain photo posts.",
   inputSchema: {
     projects: z.array(projectSchema.omit({ id: true })).min(1).max(20),
     targets: z.array(slideshowTargetSchema).max(20).default([]),
@@ -367,15 +386,14 @@ server.registerTool("create_slideshow_batch", {
   for (const entry of created.data ?? []) {
     if (!entry.data?.id) { results.push({ index: entry.index, status: "failed", error: entry.error || "Could not create slideshow." }); continue; }
     try {
-      const rendered = await relay("/api/v1/slideshows/render", { method: "POST", body: JSON.stringify({ id: entry.data.id }) }) as { data?: { brandId?: string; caption?: string; slides?: Array<{ renderedUrl?: string }> }; folder?: unknown };
-      const urls = rendered.data?.slides?.map((slide) => slide.renderedUrl).filter((url): url is string => Boolean(url)) ?? [];
-      if (!urls.length) throw new Error("Relay rendered no slideshow images.");
+      const rendered = await relay("/api/v1/slideshows/render", { method: "POST", body: JSON.stringify({ id: entry.data.id }) }) as SlideshowRenderResult;
+      const media = slideshowRenderedMedia(rendered, projects[entry.index]?.output?.format);
       let post: unknown = null;
       if (targets.length) {
         const time = scheduledAt ? new Date(new Date(scheduledAt).getTime() + entry.index * intervalMinutes * 60_000).toISOString() : null;
-        post = await relay("/api/v1/posts", { method: "POST", body: JSON.stringify({ clientRequestId: `${clientRequestId || `slideshow-batch-${entry.data.id}`}-${entry.index}`, brandId: rendered.data?.brandId || undefined, text: rendered.data?.caption || "", mediaType: "image", mediaUrl: urls[0], mediaUrls: urls, status: time ? "scheduled" : "publishing", scheduledAt: time || undefined, targets }) });
+        post = await relay("/api/v1/posts", { method: "POST", body: JSON.stringify({ clientRequestId: `${clientRequestId || `slideshow-batch-${entry.data.id}`}-${entry.index}`, brandId: rendered.data?.brandId || undefined, text: rendered.data?.caption || "", ...media, status: time ? "scheduled" : "publishing", scheduledAt: time || undefined, targets }) });
       }
-      results.push({ index: entry.index, projectId: entry.data.id, folder: rendered.folder, renderedUrls: urls, post, status: targets.length ? (scheduledAt ? "scheduled" : "publishing") : "rendered" });
+      results.push({ index: entry.index, projectId: entry.data.id, folder: rendered.folder, mediaType: media.mediaType, renderedUrls: media.mediaUrls, video: rendered.video, post, status: targets.length ? (scheduledAt ? "scheduled" : "publishing") : "rendered" });
     } catch (error) { results.push({ index: entry.index, projectId: entry.data.id, status: "failed", error: error instanceof Error ? error.message : "Could not finish slideshow." }); }
   }
   const failed = results.filter((entry) => entry.status === "failed").length;

@@ -176,7 +176,11 @@ async function renderTimeline(input: { projectId: string; timeline: VideoTimelin
       const c = {...original,deviceFrame:original.deviceFrame ? {...original.deviceFrame,...(timeline.scene ? {scene:timeline.scene} : {})} : undefined};
       input.signal?.throwIfAborted();
       const source=join(dir,`input-${key}`); const dest=join(dir,`clip-${key}.${transparent ? "mkv" : "mp4"}`);
-      const sourceBytes=gpuMedia.get(c.sourceUrl)??await download(c.sourceUrl,500*1024*1024,input.signal);
+      const sourceBytes=gpuMedia.get(c.sourceUrl)??await download(c.sourceUrl,(c.kind === "image" ? 30 : 500)*1024*1024,input.signal);
+      if (c.kind === "image") {
+        const image = await sharp(sourceBytes, { limitInputPixels: 40_000_000 }).metadata();
+        if (!image.width || !image.height || image.width > 8192 || image.height > 8192 || image.width * image.height > 40_000_000) throw new Error("Image media exceeds the rendering pixel limit.");
+      }
       if(c.deviceFrame?.renderMode==="gpu"){if(!gpuMedia.has(c.sourceUrl)&&[...gpuMedia.values()].reduce((sum,data)=>sum+data.length,0)+sourceBytes.length>512*1024*1024)throw new Error("The 3D scene media exceeds 512 MB. Trim or compress your recordings before export.");gpuMedia.set(c.sourceUrl,sourceBytes);}
       await writeFile(source,sourceBytes);
       const probe=JSON.parse(await command("ffprobe",["-v","error","-show_entries","format=duration:stream=codec_type,width,height","-of","json",source],input.signal)) as {format?:{duration?:string};streams?:Array<{codec_type?:string;width?:number;height?:number}>};

@@ -1,4 +1,5 @@
 import type { SlideshowProject, SlideshowSlide } from "@relay/core";
+import { imageVideoSeconds } from "@relay/core/image-video";
 import { normalizeDeviceFrame } from "./device-frames.ts";
 
 export interface SlideshowRow {
@@ -7,6 +8,7 @@ export interface SlideshowRow {
   name: string;
   caption: string;
   slides: SlideshowSlide[];
+  output?: SlideshowProject["output"];
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -62,6 +64,20 @@ export function normalizeSlides(value: unknown): SlideshowSlide[] | null {
   return slides;
 }
 
+export function normalizeSlideshowOutput(value: unknown, slideCount: number): NonNullable<SlideshowProject["output"]> | null {
+  if (value === undefined) return { format: "images" };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const input = value as Record<string, unknown>;
+  if (input.format !== "images" && input.format !== "video") return null;
+  if (input.imageSeconds !== undefined) {
+    if (typeof input.imageSeconds !== "number") return null;
+    try { imageVideoSeconds(Math.max(1, slideCount), input.imageSeconds as number); } catch { return null; }
+  }
+  return input.format === "video" && input.imageSeconds !== undefined
+    ? { format: "video", imageSeconds: input.imageSeconds as number }
+    : { format: input.format };
+}
+
 export function serializeSlideshow(row: SlideshowRow): SlideshowProject {
   return {
     id: row.id,
@@ -69,6 +85,7 @@ export function serializeSlideshow(row: SlideshowRow): SlideshowProject {
     name: row.name,
     caption: row.caption,
     slides: row.slides,
+    output: row.output ?? { format: "images" },
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   };

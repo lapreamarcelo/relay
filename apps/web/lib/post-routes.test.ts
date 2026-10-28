@@ -249,3 +249,50 @@ test("editing rejects a worker lease acquired before the destination lock", asyn
   assert.equal(targets.length, 1); assert.equal(targets[0].id, "target");
   assert.equal(targets[0].accountId, "facebook"); assert.equal(targets[0].publish_lease_owner, "worker");
 });
+
+test("YouTube image plans retain ordered originals and per-target timing on create, edit and promotion", async () => {
+  const previous = process.env.R2_PUBLIC_URL;
+  process.env.R2_PUBLIC_URL = "https://media.example.test";
+  try {
+    for (const method of ["POST", "PATCH"] as const) {
+      for (const count of [1, 3]) {
+        reset();
+        const urls = Array.from({ length: count }, (_, index) => `https://media.example.test/${index}.jpg`);
+        const imageSeconds = count === 1 ? 10 : 5;
+        const destination = youtube();
+        const response = await request(method, input({ mediaType: "image", mediaUrl: urls[0], mediaUrls: urls, status: "scheduled", scheduledAt: future(), targets: [facebook(), { ...destination, settings: { ...destination.settings, imageSeconds } }] }));
+        assert.equal(response.status, method === "POST" ? 201 : 200, await response.text());
+        assert.equal(post.mediaType, "image"); assert.deepEqual(post.mediaUrls, urls);
+        assert.equal(targets.find((target) => target.provider === "youtube")?.settings.kind, "youtube");
+        const settings = targets.find((target) => target.provider === "youtube")!.settings;
+        assert.ok(settings.kind === "youtube"); assert.equal(settings.imageSeconds, imageSeconds);
+        assert.equal((await request("PATCH", { id: post.id, scheduledAt: null })).status, 200);
+      }
+    }
+  } finally { if (previous === undefined) delete process.env.R2_PUBLIC_URL; else process.env.R2_PUBLIC_URL = previous; }
+});
+
+test("YouTube image publishing rejects invalid timing and external sources before mutation", async () => {
+  const previous = process.env.R2_PUBLIC_URL;
+  process.env.R2_PUBLIC_URL = "https://media.example.test";
+  try {
+    for (const method of ["POST", "PATCH"] as const) {
+      for (const changes of [
+        { imageSeconds: "8" }, { imageSeconds: null }, { imageSeconds: 3 }, { imageSeconds: 11 }, { imageSeconds: 8.5 },
+      ]) {
+        reset(); const destination = youtube();
+        await assertRejected(input({ mediaType: "image", mediaUrl: "https://media.example.test/first.jpg", status: "publishing", targets: [{ ...destination, settings: { ...destination.settings, ...changes } }] }), method);
+      }
+      for (const mediaUrls of [["https://external.example/first.jpg"], ["https://media.example.test/first.jpg", "https://external.example/second.jpg"], ["https://media.example.test/first.jpg", null]]) {
+        reset();
+        await assertRejected(input({ mediaType: "image", mediaUrl: mediaUrls[0], mediaUrls, status: "publishing", targets: [youtube()] }), method);
+      }
+      reset(); const destination = youtube();
+      await assertRejected(input({ mediaType: "image", mediaUrl: "https://media.example.test/first.jpg", mediaUrls: ["https://media.example.test/first.jpg", "https://media.example.test/second.jpg"], status: "publishing", targets: [{ ...destination, settings: { ...destination.settings, imageSeconds: 8 } }] }), method);
+    }
+    reset();
+    assert.equal((await request("PATCH", input({ mediaType: "image", mediaUrl: "https://external.example/first.jpg", targets: [youtube()] }))).status, 200, "draft can be saved before sources are ready");
+    mutations = 0;
+    await assertRejected({ id: post.id, scheduledAt: null });
+  } finally { if (previous === undefined) delete process.env.R2_PUBLIC_URL; else process.env.R2_PUBLIC_URL = previous; }
+});

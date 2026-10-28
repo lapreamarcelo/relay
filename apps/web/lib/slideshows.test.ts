@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeSlides } from "./slideshows.ts";
+import { normalizeSlides, normalizeSlideshowOutput, serializeSlideshow } from "./slideshows.ts";
 
 test("normalizes optional slide text and rendering controls", () => {
   const slides = normalizeSlides([
@@ -32,4 +32,14 @@ test("normalizes device frames and rejects invalid frame colors", () => {
   const slides = normalizeSlides([{ mediaUrl: "https://media.example.com/one.jpg", deviceFrame: { device: "tablet", background: "#abcdef", color: "#123456" } }]);
   assert.deepEqual(slides?.[0].deviceFrame, { device: "tablet", background: "#ABCDEF", color: "#123456" });
   assert.equal(normalizeSlides([{ mediaUrl: "https://media.example.com/one.jpg", deviceFrame: { device: "tablet", background: "cream", color: "#123456" } }]), null);
+});
+
+test("legacy slideshow projects default to images and video timing is optional and bounded", () => {
+  const project = serializeSlideshow({ id: "legacy", brand_id: null, name: "Legacy", caption: "", slides: [], created_at: "2026-10-25", updated_at: "2026-10-25" });
+  assert.deepEqual(project.output, { format: "images" });
+  assert.deepEqual(normalizeSlideshowOutput(undefined, 2), { format: "images" });
+  assert.deepEqual(normalizeSlideshowOutput({ format: "video" }, 0), { format: "video" });
+  assert.deepEqual(normalizeSlideshowOutput({ format: "video", imageSeconds: 8 }, 1), { format: "video", imageSeconds: 8 });
+  assert.deepEqual(normalizeSlideshowOutput({ format: "video", imageSeconds: 3 }, 2), { format: "video", imageSeconds: 3 });
+  for (const output of [null, [], "video", {}, { format: "mp4" }, { format: "video", imageSeconds: "4" }, { format: "video", imageSeconds: null }, { format: "video", imageSeconds: 3.5 }, { format: "video", imageSeconds: 8 }]) assert.equal(normalizeSlideshowOutput(output, 2), null);
 });

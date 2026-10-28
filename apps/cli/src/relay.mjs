@@ -165,15 +165,17 @@ async function scheduleCreative(client, kind, input) {
   const projectId = input.projectId; if (typeof projectId !== "string" || !projectId) throw new Error("projectId is required.");
   if (!Array.isArray(input.targets) || input.targets.length === 0) throw new Error("At least one target is required.");
   if (!(input.scheduledAt === null || typeof input.scheduledAt === "string")) throw new Error("scheduledAt must be an ISO timestamp or null for immediate publishing.");
-  const rendered = await client.request(`/api/v1/${kind}/render`, { method: "POST", body: JSON.stringify({ id: projectId }) });
-  const project = rendered?.data;
   const isSlideshow = kind === "slideshows";
-  const mediaUrls = isSlideshow ? project?.slides?.map((slide) => slide.renderedUrl).filter(Boolean) ?? [] : undefined;
-  const mediaUrl = isSlideshow ? mediaUrls[0] : project?.renderedUrl;
-  if (!mediaUrl) throw new Error(`Relay rendered no ${isSlideshow ? "slideshow images" : "video"}.`);
+  if (isSlideshow && input.format !== undefined && !["images", "video"].includes(input.format)) throw new Error("Slideshow format must be images or video.");
+  const rendered = await client.request(`/api/v1/${kind}/render`, { method: "POST", body: JSON.stringify({ id: projectId, ...(isSlideshow ? { format: input.format, imageSeconds: input.imageSeconds } : {}) }) });
+  const project = rendered?.data;
+  const imageOutput = isSlideshow && rendered.format !== "video" && !rendered.video && input.format !== "video";
+  const mediaUrls = imageOutput ? project?.slides?.map((slide) => slide.renderedUrl).filter(Boolean) ?? [] : undefined;
+  const mediaUrl = imageOutput ? mediaUrls[0] : isSlideshow ? rendered.video?.url : project?.renderedUrl;
+  if (!mediaUrl || (imageOutput && mediaUrls.length !== project?.slides?.length)) throw new Error(`Relay rendered no complete ${imageOutput ? "slideshow images" : "video"}.`);
   return client.request("/api/v1/posts", { method: "POST", body: JSON.stringify({
     clientRequestId: input.clientRequestId, brandId: project.brandId || undefined, campaignId: input.campaignId || undefined,
-    text: input.text ?? project.caption ?? project.labels?.[0]?.text ?? project.name ?? "", mediaType: isSlideshow ? "image" : "video", mediaUrl, mediaUrls,
+    text: input.text ?? project.caption ?? project.labels?.[0]?.text ?? project.name ?? "", mediaType: imageOutput ? "image" : "video", mediaUrl, mediaUrls: imageOutput ? mediaUrls : isSlideshow ? [mediaUrl] : undefined,
     status: input.scheduledAt === null ? "publishing" : "scheduled", scheduledAt: input.scheduledAt ?? undefined, targets: input.targets,
   }) });
 }

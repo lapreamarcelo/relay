@@ -1,0 +1,8 @@
+.reel-media.youtube-image-video { inset:auto 0; top:50%; width:100%; aspect-ratio:9/16; transform:translateY(-50%); background:#000; }
+.reel-media.youtube-image-video img { width:100%; height:100%; object-fit:contain; }
+.youtube-image-video-controls { position:absolute; z-index:4; top:60px; left:12px; right:12px; display:flex; align-items:center; gap:8px; color:#fff; font-size:10px; }
+.youtube-image-video-controls button { display:grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid rgba(255,255,255,.4); border-radius:50%; background:rgba(0,0,0,.8); color:#fff; cursor:pointer; }
+.youtube-image-video-controls button:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+.youtube-image-video-controls button svg { width:15px; height:15px; }
+.youtube-image-video-controls span { padding:5px 8px; border-radius:99px; background:rgba(0,0,0,.8); }
+.youtube-image-video-note { font-size:12px; line-height:1.5; }

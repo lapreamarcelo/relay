@@ -61,6 +61,8 @@ export interface YouTubePostSettings {
   madeForKids: boolean;
   /** Public JPEG or PNG URL uploaded as the video's custom thumbnail after the video is created. */
   thumbnailUrl?: string;
+  /** Image-to-video duration per image: 5–10 seconds for one image, 3–5 for a carousel. Defaults to 8 / 4. */
+  imageSeconds?: number;
 }
 
 export type ProviderPostSettings =
@@ -256,6 +258,7 @@ export interface SlideshowProject {
   name: string;
   caption: string;
   slides: SlideshowSlide[];
+  output?: { format: "images" | "video"; imageSeconds?: number };
   createdAt: string;
   updatedAt: string;
 }

@@ -134,6 +134,8 @@ pnpm relay -- posts create --data @post.json
 
 Create up to 100 posts by sending `{ "posts": [...] }`. Bulk rescheduling and retrying failed targets use `posts update` with the request bodies documented in the Agent API guide.
 
+Image posts may include YouTube targets: Relay converts the image or ordered `mediaUrls` into a vertical MP4 at publishing time. The default is 8 seconds for one image or 4 seconds per carousel slide; set the target's `settings.imageSeconds` to 5–10 or 3–5 respectively. Use image URLs from this Relay media library. Other destinations keep the original images.
+
 ### Slideshow workflow
 
 Create or update a project with every editor field—ordered slides, fit, label position, dimensions, font, colors, and background—then render it:
@@ -148,6 +150,17 @@ pnpm relay -- slideshows render --id slideshow-id
 ```bash
 pnpm relay -- slideshows schedule --data @schedule-slideshow.json
 ```
+
+In the slideshow editor, choose **Output → Images or Video**. The saved project exposes the same choice as `output: { "format": "video", "imageSeconds": 4 }`. Video exports preserve slide text, frames and order in a vertical MP4. One slide defaults to 8 seconds (5–10 allowed); multiple slides default to 4 seconds each (3–5 allowed).
+
+Use the saved output or override it for a render:
+
+```bash
+pnpm relay -- slideshows render --id slideshow-id --data '{ "format": "video", "imageSeconds": 4, "async": true }'
+pnpm relay -- render-jobs get --id job-id
+```
+
+After the job completes, use its `renderedUrl` for a video post, or omit `async` for a synchronous render that returns `video.url`. Video output additionally requires `videos:write`; async output also requires `videos:read`. `slideshows schedule` honors the saved output and accepts optional `format` / `imageSeconds` overrides; video output can target Instagram/Facebook Reels and TikTok video. It creates a video post from the MP4, while `format: "images"` retains photo/carousel publishing.
 
 Bulk-create up to 50 projects with `slideshows create --data '{ "projects": [...] }`. Use separate schedule commands when each rendered variant needs an explicit publishing decision.
 

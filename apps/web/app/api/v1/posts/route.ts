@@ -5,6 +5,7 @@ import { sql } from "@relay/database";
 import { requireApiSession } from "../../../../lib/api-session";
 import { creativeOrigin } from "../../../../lib/creative-origin";
 import { listPostsForOwner } from "../../../../lib/post-repository";
+import { youtubeImageMediaError } from "../../../../lib/youtube-image-media";
 
 export const runtime = "nodejs";
 
@@ -62,8 +63,10 @@ function parseSettings(provider: ProviderId, value: unknown): ProviderPostSettin
   const title = optionalString(settings.title, 100);
   const tags = Array.isArray(settings.tags) ? settings.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 50).map((tag) => tag.trim().slice(0, 100)).filter(Boolean) : null;
   const thumbnailUrl = optionalString(settings.thumbnailUrl, 2_000);
+  const imageSeconds = settings.imageSeconds;
+  if (imageSeconds !== undefined && (typeof imageSeconds !== "number" || !Number.isInteger(imageSeconds) || imageSeconds < 3 || imageSeconds > 10)) return null;
   return settings.kind === "youtube" && title && tags && ["private", "unlisted", "public"].includes(String(settings.privacyStatus)) && typeof settings.madeForKids === "boolean" && (!thumbnailUrl || isHttpsUrl(thumbnailUrl))
-    ? { kind: "youtube", title, tags, privacyStatus: settings.privacyStatus as "private" | "unlisted" | "public", madeForKids: settings.madeForKids, thumbnailUrl: thumbnailUrl ?? undefined } : null;
+    ? { kind: "youtube", title, tags, privacyStatus: settings.privacyStatus as "private" | "unlisted" | "public", madeForKids: settings.madeForKids, thumbnailUrl: thumbnailUrl ?? undefined, imageSeconds } : null;
 }
 
 interface SavedPostPlan {
@@ -88,6 +91,8 @@ function savedPostValidationError(post: SavedPostPlan, targets: SavedPostTarget[
   if (targets.length === 0) return "A post needs at least one destination before publishing.";
   if (post.media_type !== "none" && !post.media_url) return "The selected media is invalid or has not finished uploading.";
   for (const target of targets) if (!parseSettings(target.provider, target.settings)) return "One of the selected destinations or its platform settings is invalid.";
+  const imageMediaError = youtubeImageMediaError({ mediaType: post.media_type, mediaUrl: post.media_url, mediaUrls: post.media_urls, destinations: targets });
+  if (imageMediaError) return imageMediaError;
   return validatePostPlan({
     text: post.text,
     mediaType: post.media_type,
@@ -171,10 +176,9 @@ async function createPost(ownerId: string, body: PostInput | null) {
     const textOverride = optionalString(target.textOverride, 63_206) ?? undefined;
     destinations.push({ id: account.id, provider: account.provider, displayName: account.display_name, handle: account.username.startsWith("@") ? account.username : `@${account.username}`, settings, textOverride });
   }
-  if (mediaUrls.length > 1 && destinations.some((destination) => destination.provider === "youtube")) {
-    return Response.json({ error: "YouTube requires video and cannot receive image slideshows." }, { status: 400 });
-  }
-  const validationIssues = status === "draft" ? [] : validatePostPlan({ text, mediaType, mediaCount: mediaUrls.length, scheduledAt: status === "scheduled" ? scheduledAt : null, destinations });
+  const imageMediaError = status === "draft" ? undefined : youtubeImageMediaError({ mediaType, mediaUrl, mediaUrls, destinations });
+  if (imageMediaError) return Response.json({ error: imageMediaError }, { status: 400 });
+  const validationIssues = status === "draft" ? [] : validatePostPlan({ text, mediaType, mediaCount: mediaUrls.length || (mediaUrl ? 1 : 0), scheduledAt: status === "scheduled" ? scheduledAt : null, destinations });
   if (validationIssues.length > 0) return Response.json({ error: validationIssues[0].message, issues: validationIssues }, { status: 400 });
 
   const proposedPostId = crypto.randomUUID();
@@ -316,14 +320,15 @@ export async function PATCH(request: Request) {
     const text = body.text.trim().slice(0, 63_206);
     const mediaType = typeof body.mediaType === "string" && mediaTypes.has(body.mediaType) ? body.mediaType as "none" | "image" | "video" : "none";
     const mediaUrl = optionalString(body.mediaUrl, 2_000);
-    const mediaUrls = Array.isArray(body.mediaUrls) ? body.mediaUrls.map((value) => optionalString(value, 2_000)).filter((value): value is string => Boolean(value)) : mediaUrl ? [mediaUrl] : [];
+    const rawMediaUrls = Array.isArray(body.mediaUrls) ? body.mediaUrls : null;
+    const mediaUrls = rawMediaUrls ? rawMediaUrls.map((value) => optionalString(value, 2_000)).filter((value): value is string => Boolean(value)) : mediaUrl ? [mediaUrl] : [];
     const brandId = optionalString(body.brandId, 240);
     const campaignId = optionalString(body.campaignId, 240);
     const status = body.status === "draft" ? "draft" : body.status === "scheduled" ? "scheduled" : body.status === "publishing" ? "publishing" : null;
     const scheduledAt = optionalString(body.scheduledAt, 100);
     if (!status || (status === "scheduled" && (!scheduledAt || Number.isNaN(new Date(scheduledAt).getTime())))) return Response.json({ error: "Edited posts must be saved as a draft, scheduled, or published now." }, { status: 400 });
     if ((mediaType === "none" && mediaUrl) || (mediaType !== "none" && (!mediaUrl || !isWebUrl(mediaUrl)))) return Response.json({ error: "The selected media is invalid." }, { status: 400 });
-    if (mediaUrls.length > 35 || mediaUrls.some((value) => !isWebUrl(value)) || (mediaUrls.length > 1 && (mediaType !== "image" || mediaUrl !== mediaUrls[0] || mediaUrls.some((value) => !isHttpsUrl(value))))) return Response.json({ error: "A slideshow needs between 1 and 35 valid HTTPS image URLs." }, { status: 400 });
+    if ((rawMediaUrls && rawMediaUrls.length !== mediaUrls.length) || mediaUrls.length > 35 || mediaUrls.some((value) => !isWebUrl(value)) || (mediaUrls.length > 1 && (mediaType !== "image" || mediaUrl !== mediaUrls[0] || mediaUrls.some((value) => !isHttpsUrl(value))))) return Response.json({ error: "A slideshow needs between 1 and 35 valid HTTPS image URLs." }, { status: 400 });
     const destinations: Array<{ id: string; provider: ProviderId; displayName: string; handle: string; settings: ProviderPostSettings; textOverride?: string }> = [];
     const destinationIds = new Set<string>();
     for (const target of body.targets) {
@@ -335,8 +340,9 @@ export async function PATCH(request: Request) {
       destinationIds.add(accountId);
       destinations.push({ id: account.id, provider: account.provider, displayName: account.display_name, handle: account.username.startsWith("@") ? account.username : `@${account.username}`, settings, textOverride: optionalString(target.textOverride, 63_206) ?? undefined });
     }
-    if (mediaUrls.length > 1 && destinations.some((destination) => destination.provider === "youtube")) return Response.json({ error: "YouTube requires video and cannot receive image slideshows." }, { status: 400 });
-    const issues = status === "draft" ? [] : validatePostPlan({ text, mediaType, mediaCount: mediaUrls.length, scheduledAt: status === "scheduled" ? scheduledAt : null, destinations });
+    const imageMediaError = status === "draft" ? undefined : youtubeImageMediaError({ mediaType, mediaUrl, mediaUrls, destinations });
+    if (imageMediaError) return Response.json({ error: imageMediaError }, { status: 400 });
+    const issues = status === "draft" ? [] : validatePostPlan({ text, mediaType, mediaCount: mediaUrls.length || (mediaUrl ? 1 : 0), scheduledAt: status === "scheduled" ? scheduledAt : null, destinations });
     if (issues.length > 0) return Response.json({ error: issues[0].message, issues }, { status: 400 });
     if (campaignId) {
       const [campaign] = await sql<{ brand_id: string | null }[]>`SELECT brand_id FROM "campaign" WHERE id = ${campaignId} AND owner_id = ${ownerId}`;
