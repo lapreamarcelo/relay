@@ -1,5 +1,6 @@
 import type { SlideshowProject, SlideshowSlide } from "@relay/core";
 import { imageVideoSeconds } from "@relay/core/image-video";
+import { normalizeVideoBackground } from "./video-background.ts";
 import { normalizeDeviceFrame } from "./device-frames.ts";
 
 export interface SlideshowRow {
@@ -40,8 +41,8 @@ export function normalizeSlides(value: unknown): SlideshowSlide[] | null {
     const requestedId = typeof input.id === "string" && /^[a-zA-Z0-9_-]{1,120}$/.test(input.id) ? input.id : "";
     const id = requestedId && !ids.has(requestedId) ? requestedId : crypto.randomUUID();
     ids.add(id);
-    let deviceFrame;
-    try { deviceFrame = normalizeDeviceFrame(input.deviceFrame); } catch { return null; }
+    let deviceFrame, background;
+    try { deviceFrame = normalizeDeviceFrame(input.deviceFrame); background = normalizeVideoBackground(input.background); } catch { return null; }
     slides.push({
       id,
       mediaUrl,
@@ -59,6 +60,7 @@ export function normalizeSlides(value: unknown): SlideshowSlide[] | null {
       textBackground: input.textBackground === "none" || input.textBackground === "light" ? input.textBackground : "dark",
       textBackgroundColor: color(input.textBackgroundColor, input.textBackground === "light" ? "#FFFFFF" : "#000000"),
       ...(deviceFrame ? { deviceFrame } : {}),
+      ...(background ? { background } : {}),
     });
   }
   return slides;

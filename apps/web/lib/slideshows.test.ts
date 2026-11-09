@@ -43,3 +43,13 @@ test("legacy slideshow projects default to images and video timing is optional a
   assert.deepEqual(normalizeSlideshowOutput({ format: "video", imageSeconds: 3 }, 2), { format: "video", imageSeconds: 3 });
   for (const output of [null, [], "video", {}, { format: "mp4" }, { format: "video", imageSeconds: "4" }, { format: "video", imageSeconds: null }, { format: "video", imageSeconds: 3.5 }, { format: "video", imageSeconds: 8 }]) assert.equal(normalizeSlideshowOutput(output, 2), null);
 });
+
+test("slide backgrounds preserve image, fit and colors while rejecting invalid input", () => {
+  const slide = { mediaUrl: "https://media.example.com/screen.png" };
+  const background = { color: "#abcdef", endColor: "#123abc", imageUrl: "https://media.example.com/background.png", imageFit: "contain" };
+  assert.deepEqual(normalizeSlides([{ ...slide, background }])?.[0].background, { ...background, color: "#ABCDEF", endColor: "#123ABC" });
+  assert.equal(normalizeSlides([slide])?.[0].background, undefined);
+  for (const invalid of [null, [], "image", {}, { ...background, color: "red" }, { ...background, endColor: "transparent" }, { ...background, imageFit: "stretch" }, { ...background, imageUrl: "file:///private/background.png" }, { ...background, imageUrl: "http://media.example.com/background.png" }]) {
+    assert.equal(normalizeSlides([{ ...slide, background: invalid }]), null);
+  }
+});

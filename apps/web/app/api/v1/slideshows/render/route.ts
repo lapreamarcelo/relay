@@ -25,10 +25,10 @@ function allowedMediaUrl(value: string): boolean {
   return candidate.protocol === "https:" && candidate.origin === publicBase.origin && candidate.pathname.startsWith(publicBase.pathname);
 }
 
-async function renderSlide(folderId: string, index: number, slide: SlideshowSlide, createdKeys: Set<string>): Promise<string> {
-  if (!allowedMediaUrl(slide.mediaUrl)) throw new Error("Slides can only render media from this Relay R2 library.");
-  const response = await fetch(slide.mediaUrl, { signal: AbortSignal.timeout(30_000), redirect: "error" });
-  if (!response.ok) throw new Error(`Could not download ${slide.mediaUrl} (HTTP ${response.status}).`);
+async function downloadImage(url: string): Promise<Buffer> {
+  if (!allowedMediaUrl(url)) throw new Error("Slides can only render media from this Relay R2 library.");
+  const response = await fetch(url, { signal: AbortSignal.timeout(30_000), redirect: "error" });
+  if (!response.ok) throw new Error(`Could not download ${url} (HTTP ${response.status}).`);
   const contentLength = Number(response.headers.get("content-length") || 0);
   if (contentLength > 30 * 1024 * 1024) throw new Error("A source image exceeds the 30 MB rendering limit.");
   if (!response.body) throw new Error("A source image was empty.");
@@ -44,8 +44,13 @@ async function renderSlide(folderId: string, index: number, slide: SlideshowSlid
       chunks.push(Buffer.from(value));
     }
   } finally { reader.releaseLock(); }
-  const source = Buffer.concat(chunks, size);
-  const output = await renderSlideshowImage(source, slide);
+  return Buffer.concat(chunks, size);
+}
+
+async function renderSlide(folderId: string, index: number, slide: SlideshowSlide, createdKeys: Set<string>): Promise<string> {
+  const source = await downloadImage(slide.mediaUrl);
+  const backgroundImage = slide.background?.imageUrl ? await downloadImage(slide.background.imageUrl) : undefined;
+  const output = await renderSlideshowImage(source, slide, backgroundImage);
   const key = `media-projects/${folderId}/media/${String(index + 1).padStart(2, "0")}-${slide.id}.jpg`;
   createdKeys.add(key);
   const config = getR2Config();

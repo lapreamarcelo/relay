@@ -37,6 +37,8 @@ test("motion catalog example survives the video contract and is rejected for sti
 test("background catalog exposes an image contract accepted by the timeline normalizer", () => {
   const canvas = deviceFrameCatalog().canvasBackground;
   assert.equal(canvas.field,"timeline.background");
+  assert.deepEqual(canvas.appliesTo,["timeline.background","slides[].background"]);
+  assert.deepEqual(normalizeSlides([{mediaUrl:"https://media.example/screen.png",background:canvas.example}])?.[0].background,canvas.example);
   assert.equal(canvas.imageUrl.maximumBytes,30*1024*1024);
   assert.equal(canvas.imageUrl.maximumPixels,40_000_000);
   assert.deepEqual(canvas.imageFit.values,["cover","contain"]);

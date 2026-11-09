@@ -33,6 +33,11 @@ test("remote MCP advertises timeline tools, isolates client keys and excludes ho
   const slideTool=listed.tools.find(t=>t.name==="save_slideshow");assert.ok(slideTool);
   await sessions[0].client.callTool({name:"save_slideshow",arguments:{name:"Framed screenshot",slides:[{mediaUrl:"https://media.example/screen.png",deviceFrame}]}});
   assert.deepEqual(JSON.parse(calls.at(-1).init.body).slides[0].deviceFrame,deviceFrame);
+  const background={color:"#112233",imageUrl:"https://media.example/backdrop.png",imageFit:"contain"};
+  assert.ok(slideTool.inputSchema.properties.slides.items.properties.background);
+  const withBackground=await sessions[0].client.callTool({name:"save_slideshow",arguments:{name:"Image background",slides:[{mediaUrl:"https://media.example/screen.png",deviceFrame,background}]}});
+  assert.equal(withBackground.isError,undefined);
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body).slides[0].background,background);
   const beforeInvalid=calls.length;
   const invalidStill=await sessions[0].client.callTool({name:"save_slideshow",arguments:{name:"Invalid motion",slides:[{mediaUrl:"https://media.example/screen.png",deviceFrame:animatedFrame}]}});
   assert.equal(invalidStill.isError,true);

@@ -152,7 +152,7 @@ export function DeviceFramePreview({ value, width, height, children, timeMs = 0,
   const scene = renderedFrame && advanced && !gpu ? deviceScene(width, height, renderedFrame, timeMs, durationMs,sceneTimeMs,fps) : undefined;
   const shutterPanels = scene && renderedFrame?.renderMode === "mesh" ? sceneShutterSamples(renderedFrame.scene,timeMs,fps).map(sample=>({weight:sample.weight,scene:sample.timeMs === timeMs ? scene : deviceScene(width,height,{...renderedFrame,scene:renderedFrame.scene?{...renderedFrame.scene,motionBlur:0}:undefined},sample.timeMs,durationMs,Math.max(0,sceneTimeMs+sample.timeMs-timeMs),fps)})) : scene ? [{weight:1,scene}] : [];
   const geometry = scene?.geometry ?? (value ? deviceFrameGeometry(width, height, value.device) : undefined);
-  const overlay = value ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(advanced ? deviceFrameLayerSvg(width, height, value) : deviceFrameSvg(width, height, value))}` : undefined;
+  const overlay = value ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(advanced || background ? deviceFrameLayerSvg(width, height, value) : deviceFrameSvg(width, height, value))}` : undefined;
   const backgroundColor = background?.color ?? value?.background ?? "#000000";
   const backgroundEnd = background?.endColor ?? (background ? undefined : value?.backgroundEnd);
   const backgroundStyle = videoBackgroundCss(width,height,background ?? {color:backgroundColor,endColor:backgroundEnd});

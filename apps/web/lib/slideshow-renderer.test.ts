@@ -51,3 +51,29 @@ test("slideshow JPEG exports preserve color emoji sequences alongside title text
   for (let i = 0; i < data.length; i += info.channels) if (Math.max(...data.subarray(i, i + 3)) - Math.min(...data.subarray(i, i + 3)) > 70) colored++;
   assert.ok(colored > 10_000, "exported title includes colored emoji artwork on its monochrome slide");
 });
+
+test("image backgrounds render behind every still device with centered cover and contain", async () => {
+  const source = await sharp({ create: { width: 80, height: 160, channels: 3, background: "#FFFF00" } }).png().toBuffer();
+  const backdrop = await sharp({ create: { width: 300, height: 100, channels: 3, background: "#00FF00" } }).png().toBuffer();
+  for (const device of ["phone", "tablet", "browser"] as const) for (const imageFit of ["cover", "contain"] as const) {
+    const slide: SlideshowSlide = { id: "background", mediaUrl: "https://media.example/screen.png", fit: "cover", textPosition: "bottom", textSize: 64, textFont: "modern", textColor: "#FFFFFF", textBackground: "none", deviceFrame: { device, background: "#000000", color: "#171717" }, background: { color: "#FF00FF", imageUrl: "https://media.example/background.png", imageFit } };
+    const output = await renderSlideshowImage(source, slide, backdrop);
+    const { data, info } = await sharp(output).raw().toBuffer({ resolveWithObject: true });
+    const pixel = (x: number, y: number) => [...data.subarray((y * info.width + x) * info.channels, (y * info.width + x) * info.channels + 3)];
+    const near = (actual: number[], expected: number[]) => assert.ok(actual.every((value, i) => Math.abs(value - expected[i]) < 12), `${device}/${imageFit}: ${actual} expected ${expected}`);
+    near(pixel(5, 5), imageFit === "cover" ? [0, 255, 0] : [255, 0, 255]);
+    near(pixel(5, 960), [0, 255, 0]);
+    near(pixel(540, 960), [255, 255, 0]);
+    const { screen } = deviceFrameGeometry(1080, 1920, device);
+    if (device !== "browser") assert.ok(pixel(screen.x, screen.y)[0] < 80 || pixel(screen.x, screen.y)[1] < 80, "screen corners do not leak yellow source pixels");
+  }
+});
+
+test("unframed contain images reveal the canvas background", async () => {
+  const source = await sharp({ create: { width: 300, height: 100, channels: 3, background: "#FFFF00" } }).png().toBuffer();
+  const slide: SlideshowSlide = { id: "plain", mediaUrl: "https://media.example/screen.png", fit: "contain", textPosition: "bottom", textSize: 64, textFont: "modern", textColor: "#FFFFFF", textBackground: "none", background: { color: "#00FF00" } };
+  const { data, info } = await sharp(await renderSlideshowImage(source, slide)).raw().toBuffer({ resolveWithObject: true });
+  assert.ok(data[1] > 240 && data[0] < 12, "letterboxing shows the chosen canvas color");
+  const center = (960 * info.width + 540) * info.channels;
+  assert.ok(data[center] > 240 && data[center + 1] > 240, "source image stays visible");
+});

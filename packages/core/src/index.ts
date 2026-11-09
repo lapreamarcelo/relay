@@ -250,6 +250,7 @@ export interface SlideshowSlide {
   textBackground: SlideshowTextBackground;
   textBackgroundColor?: string;
   deviceFrame?: DeviceFrame;
+  background?: VideoTimeline["background"];
 }
 
 export interface SlideshowProject {

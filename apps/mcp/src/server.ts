@@ -130,7 +130,14 @@ const deviceFrameSchema = deviceFrameSchemaBase.superRefine((frame, context) => 
   }
 });
 
+const canvasBackgroundSchema = z.object({
+  color:z.string().regex(/^#[0-9A-Fa-f]{6}$/),endColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  imageUrl:z.string().url().max(2000).refine(value=>new URL(value).protocol==="https:","Background images must use HTTPS.").optional().describe("Static image from this Relay R2 media library; export allows up to 30 MB and 40 megapixels. Upload an image with prepare_media_upload first."),
+  imageFit:z.enum(["cover","contain"]).optional().describe("Centered crop (cover, default) or centered letterbox (contain). Color/gradient shows through letterboxing and transparency."),
+});
+
 const slideSchema = z.object({
+  background: canvasBackgroundSchema.optional().describe("Color, gradient or image behind the device and text. Overrides the device background; use an image from Media."),
   deviceFrame: staticDeviceFrameSchema.optional().describe("Wrap media in a built-in device. Call list_device_frames for background, pose, motion and slideshow constraints. Omit to disable."),
   id: z.string().min(1).max(120).optional(),
   mediaUrl: z.string().url().describe("Public URL returned by Relay's media library"),
@@ -428,11 +435,7 @@ const timelineSchema = z.object({
   audioTracks: z.array(z.object({ id: z.string().regex(/^[\w-]{1,120}$/), url: z.string().url(), name: z.string().max(120), startMs: z.number().min(0).max(900000), endMs: z.number().min(100).max(900000), offsetMs: z.number().min(0).max(3600000), volume: z.number().min(0).max(1), fadeInMs: z.number().min(0).max(900000), fadeOutMs: z.number().min(0).max(900000) }).strict().refine(track => track.endMs - track.startMs >= 100 && track.fadeInMs <= track.endMs - track.startMs && track.fadeOutMs <= track.endMs - track.startMs, "Sound track timing or fades exceed its lifetime.")).max(12).optional(),
   graphics: z.array(z.object({ id: z.string().regex(/^\w[\w-]{0,119}$/), kind: z.enum(["shape", "particles", "bars", "ring", "code"]), code:codeClipSchema.optional(), audioReactive:z.object({sourceUrl:sourceMediaSchema,signal:z.enum(["envelope","bass","mid","treble"]),amount:z.number().min(0).max(10)}).strict().optional(), startMs: z.number().min(0).max(900000), endMs: z.number().min(100).max(900000), x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().min(.01).max(1), height: z.number().min(.01).max(1), color: z.string().regex(/^#[0-9a-f]{6}$/i), seed: z.number().min(0).max(2147483647), count: z.number().min(1).max(100), speed: z.number().min(0).max(10), animation: animationSchema().optional() }).strict().refine(graphic => graphic.endMs > graphic.startMs && (graphic.kind!=="code"||graphic.code!==undefined), "Graphic end must follow start and code graphics require drawing source.")).max(24).optional(),
   camera: videoCameraSchema.optional().describe("Animated camera zoom, focus and pans across the composed footage/devices below labels. Call list_video_animations for camera limits and cinematic examples. Omit to disable."),
-  background: z.object({
-    color:z.string().regex(/^#[0-9A-Fa-f]{6}$/),endColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
-    imageUrl:z.string().url().max(2000).refine(value=>new URL(value).protocol==="https:","Background images must use HTTPS.").optional().describe("Static image from this Relay R2 media library; export allows up to 30 MB and 40 megapixels. Upload an image with prepare_media_upload first."),
-    imageFit:z.enum(["cover","contain"]).optional().describe("Centered crop (cover, default) or centered letterbox (contain). Color/gradient shows through letterboxing and transparency."),
-  }).optional().describe("Shared color, gradient or static image canvas below devices and text; overrides frame backgrounds. Visible around framed or contain-fit media, and throughout layers-only scenes."),
+  background: canvasBackgroundSchema.optional().describe("Shared color, gradient or static image canvas below devices and text; overrides frame backgrounds. Visible around framed or contain-fit media, and throughout layers-only scenes."),
   version: z.literal(1), aspectRatio: z.enum(["9:16", "4:5", "1:1", "16:9"]),
   clips: z.array(videoClipSchema).max(50),
   layers: z.array(videoLayerSchema).max(12).optional().describe("Independent simultaneous device/media layers, back-to-front array order above sequential clips and below labels. Each has its own source, startMs, trims, frame pose/motion/keyframes and volume. Multiple layers may use the same recording. Layer backgrounds are transparent outside their frames; timeline.background is shared. Omit transition on layers. Empty clips supports a layers-only scene."),

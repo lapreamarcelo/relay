@@ -90,7 +90,7 @@ const adapter = {
     } else { assert.ok(command.input.Key); assert.ok(command.input.Body); writes.push({ Key: command.input.Key, Body: command.input.Body }); }
     return {};
   } },
-  flatten: async (bytes: Buffer, slide: SlideshowSlide) => { flattened.push(structuredClone(slide)); return renderSlideshowImage(bytes, slide); },
+  flatten: async (bytes: Buffer, slide: SlideshowSlide, background?: Buffer) => { flattened.push(structuredClone(slide)); return renderSlideshowImage(bytes, slide, background); },
   render: async (input: { projectId: string; timeline: VideoTimeline; targetKey: string }) => {
     renders.push(input);
     assert.equal(mutations, 0, "synchronous encoding must succeed before database mutations");
@@ -300,4 +300,44 @@ test("storage cleanup errors preserve the original synchronous render failure", 
   try { response = await render({ id: "slideshow" }); } finally { console.error = originalError; }
   assert.equal(response.status, 500); assert.match((await response.json()).error, /Primary encoding failure/);
   assert.equal(mutations, 0); assert.equal(videos.size, 0);
+});
+
+test("image backgrounds survive saving and reach JPEG and video slide rendering", async () => {
+  for (const format of ["images", "video"] as const) {
+    reset({ format });
+    const project = projects.get("slideshow")!;
+    project.slides[0].background = { color: "#123456", imageUrl: `${publicUrl}/background.png`, imageFit: "contain" };
+    const saved = await crud.PATCH(new Request("https://relay.test/api/v1/slideshows", { method: "PATCH", headers: { authorization: "Bearer test" }, body: JSON.stringify({ ...project, brandId: project.brand_id }) }));
+    assert.equal(saved.status, 200);
+    assert.deepEqual((await saved.json()).data.slides[0].background, project.slides[0].background);
+    mutations = 0;
+    const response = await render({ id: "slideshow" });
+    assert.equal(response.status, 200);
+    assert.deepEqual(flattened[0].background, project.slides[0].background);
+    const jpeg = writes.find(write => write.Key.endsWith("01-second.jpg"))!;
+    const { data } = await sharp(jpeg.Body as Buffer).raw().toBuffer({ resolveWithObject: true });
+    assert.ok(Math.abs(data[0] - 0x12) < 12 && Math.abs(data[1] - 0x34) < 12, "JPEG letterboxing uses the canvas background");
+  }
+});
+
+test("slideshow backgrounds enforce library URLs and bounded downloads", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const imageUrl of ["https://outside.example/background.png", `${publicUrl}-neighbor/background.png`]) {
+      reset(); projects.get("slideshow")!.slides[0].background = { color: "#000000", imageUrl };
+      const fetched: string[] = [];
+      globalThis.fetch = async url => { fetched.push(String(url)); return new Response(source); };
+      const response = await render({ id: "slideshow" });
+      assert.equal(response.status, 500);
+      assert.match((await response.json()).error, /Relay R2 library/);
+      assert.ok(!fetched.includes(imageUrl));
+      assert.equal(flattened.length, 0);
+    }
+    reset(); projects.get("slideshow")!.slides[0].background = { color: "#000000", imageUrl: `${publicUrl}/huge.png` };
+    globalThis.fetch = async url => String(url).endsWith("huge.png") ? new Response("x", { headers: { "content-length": String(31 * 1024 * 1024) } }) : new Response(source);
+    const response = await render({ id: "slideshow" });
+    assert.equal(response.status, 500);
+    assert.match((await response.json()).error, /30 MB/);
+    assert.equal(flattened.length, 0);
+  } finally { globalThis.fetch = originalFetch; }
 });
